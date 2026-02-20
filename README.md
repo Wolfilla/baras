@@ -6,7 +6,14 @@ The **Battle Analysis and Raid Assessment System** (BARAS) is the ultimate compa
   <img src="etc/app-icon.png" alt="BARAS Icon" width="150">
 </p>
 
-For user-facing documentation, visit the [official website](https://baras-app.github.io).
+<p align="center">
+  <a href="https://baras-app.github.io">Website</a> &nbsp;&middot;&nbsp;
+  <a href="https://discord.gg/zmtkYkhSM4">
+    <img src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white" alt="Discord">
+  </a>
+</p>
+
+> **Questions, bugs, or feedback?** Join the [Discord server](https://discord.gg/zmtkYkhSM4) — it's the fastest way to get help.
 
 ## Installation
 
