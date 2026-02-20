@@ -1,0 +1,135 @@
+name: Bug Report
+description: Report something that isn't working correctly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an issue. Please fill out the sections below so the bug can actually be reproduced and fixed.
+
+  - type: input
+    id: version
+    attributes:
+      label: BARAS Version
+      description: Found in Settings or the title bar (e.g. 2026.2.19)
+      placeholder: "2026.2.19"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux (Wayland)
+        - Linux (X11)
+        - Windows 10
+        - Windows 11
+        - macOS
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe what went wrong. Be specific.
+      placeholder: |
+        Example: "The timer overlay for Brontes NiM stopped updating after the Kephess phase transition.
+        The timers froze at 0:00 and never restarted for the burn phase."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened?
+      description: What did you expect to see instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: |
+        How can this be triggered? Include the game content you were running.
+        The more specific you are, the faster this gets fixed.
+      placeholder: |
+        1. Start tailing a log file
+        2. Enter [operation/flashpoint/area]
+        3. Pull [boss name] on [difficulty]
+        4. Observe [what breaks and when]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: game-content
+    attributes:
+      label: Game content type
+      description: What were you doing when this happened?
+      options:
+        - Operation
+        - Flashpoint
+        - Open World / Daily Area
+        - PvP
+        - Dummy Parse
+        - Not in game / UI only
+    validations:
+      required: true
+
+  - type: input
+    id: encounter
+    attributes:
+      label: Boss / Encounter
+      description: Which boss or encounter triggered the issue, if applicable?
+      placeholder: "e.g. Brontes NiM, Revan HM, Apex Vanguard SM"
+
+  - type: dropdown
+    id: overlay
+    attributes:
+      label: Which overlay or feature is affected?
+      description: Select the most relevant one
+      options:
+        - Metric Overlay (DPS/HPS)
+        - Raid Frames
+        - Boss Health
+        - Timers
+        - Alerts
+        - Effects / Buffs / Debuffs
+        - Cooldowns
+        - DOT Tracker
+        - Challenges
+        - Notes
+        - Personal Stats
+        - Data Explorer
+        - History / Parsely Upload
+        - Encounter Editor
+        - Settings / Profiles
+        - Log File Management
+        - Other
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output
+      description: |
+        If applicable, attach the relevant BARAS log file or paste the error.
+        Logs are located at `~/.config/baras/logs/` (Linux/macOS) or `%APPDATA%\baras\logs\` (Windows).
+      render: shell
+
+  - type: checkboxes
+    id: combat-log
+    attributes:
+      label: Combat log available?
+      description: |
+        Attaching the SWTOR combat log that triggered the issue makes reproduction much easier.
+        Logs are in your SWTOR directory under `CombatLogs/`.
+      options:
+        - label: I can attach the combat log file that triggered this issue
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Screenshots, screen recordings, or anything else that helps.
