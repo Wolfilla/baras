@@ -466,64 +466,80 @@ pub fn App() -> Element {
                 div { class: "header-content",
                     h1 { "BARAS" }
                     img { class: "header-logo", src: LOGO, alt: "BARAS mascot" }
-                    if !app_version().is_empty() {
-                        if let Some(ref update) = update_available() {
-                            // Update available - show clickable notification
-                            button {
-                                class: if update_installing() { "header-version update-available updating" } else { "header-version update-available" },
-                                title: update.notes.as_deref().unwrap_or("Update available"),
-                                disabled: update_installing(),
-                                onclick: move |_| {
-                                    update_installing.set(true);
-                                    let mut toast = use_toast();
+                    div { class: "header-version-group",
+                        div { class: "header-links",
+                            a {
+                                class: "header-link",
+                                href: "#",
+                                title: "Discord — Questions, bugs, or feedback",
+                                onclick: move |e| {
+                                    e.prevent_default();
                                     spawn(async move {
-                                        if let Err(e) = api::install_update().await {
-                                            toast.show(format!("Update failed: {}", e), ToastSeverity::Critical);
-                                            update_installing.set(false);
-                                        }
-                                        // On success, app will restart automatically
+                                        api::open_url("https://discord.gg/zmtkYkhSM4").await;
                                     });
                                 },
-                                if update_installing() {
-                                    i { class: "fa-solid fa-spinner fa-spin" }
-                                    " Updating..."
-                                } else {
-                                    i { class: "fa-solid fa-arrow-up" }
-                                    " Update Available!"
-                                }
+                                i { class: "fa-brands fa-discord" }
                             }
-                        } else {
-                            // No update - show current version (clickable for changelog)
-                            button {
-                                class: "header-version clickable",
-                                title: "View changelog",
-                                onclick: move |_| {
+                            a {
+                                class: "header-link",
+                                href: "#",
+                                title: "Documentation & Help",
+                                onclick: move |e| {
+                                    e.prevent_default();
                                     spawn(async move {
-                                        if let Some(response) = api::get_changelog().await {
-                                            if let Some(html) = response.html {
-                                                changelog_html.set(html);
-                                            }
-                                        }
-                                        changelog_open.set(true);
+                                        api::open_url("https://baras-app.github.io/features/overview").await;
                                     });
                                 },
-                                "v{app_version}"
+                                i { class: "fa-solid fa-circle-question" }
+                            }
+                        }
+                        if !app_version().is_empty() {
+                            if let Some(ref update) = update_available() {
+                                // Update available - show clickable notification
+                                button {
+                                    class: if update_installing() { "header-version update-available updating" } else { "header-version update-available" },
+                                    title: update.notes.as_deref().unwrap_or("Update available"),
+                                    disabled: update_installing(),
+                                    onclick: move |_| {
+                                        update_installing.set(true);
+                                        let mut toast = use_toast();
+                                        spawn(async move {
+                                            if let Err(e) = api::install_update().await {
+                                                toast.show(format!("Update failed: {}", e), ToastSeverity::Critical);
+                                                update_installing.set(false);
+                                            }
+                                            // On success, app will restart automatically
+                                        });
+                                    },
+                                    if update_installing() {
+                                        i { class: "fa-solid fa-spinner fa-spin" }
+                                        " Updating..."
+                                    } else {
+                                        i { class: "fa-solid fa-arrow-up" }
+                                        " Update Available!"
+                                    }
+                                }
+                            } else {
+                                // No update - show current version (clickable for changelog)
+                                button {
+                                    class: "header-version clickable",
+                                    title: "View changelog",
+                                    onclick: move |_| {
+                                        spawn(async move {
+                                            if let Some(response) = api::get_changelog().await {
+                                                if let Some(html) = response.html {
+                                                    changelog_html.set(html);
+                                                }
+                                            }
+                                            changelog_open.set(true);
+                                        });
+                                    },
+                                    "v{app_version}"
+                                }
                             }
                         }
                     }
                     p { class: "subtitle", "Battle Analysis and Raid Assessment System" }
-                    a {
-                        class: "header-help",
-                        href: "#",
-                        title: "Documentation & Help",
-                        onclick: move |e| {
-                            e.prevent_default();
-                            spawn(async move {
-                                api::open_url("https://baras-app.github.io/features/overview").await;
-                            });
-                        },
-                        i { class: "fa-solid fa-circle-question" }
-                    }
                 }
                 // Session indicator wrapper (resume button on left + indicator box)
                 div { class: "header-session-wrapper",

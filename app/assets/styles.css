@@ -257,11 +257,18 @@ select optgroup {
   object-fit: contain;
 }
 
+.app-header .header-version-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: flex-end;
+  margin-bottom: 0.1em;
+  gap: 0.15rem;
+}
+
 .app-header .header-version {
   font-size: clamp(0.6rem, 1.2vh, 0.8rem);
   color: var(--text-disabled);
-  align-self: flex-end;
-  margin-bottom: 0.3em;
 }
 
 .app-header .header-version.clickable {
@@ -334,21 +341,22 @@ select optgroup {
   text-align: left;
 }
 
-.app-header .header-help {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  color: var(--text-disabled);
-  font-size: 1.1rem;
-  opacity: 0.6;
-  transition:
-    opacity 0.2s,
-    color 0.2s;
+.app-header .header-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
 }
 
-.app-header .header-help:hover {
-  opacity: 1;
+.app-header .header-link {
   color: var(--swtor-blue);
+  font-size: clamp(0.75rem, 1.4vh, 1rem);
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.app-header .header-link:hover {
+  opacity: 1;
 }
 
 .btn-header-settings {
