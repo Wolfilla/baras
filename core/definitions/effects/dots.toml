@@ -213,7 +213,7 @@ id = "plasma_brand"
 name = "Plasma Brand"
 display_target = "dot_tracker"
 trigger = { type = "effect_applied", effects = [
-  3429368177098752,
+  3429368177099009,
 ], source = "local_player", target = "any" }
 refresh_abilities = [3429368177098752]
 duration_secs = 12.0
