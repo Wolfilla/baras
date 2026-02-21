@@ -703,7 +703,7 @@ pub fn App() -> Element {
                     button {
                         class: if is_move_mode { "btn btn-header-overlay active" } else { "btn btn-header-overlay" },
                         title: if is_move_mode { "Lock overlays" } else { "Unlock overlays (move/resize)" },
-                        disabled: !is_visible || !any_enabled || is_rearrange,
+                        disabled: !is_visible || !any_enabled || is_rearrange || overlays_auto_hidden,
                         onclick: move |_| { spawn(async move {
                             if let Ok(new_mode) = api::toggle_move_mode().await {
                                 move_mode.set(new_mode);
@@ -715,7 +715,7 @@ pub fn App() -> Element {
                     button {
                         class: if is_rearrange { "btn btn-header-overlay active" } else { "btn btn-header-overlay" },
                         title: "Rearrange raid frames",
-                        disabled: !is_visible || !raid_on || is_move_mode,
+                        disabled: !is_visible || !raid_on || is_move_mode || overlays_auto_hidden,
                         onclick: move |_| { spawn(async move {
                             if let Ok(new_mode) = api::toggle_raid_rearrange().await {
                                 rearrange_mode.set(new_mode);
@@ -1221,7 +1221,7 @@ pub fn App() -> Element {
                             }
                             button {
                                 class: if is_move_mode { "btn btn-control btn-unlocked" } else { "btn btn-control btn-locked" },
-                                disabled: !is_visible || !any_enabled || is_rearrange,
+                                disabled: !is_visible || !any_enabled || is_rearrange || overlays_auto_hidden,
                                 onclick: move |_| { spawn(async move {
                                     if let Ok(new_mode) = api::toggle_move_mode().await {
                                         move_mode.set(new_mode);
@@ -1233,7 +1233,7 @@ pub fn App() -> Element {
                             }
                             button {
                                 class: if is_rearrange { "btn btn-control btn-rearrange btn-active" } else { "btn btn-control btn-rearrange" },
-                                disabled: !is_visible || !raid_on || is_move_mode,
+                                disabled: !is_visible || !raid_on || is_move_mode || overlays_auto_hidden,
                                 onclick: move |_| { spawn(async move {
                                     if let Ok(new_mode) = api::toggle_raid_rearrange().await {
                                         rearrange_mode.set(new_mode);

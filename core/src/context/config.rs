@@ -69,7 +69,10 @@ impl AppConfigExt for AppConfig {
                     if path.exists() {
                         let backup = path.with_extension("toml.bak");
                         if let Err(e) = std::fs::copy(&path, &backup) {
-                            tracing::error!("Failed to back up config to {}: {e}", backup.display());
+                            tracing::error!(
+                                "Failed to back up config to {}: {e}",
+                                backup.display()
+                            );
                         } else {
                             tracing::info!("Backed up invalid config to {}", backup.display());
                         }
@@ -93,9 +96,11 @@ impl AppConfigExt for AppConfig {
     }
 
     fn save_profile(&mut self, name: String) -> Result<(), &'static str> {
-        // Clone settings but reset visibility to default (visibility is independent of profiles)
+        // Clone settings but reset behavioral flags to defaults (they are independent of profiles)
         let mut settings_to_save = self.overlay_settings.clone();
         settings_to_save.overlays_visible = true;
+        settings_to_save.hide_when_not_live = false;
+        settings_to_save.hide_during_conversations = false;
 
         // Check if profile already exists (update case)
         if let Some(profile) = self.profiles.iter_mut().find(|p| p.name == name) {
@@ -122,10 +127,14 @@ impl AppConfigExt for AppConfig {
             .find(|p| p.name == name)
             .ok_or("Profile not found")?;
 
-        // Preserve visibility state - it's independent of profiles
+        // Preserve behavioral state - these are independent of profiles
         let was_visible = self.overlay_settings.overlays_visible;
+        let was_hide_not_live = self.overlay_settings.hide_when_not_live;
+        let was_hide_conversations = self.overlay_settings.hide_during_conversations;
         self.overlay_settings = profile.settings.clone();
         self.overlay_settings.overlays_visible = was_visible;
+        self.overlay_settings.hide_when_not_live = was_hide_not_live;
+        self.overlay_settings.hide_during_conversations = was_hide_conversations;
 
         self.active_profile_name = Some(name.to_string());
         Ok(())
