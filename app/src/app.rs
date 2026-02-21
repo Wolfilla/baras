@@ -317,6 +317,9 @@ pub fn App() -> Element {
             // Reset session-specific state when a new file starts being parsed.
             // Preserves user preferences like show_only_bosses, show_ids, etc.
             let _ = ui_state.try_write().map(|mut w| w.reset_session());
+            // Clear the "session ended" flag — a new session starting means
+            // the previous logout/empty-file state is no longer relevant.
+            let _ = session_ended.try_write().map(|mut w| *w = false);
         });
         api::tauri_listen("new-session-started", &closure).await;
         closure.forget();
