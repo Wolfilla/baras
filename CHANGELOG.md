@@ -1,40 +1,28 @@
-# v2026.2.1900
+# v2026.2.2200
 
-Documentation is in the process of bring improved at baras-app.github.io. Some tutorials added.
+## General
 
-## Auto-hide When not live
+- Added link to the support discord in title bar
+- Auto-hide logic has been updated to be more robust and remain in sync
+- Switching profiles will no longer affect auto-hide
+- The application will now display a warning message if an invalid log file is detected from a crash
+- Added a polling fallback to detect log file rotations
 
-Added an experimental option to hide overlays when the application is not live or the game is not running.
-This will monitor for swtor.exe running on your system. If the feature is disabled no process monitoring occurs.
+## Data Explorer
 
-## UI
-
-- Added option for European-style `1.234,567` number formatting in the general application settings
-- Scroll bars on Windows now fit better with the application UI
-- Use toggle buttons instead of checkboxes
-- Fixed issue where UI was not responsive to saved changes in encounter editor non-timer elements
-
-## Effects Tracker
-
-- Effects audio will not play if disabled
-- Ability tracking logic improved to be more robust
-- Fixed issue causing local player discipline to not be recognized for effects scoping
-- Effects can now be configured to instantly alert in the same manner as encounter timers
+- Data explorer player selection and combat log filters will now persist when swapping between encounters
+- Clicking on the charts tab will no longer reset the selected entity to the local player
+- Time range filtering can now be set by dragging the mouse over charts on the Charts tab
+- Added an ability usage summary panel to the data explorer
 
 ## Overlays
 
-- Improved text alignment and separator spacing of personal overlay
-- Fixed issue with text overflow in DOT tracker when using font scaling
-- Fixed issue with class/role icons not displaying on certain frame spacing settings
+- Added a standalone overlay for displaying combat time
+- Alert text is now centered in the overlay window
+- Dynamic background setting added to the raid notes overlay
+- Show an alert message if changes to overlay configurations aren't saved to a profile
 
-## Encounter Definitions
+## Effects
 
-- Removed spammy Watchdog Missiles timers
-- Added Xenoanalyst to boss definitions
-- Added phases to Cartel Warlords
-- Added alert when targeted by Huntmaster grenade
-- Added initial phases and timers for Izax
-- Reformatted Apex Vanguard phases - timer update planned soon.
-- Added Brontes arcing assault timer
-
-Thanks Wolfy and Errør for contribution to the encounter definitions!
+- Individual effects can now be exported
+- Fixed incorrect effect ID for Plasma Brand
