@@ -2607,6 +2607,8 @@ pub struct DataExplorerState {
     pub collapsed_sections: std::collections::HashSet<String>,
     /// Timeline selection (time range filter)
     pub time_range: TimeRange,
+    /// Selected anchor ability for rotation view (persists across encounters)
+    pub selected_rotation_anchor: Option<i64>,
 }
 
 impl Default for DataExplorerState {
@@ -2622,6 +2624,7 @@ impl Default for DataExplorerState {
             sort_direction: SortDirection::default(),
             collapsed_sections: std::collections::HashSet::new(),
             time_range: TimeRange::default(),
+            selected_rotation_anchor: None,
         }
     }
 }
@@ -2633,6 +2636,7 @@ impl DataExplorerState {
         self.selected_encounter = None;
         self.selected_source = None;
         self.time_range = TimeRange::default();
+        self.selected_rotation_anchor = None;
         // Preserve: show_only_bosses, view_mode, breakdown_mode, show_players_only,
         // sort_column, sort_direction, collapsed_sections
     }

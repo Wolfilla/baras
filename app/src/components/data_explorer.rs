@@ -328,6 +328,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
     let mut sort_column = use_signal(|| props.state.read().data_explorer.sort_column);
     let mut sort_direction = use_signal(|| props.state.read().data_explorer.sort_direction);
     let mut collapsed_sections = use_signal(|| props.state.read().data_explorer.collapsed_sections.clone());
+    let selected_rotation_anchor = use_signal(|| props.state.read().data_explorer.selected_rotation_anchor);
 
     // Sidebar collapse states (not persisted - always start expanded)
     let mut sidebar_collapsed = use_signal(|| false);
@@ -358,6 +359,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         let dir = *sort_direction.read();
         let sections = collapsed_sections.read().clone();
         let tr = *time_range.read();
+        let anchor = *selected_rotation_anchor.read();
         let combat = combat_log_state.read().clone();
         
         if let Ok(mut state) = props.state.try_write() {
@@ -370,6 +372,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
             state.data_explorer.sort_direction = dir;
             state.data_explorer.collapsed_sections = sections;
             state.data_explorer.time_range = tr;
+            state.data_explorer.selected_rotation_anchor = anchor;
             state.combat_log = combat;
         }
     });
@@ -589,6 +592,8 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                 // Use try_write to handle signal being dropped when component unmounts
                 if event_type.contains("FileLoaded") {
                     let _ = selected_encounter.try_write().map(|mut w| *w = None);
+                    // Reset selected player on new file (different players)
+                    let _ = selected_source.try_write().map(|mut w| *w = None);
                 }
                 spawn(async move {
                     // Refresh encounter list
@@ -642,9 +647,11 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         let _ = npc_health.try_write().map(|mut w| *w = Vec::new());
         let _ = last_overview_fetch.try_write().map(|mut w| *w = None);
         let _ = timeline.try_write().map(|mut w| *w = None);
-        // Only reset time_range and selected_source if encounter actually changed (not on initial mount restore)
+        // Only reset time_range if encounter actually changed (not on initial mount restore)
+        // Note: selected_source is intentionally preserved across encounter changes
+        // so users can track the same player across pulls. If the player isn't in the
+        // new encounter, auto-selection logic will fall back to the local player.
         if is_encounter_change {
-            let _ = selected_source.try_write().map(|mut w| *w = None);
             let _ = time_range
                 .try_write()
                 .map(|mut w| *w = TimeRange::default());
@@ -797,9 +804,9 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
             ViewMode::Rotation => DataTab::Damage,
             _ => {
                 // Clear detailed data when not in detailed/rotation mode
+                // Note: selected_source is preserved so it syncs with Charts tab
                 let _ = entities.try_write().map(|mut w| *w = Vec::new());
                 let _ = abilities.try_write().map(|mut w| *w = Vec::new());
-                let _ = selected_source.try_write().map(|mut w| *w = None);
                 return;
             }
         };
@@ -850,20 +857,37 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                 }
             };
 
-            // Auto-select local player if none selected, fall back to first player
-            let auto_selected = if selected_source.read().is_none() {
-                let local_name = local_player_name.read();
+            // Auto-select player: keep held selection if it exists in this encounter,
+            // otherwise fall back to local player, then first player
+            let auto_selected = {
+                let current = selected_source.read().clone();
                 let players = entity_data.iter().filter(|e| e.entity_type == "Player" || e.entity_type == "Companion");
-                // Prefer the local player if present
-                if let Some(name) = local_name.as_deref() {
-                    players.clone().find(|e| e.source_name == name)
-                        .or_else(|| players.clone().next())
-                        .map(|e| e.source_name.clone())
+                // If we have a held selection and it exists in the new encounter, keep it
+                if let Some(ref name) = current {
+                    if players.clone().any(|e| &e.source_name == name) {
+                        current
+                    } else {
+                        // Held player not in this encounter — fall back
+                        let local_name = local_player_name.read();
+                        if let Some(name) = local_name.as_deref() {
+                            players.clone().find(|e| e.source_name == name)
+                                .or_else(|| players.clone().next())
+                                .map(|e| e.source_name.clone())
+                        } else {
+                            players.clone().next().map(|e| e.source_name.clone())
+                        }
+                    }
                 } else {
-                    players.clone().next().map(|e| e.source_name.clone())
+                    // No held selection — auto-select local player or first player
+                    let local_name = local_player_name.read();
+                    if let Some(name) = local_name.as_deref() {
+                        players.clone().find(|e| e.source_name == name)
+                            .or_else(|| players.clone().next())
+                            .map(|e| e.source_name.clone())
+                    } else {
+                        players.clone().next().map(|e| e.source_name.clone())
+                    }
                 }
-            } else {
-                selected_source.read().clone()
             };
 
             let _ = entities.try_write().map(|mut w| *w = entity_data);
@@ -1584,6 +1608,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                         duration_secs: duration,
                                         time_range: tr,
                                         local_player: local_player_name.read().clone(),
+                                        selected_source: selected_source,
                                         entity_collapsed: *entity_collapsed.read(),
                                         on_toggle_entity: move |_| { let v = *entity_collapsed.read(); entity_collapsed.set(!v); },
                                         european: eu,
@@ -1908,6 +1933,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                         encounter_idx: *selected_encounter.read(),
                                         time_range: time_range(),
                                         selected_source: selected_source.read().clone(),
+                                        selected_anchor: selected_rotation_anchor,
                                         on_range_change: move |new_range: TimeRange| {
                                             time_range.set(new_range);
                                         },

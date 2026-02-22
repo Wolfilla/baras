@@ -15,6 +15,8 @@ pub struct RotationViewProps {
     pub encounter_idx: Option<u32>,
     pub time_range: TimeRange,
     pub selected_source: Option<String>,
+    /// Shared anchor ability signal (persists across encounters)
+    pub selected_anchor: Signal<Option<i64>>,
     /// Optional callback to update the parent's time range (e.g. from context menu)
     #[props(default)]
     pub on_range_change: Option<EventHandler<TimeRange>>,
@@ -30,7 +32,7 @@ pub fn RotationView(props: RotationViewProps) -> Element {
     let format_pct = move |count: i64, total: i64| formatting::format_pct_ratio(count, total, eu);
 
     let mut available_abilities = use_signal(|| Vec::<(i64, String)>::new());
-    let mut selected_anchor = use_signal(|| None::<i64>);
+    let mut selected_anchor = props.selected_anchor;
     let mut rotation = use_signal(|| None::<RotationAnalysis>);
     let mut loading = use_signal(|| false);
 
@@ -51,20 +53,29 @@ pub fn RotationView(props: RotationViewProps) -> Element {
     }
 
     // Flag: user has clicked Create (reset on source/anchor change)
-    let mut rotation_active = use_signal(|| false);
+    // Initialize as active if we have a held anchor (re-mount with persisted state)
+    let mut rotation_active = use_signal(|| selected_anchor.peek().is_some());
+
+    // Track previous source to detect actual player changes vs. re-mounts
+    let mut prev_source = use_signal(|| props.selected_source.clone());
 
     let enc_idx = props.encounter_idx;
 
-    // Load available abilities when source changes
+    // Load available abilities when source changes, validate held anchor
     use_effect(move || {
         let source = tracked_source.read().clone();
+        let prev = prev_source.peek().clone();
+        let is_source_change = source != prev;
 
-        selected_anchor.set(None);
-        rotation.set(None);
-        rotation_active.set(false);
+        if is_source_change {
+            prev_source.set(source.clone());
+            rotation.set(None);
+            rotation_active.set(false);
+        }
 
         let Some(source_name) = source else {
             available_abilities.set(Vec::new());
+            selected_anchor.set(None);
             return;
         };
 
@@ -72,6 +83,18 @@ pub fn RotationView(props: RotationViewProps) -> Element {
             // Fetch with a dummy anchor to get the abilities list
             let result = api::query_rotation(enc_idx, &source_name, 0, None).await;
             if let Some(analysis) = result {
+                // Validate held anchor exists in this player's abilities
+                let held = *selected_anchor.peek();
+                if let Some(anchor_id) = held {
+                    if analysis.abilities.iter().any(|(id, _)| *id == anchor_id) {
+                        // Anchor is valid — auto-activate if we had a persisted anchor
+                        if !is_source_change {
+                            rotation_active.set(true);
+                        }
+                    } else {
+                        selected_anchor.set(None);
+                    }
+                }
                 available_abilities.set(analysis.abilities);
             }
         });

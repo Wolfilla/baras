@@ -200,38 +200,41 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
     }
 
     // Determine whether to restore saved state:
-    // - Only restore if no initial_target override (death tracker click)
-    // - Only restore if encounter matches (filters are encounter-specific)
+    // - Filters (source/target, event toggles) persist across encounters
+    // - Scroll position, search text only restore on same-encounter revisit (e.g. tab switch)
+    // - Skip all restore if initial_target override is set (death tracker click)
     let mut state = props.state;
-    let should_restore = props.initial_target.is_none()
+    let should_restore_filters = props.initial_target.is_none();
+    let should_restore_position = props.initial_target.is_none()
         && state.peek().encounter_idx == Some(props.encounter_idx);
 
-    // Filter state - restore from saved state or use defaults
+    // Filter state - restore from saved state (persists across encounters)
     let mut source_filter = use_signal(|| {
-        if should_restore { state.peek().source_filter.clone() } else { None }
+        if should_restore_filters { state.peek().source_filter.clone() } else { None }
     });
     let mut target_filter = use_signal(|| {
         if let Some(ref target) = props.initial_target {
             Some(target.clone())
-        } else if should_restore { state.peek().target_filter.clone() } else { None }
+        } else if should_restore_filters { state.peek().target_filter.clone() } else { None }
     });
+    // Search text only restores on same-encounter revisit
     let mut search_text = use_signal(|| {
-        if should_restore {
+        if should_restore_position {
             state.peek().search_text.clone()
         } else {
             String::new()
         }
     });
 
-    // Event type filter checkboxes
-    let mut filter_damage = use_signal(|| if should_restore { state.peek().filter_damage } else { true });
-    let mut filter_healing = use_signal(|| if should_restore { state.peek().filter_healing } else { true });
-    let mut filter_actions = use_signal(|| if should_restore { state.peek().filter_actions } else { true });
-    let mut filter_effects = use_signal(|| if should_restore { state.peek().filter_effects } else { true });
-    let mut filter_other = use_signal(|| if should_restore { state.peek().filter_other } else { true });
+    // Event type filter checkboxes (persist across encounters)
+    let mut filter_damage = use_signal(|| if should_restore_filters { state.peek().filter_damage } else { true });
+    let mut filter_healing = use_signal(|| if should_restore_filters { state.peek().filter_healing } else { true });
+    let mut filter_actions = use_signal(|| if should_restore_filters { state.peek().filter_actions } else { true });
+    let mut filter_effects = use_signal(|| if should_restore_filters { state.peek().filter_effects } else { true });
+    let mut filter_other = use_signal(|| if should_restore_filters { state.peek().filter_other } else { true });
 
     // Show IDs toggle - NOW PERSISTED!
-    let mut show_ids = use_signal(|| if should_restore { state.peek().show_ids } else { true });
+    let mut show_ids = use_signal(|| if should_restore_filters { state.peek().show_ids } else { true });
 
     // Time format toggle: false = M:SS.dd (relative), true = total seconds
     let mut show_absolute_time = use_signal(|| false);
@@ -254,13 +257,13 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
     let mut source_names = use_signal(GroupedEntityNames::default);
     let mut target_names = use_signal(GroupedEntityNames::default);
 
-    // Virtual scroll state - restore from saved state if same encounter
+    // Virtual scroll state - only restore on same-encounter revisit
     let mut scroll_top = use_signal(|| {
-        if should_restore { state.peek().scroll_offset } else { 0.0 }
+        if should_restore_position { state.peek().scroll_offset } else { 0.0 }
     });
 
     // Track whether we need to restore DOM scroll position after first data load
-    let mut needs_scroll_restore = use_signal(|| should_restore && state.peek().scroll_offset > 0.0);
+    let mut needs_scroll_restore = use_signal(|| should_restore_position && state.peek().scroll_offset > 0.0);
 
     // Column widths for resizable columns (in pixels)
     let mut col_time = use_signal(|| 70.0f64);
@@ -289,8 +292,8 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
     // Track previous encounter to detect changes (for resetting state on encounter switch)
     let mut prev_encounter_idx = use_signal(|| props.encounter_idx);
 
-    // Reset all UI state when encounter changes (not on initial mount)
-    // This ensures nothing is remembered from the previous encounter
+    // Reset transient UI state when encounter changes (not on initial mount)
+    // Preserves source/target filters and event type toggles across encounters
     use_effect(move || {
         let current = *encounter_idx_signal.read();
         let prev = *prev_encounter_idx.peek();
@@ -298,22 +301,14 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
         if current != prev {
             prev_encounter_idx.set(current);
 
-            // Reset scroll position
+            // Reset scroll position and search text
             scroll_top.set(0.0);
             loaded_offset.set(0);
-
-            // Reset filters to defaults
-            source_filter.set(None);
-            target_filter.set(None);
             search_text.set(String::new());
             search_debounce.set(String::new());
 
-            // Reset event type filters to defaults
-            filter_damage.set(true);
-            filter_healing.set(true);
-            filter_actions.set(true);
-            filter_effects.set(true);
-            filter_other.set(true);
+            // Preserve source/target filters and event type toggles across encounters
+            // so users can track the same entities across pulls
 
             // Clear data to trigger fresh load
             rows.set(vec![]);

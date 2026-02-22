@@ -617,6 +617,8 @@ pub struct ChartsPanelProps {
     /// Local player name for default selection
     #[props(default)]
     pub local_player: Option<String>,
+    /// Shared selected player signal (synced with Detailed tabs)
+    pub selected_source: Signal<Option<String>>,
     /// Whether entity sidebar is collapsed
     #[props(default)]
     pub entity_collapsed: bool,
@@ -644,8 +646,8 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
         encounter_idx_signal.set(props.encounter_idx);
     }
 
-    // Entity selection (default to none - show aggregated data)
-    let mut selected_entity = use_signal(|| None::<String>);
+    // Entity selection — shared with Detailed tabs via parent signal
+    let mut selected_entity = props.selected_source;
     let mut entities = use_signal(Vec::<String>::new);
     let mut class_icons = use_signal(HashMap::<String, String>::new);
 
@@ -692,7 +694,8 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
     // Local player name for default selection
     let local_player = props.local_player.clone();
 
-    // Load entities on mount and auto-select first player (with retry for race conditions)
+    // Load entities on mount and auto-select player (with retry for race conditions)
+    // Validates held selection exists in this encounter, falls back to local player
     use_effect(move || {
         let idx = encounter_idx_signal();
         let local_name = local_player.clone();
@@ -705,12 +708,20 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
                         .filter(|r| r.entity_type == "Player" || r.entity_type == "Companion")
                         .collect();
                     if !players.is_empty() {
-                        // Auto-select local player, fall back to first player
-                        let pick = local_name.as_deref()
-                            .and_then(|name| players.iter().find(|p| p.name == name))
-                            .or(players.first());
-                        if let Some(p) = pick {
-                            selected_entity.set(Some(p.name.clone()));
+                        // Check if held selection exists in this encounter
+                        let current = selected_entity.read().clone();
+                        let needs_auto_select = match &current {
+                            Some(name) => !players.iter().any(|p| &p.name == name),
+                            None => true,
+                        };
+                        if needs_auto_select {
+                            // Fall back to local player, then first player
+                            let pick = local_name.as_deref()
+                                .and_then(|name| players.iter().find(|p| p.name == name))
+                                .or(players.first());
+                            if let Some(p) = pick {
+                                selected_entity.set(Some(p.name.clone()));
+                            }
                         }
                         // Store class icons lookup
                         let icons: HashMap<String, String> = players
