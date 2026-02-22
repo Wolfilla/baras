@@ -12,6 +12,7 @@
 mod alerts;
 mod boss_health;
 mod challenges;
+mod combat_time;
 mod cooldowns;
 mod dot_tracker;
 mod effects;
@@ -24,6 +25,7 @@ mod timers;
 
 pub use alerts::{AlertEntry, AlertsData, AlertsOverlay};
 pub use boss_health::{BossHealthData, BossHealthOverlay};
+pub use combat_time::{CombatTimeConfig, CombatTimeData, CombatTimeOverlay};
 pub use challenges::{ChallengeData, ChallengeEntry, ChallengeOverlay, PlayerContribution};
 pub use cooldowns::{CooldownConfig, CooldownData, CooldownEntry, CooldownOverlay};
 pub use dot_tracker::{DotEntry, DotTarget, DotTrackerConfig, DotTrackerData, DotTrackerOverlay};
@@ -109,6 +111,8 @@ pub enum OverlayData {
     DotTracker(DotTrackerData),
     /// Encounter notes (Markdown text)
     Notes(NotesData),
+    /// Standalone combat time display
+    CombatTime(CombatTimeData),
 }
 
 /// Configuration updates that can be sent to overlays
@@ -145,6 +149,8 @@ pub enum OverlayConfigUpdate {
     DotTracker(DotTrackerConfig, u8, bool),
     /// Config for notes overlay (+ background alpha, european)
     Notes(NotesConfig, u8, bool),
+    /// Config for combat time overlay (+ background alpha, european)
+    CombatTime(CombatTimeConfig, u8, bool),
 }
 
 /// Position information for an overlay

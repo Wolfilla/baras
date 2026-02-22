@@ -53,6 +53,7 @@ pub fn App() -> Element {
     let mut cooldowns_enabled = use_signal(|| false);
     let mut dot_tracker_enabled = use_signal(|| false);
     let mut notes_enabled = use_signal(|| false);
+    let mut combat_time_enabled = use_signal(|| false);
     let mut overlays_visible = use_signal(|| true);
     let mut move_mode = use_signal(|| false);
     let mut rearrange_mode = use_signal(|| false);
@@ -201,6 +202,7 @@ pub fn App() -> Element {
                 &mut cooldowns_enabled,
                 &mut dot_tracker_enabled,
                 &mut notes_enabled,
+                &mut combat_time_enabled,
                 &mut overlays_visible,
                 &mut move_mode,
                 &mut rearrange_mode,
@@ -434,6 +436,7 @@ pub fn App() -> Element {
     let cooldowns_on = cooldowns_enabled();
     let dot_tracker_on = dot_tracker_enabled();
     let notes_on = notes_enabled();
+    let combat_time_on = combat_time_enabled();
     let any_enabled = enabled_map.values().any(|&v| v)
         || personal_on
         || raid_on
@@ -446,7 +449,8 @@ pub fn App() -> Element {
         || effects_b_on
         || cooldowns_on
         || dot_tracker_on
-        || notes_on;
+        || notes_on
+        || combat_time_on;
     let is_visible = overlays_visible();
     let is_move_mode = move_mode();
     let is_rearrange = rearrange_mode();
@@ -658,6 +662,7 @@ pub fn App() -> Element {
                                                 &mut timers_b_enabled, &mut challenges_enabled, &mut alerts_enabled,
                                                 &mut effects_a_enabled, &mut effects_b_enabled,
                                                 &mut cooldowns_enabled, &mut dot_tracker_enabled, &mut notes_enabled,
+                                                &mut combat_time_enabled,
                                                 &mut overlays_visible, &mut move_mode, &mut rearrange_mode, &mut auto_hidden);
                                         }
                                     }
@@ -1180,6 +1185,7 @@ pub fn App() -> Element {
                                                             &mut timers_b_enabled, &mut challenges_enabled, &mut alerts_enabled,
                                                             &mut effects_a_enabled, &mut effects_b_enabled,
                                                             &mut cooldowns_enabled, &mut dot_tracker_enabled, &mut notes_enabled,
+                                                            &mut combat_time_enabled,
                                                             &mut overlays_visible, &mut move_mode, &mut rearrange_mode, &mut auto_hidden);
                                                     }
                                                 }
@@ -1304,6 +1310,16 @@ pub fn App() -> Element {
                                             }
                                         }); },
                                         "Alerts"
+                                    }
+                                    button {
+                                        class: if combat_time_on { "btn btn-overlay btn-active" } else { "btn btn-overlay" },
+                                        title: "Displays the current encounter combat time",
+                                        onclick: move |_| { spawn(async move {
+                                            if api::toggle_overlay(OverlayType::CombatTime, combat_time_on).await {
+                                                combat_time_enabled.set(!combat_time_on);
+                                            }
+                                        }); },
+                                        "Combat Time"
                                     }
                                 }
                             }
@@ -2348,6 +2364,7 @@ fn apply_status(
     cooldowns_enabled: &mut Signal<bool>,
     dot_tracker_enabled: &mut Signal<bool>,
     notes_enabled: &mut Signal<bool>,
+    combat_time_enabled: &mut Signal<bool>,
     overlays_visible: &mut Signal<bool>,
     move_mode: &mut Signal<bool>,
     rearrange_mode: &mut Signal<bool>,
@@ -2370,6 +2387,7 @@ fn apply_status(
     cooldowns_enabled.set(status.cooldowns_enabled);
     dot_tracker_enabled.set(status.dot_tracker_enabled);
     notes_enabled.set(status.notes_enabled);
+    combat_time_enabled.set(status.combat_time_enabled);
     overlays_visible.set(status.overlays_visible);
     move_mode.set(status.move_mode);
     rearrange_mode.set(status.rearrange_mode);

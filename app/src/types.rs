@@ -115,6 +115,8 @@ pub struct OverlayStatus {
     pub dot_tracker_enabled: bool,
     pub notes_running: bool,
     pub notes_enabled: bool,
+    pub combat_time_running: bool,
+    pub combat_time_enabled: bool,
     pub overlays_visible: bool,
     pub move_mode: bool,
     pub rearrange_mode: bool,
@@ -249,6 +251,7 @@ pub enum OverlayType {
     Cooldowns,
     DotTracker,
     Notes,
+    CombatTime,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

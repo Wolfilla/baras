@@ -62,15 +62,16 @@ use baras_core::context::{
     OverlayPositionConfig, PersonalOverlayConfig, TimerOverlayConfig,
 };
 use baras_overlay::{
-    AlertsOverlay, BossHealthOverlay, ChallengeOverlay, CooldownConfig, CooldownOverlay,
-    DotTrackerConfig, DotTrackerOverlay, EffectsABConfig, EffectsABOverlay, MetricOverlay,
-    NotesConfig, NotesOverlay, Overlay, OverlayConfig, PersonalOverlay, RaidGridLayout,
-    RaidOverlay, RaidOverlayConfig, RaidRegistryAction, TimerOverlay,
+    AlertsOverlay, BossHealthOverlay, ChallengeOverlay, CombatTimeConfig, CombatTimeOverlay,
+    CooldownConfig, CooldownOverlay, DotTrackerConfig, DotTrackerOverlay, EffectsABConfig,
+    EffectsABOverlay, MetricOverlay, NotesConfig, NotesOverlay, Overlay, OverlayConfig,
+    PersonalOverlay, RaidGridLayout, RaidOverlay, RaidOverlayConfig, RaidRegistryAction,
+    TimerOverlay,
 };
 use baras_types::{
-    CooldownTrackerConfig, DotTrackerConfig as TypesDotTrackerConfig,
-    EffectsAConfig as TypesEffectsAConfig, EffectsBConfig as TypesEffectsBConfig,
-    NotesOverlayConfig as TypesNotesOverlayConfig,
+    CombatTimeOverlayConfig as TypesCombatTimeConfig, CooldownTrackerConfig,
+    DotTrackerConfig as TypesDotTrackerConfig, EffectsAConfig as TypesEffectsAConfig,
+    EffectsBConfig as TypesEffectsBConfig, NotesOverlayConfig as TypesNotesOverlayConfig,
 };
 
 use super::state::{OverlayCommand, OverlayHandle, PositionEvent};
@@ -979,6 +980,46 @@ pub fn create_notes_overlay(
     let factory = move || {
         NotesOverlay::new(config, overlay_config, background_alpha)
             .map_err(|e| format!("Failed to create notes overlay: {}", e))
+    };
+
+    let (tx, handle) = spawn_overlay_with_factory(factory, kind, None)?;
+
+    Ok(OverlayHandle {
+        tx,
+        handle,
+        kind,
+        registry_action_rx: None,
+    })
+}
+
+/// Create and spawn the combat time overlay
+pub fn create_combat_time_overlay(
+    position: OverlayPositionConfig,
+    ct_config: TypesCombatTimeConfig,
+    background_alpha: u8,
+) -> Result<OverlayHandle, String> {
+    let config = OverlayConfig {
+        x: position.x,
+        y: position.y,
+        width: position.width,
+        height: position.height,
+        namespace: "baras-combat-time".to_string(),
+        click_through: true,
+        target_monitor_id: position.monitor_id.clone(),
+    };
+
+    let kind = OverlayType::CombatTime;
+
+    let overlay_config = CombatTimeConfig {
+        show_title: ct_config.show_title,
+        font_scale: ct_config.font_scale,
+        font_color: ct_config.font_color,
+        dynamic_background: ct_config.dynamic_background,
+    };
+
+    let factory = move || {
+        CombatTimeOverlay::new(config, overlay_config, background_alpha)
+            .map_err(|e| format!("Failed to create combat time overlay: {}", e))
     };
 
     let (tx, handle) = spawn_overlay_with_factory(factory, kind, None)?;

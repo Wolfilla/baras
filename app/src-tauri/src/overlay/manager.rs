@@ -13,9 +13,10 @@ use std::time::Duration;
 use super::metrics::create_entries_for_type;
 use super::spawn::{
     create_alerts_overlay, create_boss_health_overlay, create_challenges_overlay,
-    create_cooldowns_overlay, create_dot_tracker_overlay, create_effects_a_overlay,
-    create_effects_b_overlay, create_metric_overlay, create_notes_overlay, create_personal_overlay,
-    create_raid_overlay, create_timers_a_overlay, create_timers_b_overlay,
+    create_combat_time_overlay, create_cooldowns_overlay, create_dot_tracker_overlay,
+    create_effects_a_overlay, create_effects_b_overlay, create_metric_overlay,
+    create_notes_overlay, create_personal_overlay, create_raid_overlay, create_timers_a_overlay,
+    create_timers_b_overlay,
 };
 use super::state::{OverlayCommand, OverlayHandle, PositionEvent};
 use super::types::{MetricType, OverlayType};
@@ -112,6 +113,10 @@ impl OverlayManager {
                 let notes_config = settings.notes_overlay.clone();
                 create_notes_overlay(position, notes_config, settings.notes_opacity)?
             }
+            OverlayType::CombatTime => {
+                let ct_config = settings.combat_time.clone();
+                create_combat_time_overlay(position, ct_config, settings.combat_time_opacity)?
+            }
         };
 
         Ok(SpawnResult {
@@ -177,6 +182,16 @@ impl OverlayManager {
                         )))
                         .await;
                 }
+            }
+            OverlayType::CombatTime => {
+                use baras_overlay::CombatTimeData;
+                let _ = tx
+                    .send(OverlayCommand::UpdateData(OverlayData::CombatTime(
+                        CombatTimeData {
+                            encounter_time_secs: data.encounter_time_secs,
+                        },
+                    )))
+                    .await;
             }
             OverlayType::Raid
             | OverlayType::BossHealth
@@ -382,6 +397,17 @@ impl OverlayManager {
                 };
                 OverlayConfigUpdate::Notes(notes_config, settings.notes_opacity, eu)
             }
+            OverlayType::CombatTime => {
+                use baras_overlay::CombatTimeConfig;
+                let cfg = &settings.combat_time;
+                let ct_config = CombatTimeConfig {
+                    show_title: cfg.show_title,
+                    font_scale: cfg.font_scale,
+                    font_color: cfg.font_color,
+                    dynamic_background: cfg.dynamic_background,
+                };
+                OverlayConfigUpdate::CombatTime(ct_config, settings.combat_time_opacity, eu)
+            }
         }
     }
 
@@ -557,6 +583,7 @@ impl OverlayManager {
                 "cooldowns" => OverlayType::Cooldowns,
                 "dot_tracker" => OverlayType::DotTracker,
                 "notes" => OverlayType::Notes,
+                "combat_time" => OverlayType::CombatTime,
                 _ => {
                     if let Some(mt) = MetricType::from_config_key(key) {
                         OverlayType::Metric(mt)
@@ -724,6 +751,7 @@ impl OverlayManager {
                 "cooldowns" => OverlayType::Cooldowns,
                 "dot_tracker" => OverlayType::DotTracker,
                 "notes" => OverlayType::Notes,
+                "combat_time" => OverlayType::CombatTime,
                 _ => {
                     if let Some(mt) = MetricType::from_config_key(key) {
                         OverlayType::Metric(mt)
@@ -981,6 +1009,7 @@ impl OverlayManager {
             OverlayType::Cooldowns,
             OverlayType::DotTracker,
             OverlayType::Notes,
+            OverlayType::CombatTime,
         ];
         for mt in MetricType::all() {
             types.push(OverlayType::Metric(*mt));

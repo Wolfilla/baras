@@ -1866,6 +1866,38 @@ impl Default for NotesOverlayConfig {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Combat Time Overlay Configuration
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Configuration for the standalone combat time overlay
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CombatTimeOverlayConfig {
+    /// Whether to show the "Combat Time" title and separator
+    #[serde(default = "default_true")]
+    pub show_title: bool,
+    /// Font scale multiplier (0.5 - 3.0, default 1.0)
+    #[serde(default = "default_scaling_factor")]
+    pub font_scale: f32,
+    /// Font color (RGBA)
+    #[serde(default = "default_font_color")]
+    pub font_color: Color,
+    /// When true, background shrinks to fit content
+    #[serde(default)]
+    pub dynamic_background: bool,
+}
+
+impl Default for CombatTimeOverlayConfig {
+    fn default() -> Self {
+        Self {
+            show_title: true,
+            font_scale: 1.0,
+            font_color: overlay_colors::WHITE,
+            dynamic_background: false,
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Hotkey Settings
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1984,6 +2016,10 @@ pub struct OverlaySettings {
     pub notes_overlay: NotesOverlayConfig,
     #[serde(default = "default_opacity")]
     pub notes_opacity: u8,
+    #[serde(default)]
+    pub combat_time: CombatTimeOverlayConfig,
+    #[serde(default = "default_opacity")]
+    pub combat_time_opacity: u8,
     /// Auto-hide overlays when local player is in a conversation
     #[serde(default)]
     pub hide_during_conversations: bool,
@@ -2033,6 +2069,8 @@ impl Default for OverlaySettings {
             dot_tracker_opacity: 180,
             notes_overlay: NotesOverlayConfig::default(),
             notes_opacity: 180,
+            combat_time: CombatTimeOverlayConfig::default(),
+            combat_time_opacity: 180,
             hide_during_conversations: false,
             hide_when_not_live: false,
         }

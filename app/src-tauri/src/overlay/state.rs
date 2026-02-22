@@ -218,6 +218,16 @@ impl OverlayState {
         self.get_tx(OverlayType::Notes)
     }
 
+    /// Get the channel for combat time overlay (convenience)
+    pub fn get_combat_time_tx(&self) -> Option<&Sender<OverlayCommand>> {
+        self.get_tx(OverlayType::CombatTime)
+    }
+
+    /// Check if combat time overlay is running
+    pub fn is_combat_time_running(&self) -> bool {
+        self.overlays.contains_key(&OverlayType::CombatTime)
+    }
+
     /// Insert an overlay handle
     pub fn insert(&mut self, handle: OverlayHandle) {
         self.overlays.insert(handle.kind, handle);

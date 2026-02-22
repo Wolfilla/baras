@@ -165,6 +165,25 @@ async fn process_overlay_update(
                     )))
                     .await;
             }
+
+            // Send combat time to combat time overlay
+            let combat_time_tx = {
+                let state = match overlay_state.lock() {
+                    Ok(s) => s,
+                    Err(_) => return,
+                };
+                state.get_combat_time_tx().cloned()
+            };
+
+            if let Some(tx) = combat_time_tx {
+                let _ = tx
+                    .send(OverlayCommand::UpdateData(OverlayData::CombatTime(
+                        baras_overlay::CombatTimeData {
+                            encounter_time_secs: data.encounter_time_secs,
+                        },
+                    )))
+                    .await;
+            }
         }
         OverlayUpdate::EffectsUpdated(raid_data) => {
             // Send raid frame data to raid overlay
@@ -379,6 +398,11 @@ async fn process_overlay_update(
                     channels.push((tx.clone(), OverlayData::Challenges(Default::default())));
                 }
 
+                // Combat time overlay
+                if let Some(tx) = state.get_combat_time_tx() {
+                    channels.push((tx.clone(), OverlayData::CombatTime(Default::default())));
+                }
+
                 channels
             };
 
@@ -462,6 +486,11 @@ async fn process_overlay_update(
                 // Notes overlay
                 if let Some(tx) = state.get_notes_tx() {
                     channels.push((tx.clone(), OverlayData::Notes(Default::default())));
+                }
+
+                // Combat time overlay
+                if let Some(tx) = state.get_combat_time_tx() {
+                    channels.push((tx.clone(), OverlayData::CombatTime(Default::default())));
                 }
 
                 channels

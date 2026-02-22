@@ -54,6 +54,10 @@ pub use overlays::{
     ChallengeData,
     ChallengeEntry,
     ChallengeOverlay,
+    // Combat time overlay
+    CombatTimeConfig,
+    CombatTimeData,
+    CombatTimeOverlay,
     // Cooldowns overlay
     CooldownConfig,
     CooldownData,

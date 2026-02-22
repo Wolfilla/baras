@@ -1501,6 +1501,60 @@ mod examples {
             std::thread::sleep(Duration::from_millis(sleep_ms));
         }
     }
+
+    /// Standalone combat time overlay that increments every second
+    pub fn run_combat_time_overlay() {
+        use baras_overlay::{
+            CombatTimeConfig, CombatTimeData, CombatTimeOverlay, Overlay, OverlayConfig,
+            OverlayData,
+        };
+
+        let config = OverlayConfig {
+            x: 300,
+            y: 200,
+            width: 180,
+            height: 80,
+            namespace: "baras-combat-time".to_string(),
+            click_through: false,
+            target_monitor_id: None,
+        };
+
+        let ct_config = CombatTimeConfig::default();
+
+        let mut overlay = match CombatTimeOverlay::new(config, ct_config, 180) {
+            Ok(o) => o,
+            Err(e) => {
+                tracing::error!("Failed to create combat time overlay: {}", e);
+                return;
+            }
+        };
+
+        overlay.set_move_mode(true);
+
+        let start = Instant::now();
+        let frame_duration = Duration::from_millis(100);
+        let mut last_frame = Instant::now();
+
+        loop {
+            if !overlay.poll_events() {
+                break;
+            }
+
+            let elapsed_secs = start.elapsed().as_secs();
+            overlay.update_data(OverlayData::CombatTime(CombatTimeData {
+                encounter_time_secs: elapsed_secs,
+            }));
+
+            let now = Instant::now();
+            if now.duration_since(last_frame) >= frame_duration {
+                overlay.render();
+                last_frame = now;
+            }
+
+            let sleep_ms = if overlay.is_interactive() { 4 } else { 50 };
+            std::thread::sleep(Duration::from_millis(sleep_ms));
+        }
+    }
 }
 
 fn main() {
@@ -1527,6 +1581,7 @@ fn main() {
         "--challenges" => examples::run_challenge_overlay(),
         "--challenges-h" => examples::run_challenge_overlay_horizontal(),
         "--alerts" => examples::run_alerts_overlay(),
+        "--combat-time" => examples::run_combat_time_overlay(),
         _ => {
             println!("Usage: cargo run -p baras-overlay -- [OPTION]");
             println!();
@@ -1543,6 +1598,7 @@ fn main() {
                 "  --challenges-h Challenge overlay (horizontal, 3-col: value + /s + percent)"
             );
             println!("  --alerts       Alerts text overlay with fade-out effect");
+            println!("  --combat-time  Standalone combat time display");
         }
     }
 }

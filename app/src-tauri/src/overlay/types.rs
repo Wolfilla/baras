@@ -148,6 +148,8 @@ pub enum OverlayType {
     DotTracker,
     /// Encounter notes overlay (Markdown)
     Notes,
+    /// Standalone combat time display
+    CombatTime,
 }
 
 impl OverlayType {
@@ -167,6 +169,7 @@ impl OverlayType {
             OverlayType::Cooldowns => "cooldowns",
             OverlayType::DotTracker => "dot_tracker",
             OverlayType::Notes => "notes",
+            OverlayType::CombatTime => "combat_time",
         }
     }
 
@@ -186,6 +189,7 @@ impl OverlayType {
             OverlayType::Cooldowns => "baras-cooldowns".to_string(),
             OverlayType::DotTracker => "baras-dot-tracker".to_string(),
             OverlayType::Notes => "baras-notes".to_string(),
+            OverlayType::CombatTime => "baras-combat-time".to_string(),
         }
     }
 
@@ -205,6 +209,7 @@ impl OverlayType {
             OverlayType::Cooldowns => (50, 500),
             OverlayType::DotTracker => (50, 650),
             OverlayType::Notes => (950, 550),
+            OverlayType::CombatTime => (400, 100),
         }
     }
 }
