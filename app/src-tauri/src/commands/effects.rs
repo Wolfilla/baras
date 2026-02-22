@@ -513,16 +513,24 @@ pub struct EffectImportPreview {
 // Export/Import Commands
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Export user effect overrides as TOML
+/// Export user effect overrides as TOML.
+/// If `effect_id` is provided, exports only that single effect; otherwise exports all.
 #[tauri::command]
-pub async fn export_effects_toml() -> Result<String, String> {
-    let effects = load_user_effects_file()
+pub async fn export_effects_toml(effect_id: Option<String>) -> Result<String, String> {
+    let mut effects = load_user_effects_file()
         .filter(|(v, _)| *v == EFFECTS_DSL_VERSION)
         .map(|(_, effects)| effects)
         .ok_or("No custom effect definitions to export")?;
 
     if effects.is_empty() {
         return Err("No custom effect definitions to export".to_string());
+    }
+
+    if let Some(ref id) = effect_id {
+        effects.retain(|e| e.id == *id);
+        if effects.is_empty() {
+            return Err(format!("Effect '{}' not found in user definitions", id));
+        }
     }
 
     let config = DefinitionConfig {

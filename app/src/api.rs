@@ -682,9 +682,15 @@ pub async fn create_effect_definition(effect: &EffectListItem) -> Result<EffectL
 
 use crate::types::EffectImportPreview;
 
-/// Export user effect overrides as TOML string
-pub async fn export_effects_toml() -> Result<String, String> {
-    let result = try_invoke("export_effects_toml", JsValue::NULL).await?;
+/// Export user effect overrides as TOML string.
+/// If `effect_id` is provided, exports only that single effect; otherwise exports all.
+pub async fn export_effects_toml(effect_id: Option<&str>) -> Result<String, String> {
+    let obj = js_sys::Object::new();
+    match effect_id {
+        Some(id) => js_set(&obj, "effectId", &JsValue::from_str(id)),
+        None => js_set(&obj, "effectId", &JsValue::NULL),
+    }
+    let result = try_invoke("export_effects_toml", obj.into()).await?;
     result
         .as_string()
         .ok_or_else(|| "Failed to get export content".to_string())

@@ -1101,7 +1101,6 @@ pub fn App() -> Element {
                                                             toast.show(format!("Failed to save settings: {}", err), ToastSeverity::Normal);
                                                         } else {
                                                             overlay_settings.set(cfg.overlay_settings);
-                                                            profile_dirty.set(true);
                                                             api::apply_not_live_auto_hide().await;
                                                         }
                                                     }
@@ -1129,7 +1128,6 @@ pub fn App() -> Element {
                                                             toast.show(format!("Failed to save settings: {}", err), ToastSeverity::Normal);
                                                         } else {
                                                             overlay_settings.set(cfg.overlay_settings);
-                                                            profile_dirty.set(true);
                                                         }
                                                     }
                                                 });

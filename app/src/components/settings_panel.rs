@@ -124,7 +124,11 @@ pub fn SettingsPanel(
                     save_status.set(format!("Failed to save: {}", err));
                 } else {
                     api::refresh_overlay_settings().await;
-                    settings.set(new_settings);
+                    // Use the merged config (draft appearance + backend positions/enabled/
+                    // behavioral flags) rather than the stale draft, so we don't overwrite
+                    // global settings like hide_when_not_live or hide_during_conversations.
+                    settings.set(config.overlay_settings.clone());
+                    draft_settings.set(config.overlay_settings);
                     has_changes.set(false);
                     save_status.set("Settings saved!".to_string());
                     on_settings_saved.call(());

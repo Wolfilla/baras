@@ -340,9 +340,15 @@ pub async fn save_profile(
 ) -> Result<(), String> {
     let mut config = handle.config().await;
 
-    // Sync enabled state with actual running overlays before saving
-    if let Ok(state) = overlay_state.lock() {
-        sync_enabled_with_running(&mut config, &state);
+    // Sync enabled state with actual running overlays before saving,
+    // but only when overlays are actually visible and not auto-hidden.
+    // When auto-hidden or globally hidden, overlays are temporarily shut down
+    // so running state doesn't reflect the user's intent — the config's
+    // enabled map is already authoritative from show()/hide() calls.
+    if config.overlay_settings.overlays_visible && !handle.shared.auto_hide.is_auto_hidden() {
+        if let Ok(state) = overlay_state.lock() {
+            sync_enabled_with_running(&mut config, &state);
+        }
     }
 
     config.save_profile(name).map_err(|e| e.to_string())?;
@@ -489,17 +495,33 @@ fn render_changelog_html() -> String {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Sync the enabled map with actual running overlay state
+/// Sync the enabled map with actual running overlay state.
+/// Only call this when overlays are globally visible and not auto-hidden,
+/// otherwise running state doesn't reflect user intent.
 fn sync_enabled_with_running(config: &mut AppConfig, overlay_state: &crate::overlay::OverlayState) {
-    // Sync raid overlay state
-    let raid_running = overlay_state.is_running(OverlayType::Raid);
-    config.overlay_settings.set_enabled("raid", raid_running);
+    // Sync all fixed overlay types
+    let fixed_types = [
+        OverlayType::Personal,
+        OverlayType::Raid,
+        OverlayType::BossHealth,
+        OverlayType::TimersA,
+        OverlayType::TimersB,
+        OverlayType::Challenges,
+        OverlayType::Alerts,
+        OverlayType::EffectsA,
+        OverlayType::EffectsB,
+        OverlayType::Cooldowns,
+        OverlayType::DotTracker,
+        OverlayType::Notes,
+        OverlayType::CombatTime,
+    ];
 
-    // Sync personal overlay state
-    let personal_running = overlay_state.is_running(OverlayType::Personal);
-    config
-        .overlay_settings
-        .set_enabled("personal", personal_running);
+    for overlay_type in &fixed_types {
+        let running = overlay_state.is_running(*overlay_type);
+        config
+            .overlay_settings
+            .set_enabled(overlay_type.config_key(), running);
+    }
 
     // Sync all metric overlay states
     for metric_type in MetricType::all() {

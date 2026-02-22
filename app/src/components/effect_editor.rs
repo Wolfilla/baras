@@ -413,6 +413,33 @@ pub fn EffectEditorPanel(mut props: EffectEditorProps) -> Element {
         });
     };
 
+    let on_export_effect = move |effect: EffectListItem| {
+        let effect_id = effect.id.clone();
+        spawn(async move {
+            match api::export_effects_toml(Some(&effect_id)).await {
+                Ok(toml) => {
+                    let default_name = format!("{}.toml", effect_id);
+                    if let Some(path) = api::save_file_dialog(&default_name).await {
+                        match api::save_export_file(&path, &toml).await {
+                            Ok(()) => {
+                                save_status.set("Exported".to_string());
+                                status_is_error.set(false);
+                            }
+                            Err(e) => {
+                                save_status.set(e);
+                                status_is_error.set(true);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    save_status.set(e);
+                    status_is_error.set(true);
+                }
+            }
+        });
+    };
+
     let on_create = move |name: String| {
         // Create a local draft - don't save to backend yet
         let mut new_effect = default_effect(name);
@@ -484,7 +511,7 @@ pub fn EffectEditorPanel(mut props: EffectEditorProps) -> Element {
                         class: "btn btn-sm",
                         onclick: move |_| {
                             spawn(async move {
-                                match api::export_effects_toml().await {
+                                match api::export_effects_toml(None).await {
                                     Ok(toml) => {
                                         if let Some(path) = api::save_file_dialog("effects_custom.toml").await {
                                             match api::save_export_file(&path, &toml).await {
@@ -506,7 +533,7 @@ pub fn EffectEditorPanel(mut props: EffectEditorProps) -> Element {
                                 }
                             });
                         },
-                        "Export"
+                        "Export All"
                     }
                     button {
                         class: "btn btn-sm",
@@ -605,6 +632,7 @@ pub fn EffectEditorPanel(mut props: EffectEditorProps) -> Element {
                             let effect_clone = effect.clone();
                             let effect_for_delete = effect.clone();
                             let effect_for_duplicate = effect.clone();
+                            let effect_for_export = effect.clone();
 
                             rsx! {
                                 EffectRow {
@@ -622,6 +650,7 @@ pub fn EffectEditorPanel(mut props: EffectEditorProps) -> Element {
                                     on_save: on_save,
                                     on_delete: move |_| on_delete(effect_for_delete.clone()),
                                     on_duplicate: move |_| on_duplicate(effect_for_duplicate.clone()),
+                                    on_export: move |_| on_export_effect(effect_for_export.clone()),
                                     on_cancel: move |_| {},
                                 }
                             }
@@ -778,6 +807,7 @@ fn EffectRow(
     on_save: EventHandler<EffectListItem>,
     on_delete: EventHandler<()>,
     on_duplicate: EventHandler<()>,
+    #[props(default)] on_export: EventHandler<()>,
     #[props(default)] on_cancel: EventHandler<()>,
 ) -> Element {
     let mut is_dirty = use_signal(|| false);
@@ -879,6 +909,7 @@ fn EffectRow(
                     on_save: on_save,
                     on_delete: on_delete,
                     on_duplicate: on_duplicate,
+                    on_export: on_export,
                     on_dirty: move |dirty: bool| is_dirty.set(dirty),
                 }
             }
@@ -897,6 +928,7 @@ fn EffectEditForm(
     on_save: EventHandler<EffectListItem>,
     on_delete: EventHandler<()>,
     on_duplicate: EventHandler<()>,
+    #[props(default)] on_export: EventHandler<()>,
     #[props(default)] on_dirty: EventHandler<bool>,
 ) -> Element {
     let effect_for_draft = effect.clone();
@@ -1853,6 +1885,14 @@ fn EffectEditForm(
                             class: "btn-duplicate",
                             onclick: move |_| on_duplicate.call(()),
                             "Duplicate"
+                        }
+                    }
+
+                    if !is_draft && effect.is_user_override {
+                        button {
+                            class: "btn-duplicate",
+                            onclick: move |_| on_export.call(()),
+                            "Export"
                         }
                     }
 
