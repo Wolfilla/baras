@@ -322,6 +322,25 @@ pub fn format_duration_u64(secs: u64) -> String {
     format!("{}:{:02}", secs / 60, secs % 60)
 }
 
+/// Format a duration from f32 seconds as `M:SS.mmm` with millisecond precision.
+///
+/// # Examples
+/// ```
+/// use baras_types::formatting::format_duration_ms;
+/// assert_eq!(format_duration_ms(0.486), "0:00.486");
+/// assert_eq!(format_duration_ms(65.25), "1:05.250");
+/// assert_eq!(format_duration_ms(342.861), "5:42.861");
+/// assert_eq!(format_duration_ms(0.0), "0:00.000");
+/// ```
+pub fn format_duration_ms(secs: f32) -> String {
+    let total_ms = (secs * 1000.0).round() as u64;
+    let mins = total_ms / 60_000;
+    let remaining_ms = total_ms % 60_000;
+    let whole_secs = remaining_ms / 1000;
+    let ms = remaining_ms % 1000;
+    format!("{}:{:02}.{:03}", mins, whole_secs, ms)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -429,6 +448,16 @@ mod tests {
     fn test_format_duration_f32() {
         assert_eq!(format_duration_f32(125.7), "2:06");
         assert_eq!(format_duration_f32(59.4), "0:59");
+    }
+
+    #[test]
+    fn test_format_duration_ms() {
+        assert_eq!(format_duration_ms(0.0), "0:00.000");
+        assert_eq!(format_duration_ms(0.486), "0:00.486");
+        assert_eq!(format_duration_ms(65.25), "1:05.250");
+        assert_eq!(format_duration_ms(342.861), "5:42.861");
+        assert_eq!(format_duration_ms(59.999), "0:59.999");
+        assert_eq!(format_duration_ms(60.0), "1:00.000");
     }
 
     #[test]

@@ -1317,6 +1317,41 @@ impl ServiceHandle {
             .await
     }
 
+    /// Query ability usage statistics for a single player.
+    pub async fn query_ability_usage(
+        &self,
+        source_name: String,
+        encounter_idx: Option<u32>,
+        time_range: Option<TimeRange>,
+    ) -> Result<Vec<baras_core::query::AbilityUsageRow>, String> {
+        let session_guard = self.shared.session.read().await;
+        let session = session_guard.as_ref().ok_or("No active session")?;
+        let session = session.read().await;
+
+        if let Some(idx) = encounter_idx {
+            let dir = session.encounters_dir().ok_or("No encounters directory")?;
+            let path = dir.join(baras_core::storage::encounter_filename(idx));
+            if !path.exists() {
+                return Err(format!("Encounter file not found: {:?}", path));
+            }
+            self.shared.query_context.register_parquet(&path).await?;
+        } else {
+            let writer = session
+                .encounter_writer()
+                .ok_or("No live encounter buffer")?;
+            let batch = writer.to_record_batch().ok_or("Live buffer is empty")?;
+            self.shared.query_context.register_batch(batch).await?;
+        }
+
+        self.shared
+            .query_context
+            .query()
+            .await
+            .query()
+            .query_ability_usage(&source_name, time_range.as_ref())
+            .await
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Overlay Status Flags (for skipping work in effects loop)
     // ─────────────────────────────────────────────────────────────────────────

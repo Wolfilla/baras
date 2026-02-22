@@ -13,6 +13,7 @@ mod overview;
 mod rotation;
 mod time_series;
 mod timeline;
+mod usage;
 
 pub use error::QueryError;
 
@@ -31,7 +32,8 @@ pub use baras_types::{
     AbilityBreakdown, BreakdownMode, CombatLogFilters, CombatLogFindMatch, CombatLogRow,
     DamageTakenSummary, DataTab, EffectChartData, EffectWindow, EncounterTimeline,
     EntityBreakdown, GcdSlot, GroupedEntityNames, HpPoint, NpcHealthRow, PhaseSegment, PlayerDeath,
-    RaidOverviewRow, RotationAnalysis, RotationCycle, RotationEvent, TimeRange, TimeSeriesPoint,
+    AbilityUsageRow, RaidOverviewRow, RotationAnalysis, RotationCycle, RotationEvent, TimeRange,
+    TimeSeriesPoint,
 };
 
 /// Escape single quotes for SQL string literals (O'Brien -> O''Brien)

@@ -400,6 +400,28 @@ pub struct RotationAnalysis {
     pub abilities: Vec<(i64, String)>,
 }
 
+/// Per-ability usage statistics for a single player.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AbilityUsageRow {
+    pub ability_name: String,
+    pub ability_id: i64,
+    pub cast_count: i64,
+    /// Seconds from combat start of first cast.
+    pub first_cast_secs: f32,
+    /// Seconds from combat start of last cast.
+    pub last_cast_secs: f32,
+    /// Average time between consecutive casts (0.0 if < 2 casts).
+    pub avg_time_between: f32,
+    /// Median time between consecutive casts (0.0 if < 2 casts).
+    pub median_time_between: f32,
+    /// Minimum time between consecutive casts (0.0 if < 2 casts).
+    pub min_time_between: f32,
+    /// Maximum time between consecutive casts (0.0 if < 2 casts).
+    pub max_time_between: f32,
+    /// Raw cast timestamps (combat_time_secs) for timeline visualization.
+    pub timestamps: Vec<f32>,
+}
+
 /// A phase segment - one occurrence of a phase (phases can repeat).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PhaseSegment {
@@ -2536,6 +2558,7 @@ pub enum ViewMode {
     CombatLog,
     Detailed(DataTab),
     Rotation,
+    Usage,
 }
 
 impl ViewMode {
@@ -2575,6 +2598,21 @@ pub enum SortColumn {
     Absorbed,
 }
 
+/// Sort column for ability usage table
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UsageSortColumn {
+    Ability,
+    #[default]
+    CastCount,
+    FirstCast,
+    LastCast,
+    AvgTime,
+    MedianTime,
+    MinTime,
+    MaxTime,
+}
+
 /// Sort direction
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -2609,6 +2647,10 @@ pub struct DataExplorerState {
     pub time_range: TimeRange,
     /// Selected anchor ability for rotation view (persists across encounters)
     pub selected_rotation_anchor: Option<i64>,
+    /// Sort column for usage table
+    pub usage_sort_column: UsageSortColumn,
+    /// Sort direction for usage table
+    pub usage_sort_direction: SortDirection,
 }
 
 impl Default for DataExplorerState {
@@ -2625,6 +2667,8 @@ impl Default for DataExplorerState {
             collapsed_sections: std::collections::HashSet::new(),
             time_range: TimeRange::default(),
             selected_rotation_anchor: None,
+            usage_sort_column: UsageSortColumn::default(),
+            usage_sort_direction: SortDirection::default(),
         }
     }
 }

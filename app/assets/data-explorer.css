@@ -1729,3 +1729,129 @@
   padding-top: 8px;
   padding-bottom: 8px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Ability Usage Tab
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Ability Usage tab accent color */
+.data-tab:nth-child(8).active::after {
+  background: hsl(200, 70%, 55%);
+} /* Ability Usage - blue */
+
+/* Rotation tab accent color */
+.data-tab:nth-child(9).active::after {
+  background: hsl(45, 80%, 55%);
+} /* Rotation - amber */
+
+.usage-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.usage-table-container {
+  overflow-x: auto;
+}
+
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.usage-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-secondary);
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.usage-table thead th.num {
+  text-align: right;
+}
+
+.usage-table thead th.sortable {
+  cursor: pointer;
+}
+
+.usage-table thead th.sortable:hover {
+  color: var(--text-primary);
+}
+
+.usage-table tbody td {
+  padding: 6px 10px;
+  font-size: 0.85em;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.usage-table tbody td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-table tbody td.muted {
+  color: var(--text-muted, #666);
+}
+
+.usage-table tbody tr {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.usage-table .ability-name-cell {
+  min-width: 200px;
+}
+
+.usage-table .ability-name-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ability-id-muted {
+  opacity: 0.4;
+  font-size: 0.85em;
+}
+
+.usage-table .empty-message {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Timeline Chart */
+.usage-timeline-container {
+  flex-shrink: 0;
+  margin-top: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  padding: 8px;
+}
+
+.usage-timeline-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  color: var(--text-muted, #666);
+  font-size: 0.85em;
+  font-style: italic;
+}
+
+.usage-timeline-chart {
+  width: 100%;
+  transition: height 0.2s ease;
+}

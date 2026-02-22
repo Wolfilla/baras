@@ -3,11 +3,10 @@
 //! Provides SQL-based queries over encounter data using DataFusion.
 
 use baras_core::query::{
-    AbilityBreakdown, BreakdownMode, CombatLogFilters, CombatLogFindMatch, CombatLogRow,
-    DamageTakenSummary, DataTab, EffectChartData, EffectWindow, EncounterTimeline,
+    AbilityBreakdown, AbilityUsageRow, BreakdownMode, CombatLogFilters, CombatLogFindMatch,
+    CombatLogRow, DamageTakenSummary, DataTab, EffectChartData, EffectWindow, EncounterTimeline,
     EntityBreakdown, HpPoint, NpcHealthRow, PlayerDeath, RaidOverviewRow, RotationAnalysis,
-    TimeRange,
-    TimeSeriesPoint,
+    TimeRange, TimeSeriesPoint,
 };
 use tauri::State;
 
@@ -320,5 +319,18 @@ pub async fn query_rotation(
 ) -> Result<RotationAnalysis, String> {
     handle
         .query_rotation(encounter_idx, source_name, anchor_ability_id, time_range)
+        .await
+}
+
+/// Query ability usage statistics for a single player.
+#[tauri::command]
+pub async fn query_ability_usage(
+    handle: State<'_, ServiceHandle>,
+    source_name: String,
+    encounter_idx: Option<u32>,
+    time_range: Option<TimeRange>,
+) -> Result<Vec<AbilityUsageRow>, String> {
+    handle
+        .query_ability_usage(source_name, encounter_idx, time_range)
         .await
 }

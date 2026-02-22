@@ -47,6 +47,7 @@ pub use baras_types::{
     // Trigger type (shared across timers, phases, counters)
     Trigger,
     UiSessionState,
+    UsageSortColumn,
     ViewMode,
     MAX_PROFILES,
 };
