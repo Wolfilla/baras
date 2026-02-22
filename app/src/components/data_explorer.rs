@@ -1624,6 +1624,9 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                         entity_collapsed: *entity_collapsed.read(),
                                         on_toggle_entity: move |_| { let v = *entity_collapsed.read(); entity_collapsed.set(!v); },
                                         european: eu,
+                                        on_time_range_change: move |new_range: TimeRange| {
+                                            time_range.set(new_range);
+                                        },
                                     }
                                 }
                             }
