@@ -6037,6 +6037,29 @@ details[open] .collapsible-summary::before {
   outline-offset: -2px;
 }
 
+/* ─── Profile Unsaved Changes Indicator ──────────────────────────────────────── */
+.profile-unsaved-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.35em 0.75em;
+  margin-bottom: 0.5em;
+  font-size: 0.8rem;
+  color: var(--swtor-orange, #f0ad4e);
+  background: rgba(240, 173, 78, 0.08);
+  border: 1px solid rgba(240, 173, 78, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.profile-unsaved-indicator i {
+  font-size: 0.85em;
+  flex-shrink: 0;
+}
+
+.settings-panel .profile-unsaved-indicator {
+  margin: 0 1em 0.5em 1em;
+}
+
 /* ─── Color Swatch ───────────────────────────────────────────────────────────── */
 .color-swatch {
   width: 12px;

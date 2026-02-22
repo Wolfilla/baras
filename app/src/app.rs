@@ -124,6 +124,7 @@ pub fn App() -> Element {
     // Profile state
     let mut profile_names = use_signal(Vec::<String>::new);
     let mut active_profile = use_signal(|| None::<String>);
+    let mut profile_dirty = use_signal(|| false);
 
     // Parsely settings
     let mut parsely_username = use_signal(String::new);
@@ -655,6 +656,7 @@ pub fn App() -> Element {
                                         if let Some(cfg) = api::get_config().await {
                                             overlay_settings.set(cfg.overlay_settings);
                                         }
+                                        profile_dirty.set(false);
                                         api::refresh_overlay_settings().await;
                                         if let Some(status) = api::get_overlay_status().await {
                                             apply_status(&status, &mut metric_overlays_enabled, &mut personal_enabled,
@@ -1065,6 +1067,13 @@ pub fn App() -> Element {
                 // ─────────────────────────────────────────────────────────────
                 if ui_state.read().active_tab == MainTab::Overlays {
                     section { class: "overlay-controls",
+                        // Profile unsaved changes indicator
+                        if profile_dirty() && active_profile().is_some() {
+                            div { class: "profile-unsaved-indicator",
+                                i { class: "fa-solid fa-circle-exclamation" }
+                                span { " Changes not saved to profile" }
+                            }
+                        }
                         // Top bar: Customize button + Profile selector
                         div { class: "overlays-top-bar",
                             button {
@@ -1092,6 +1101,7 @@ pub fn App() -> Element {
                                                             toast.show(format!("Failed to save settings: {}", err), ToastSeverity::Normal);
                                                         } else {
                                                             overlay_settings.set(cfg.overlay_settings);
+                                                            profile_dirty.set(true);
                                                             api::apply_not_live_auto_hide().await;
                                                         }
                                                     }
@@ -1119,6 +1129,7 @@ pub fn App() -> Element {
                                                             toast.show(format!("Failed to save settings: {}", err), ToastSeverity::Normal);
                                                         } else {
                                                             overlay_settings.set(cfg.overlay_settings);
+                                                            profile_dirty.set(true);
                                                         }
                                                     }
                                                 });
@@ -1151,6 +1162,7 @@ pub fn App() -> Element {
                                                         let names = api::get_profile_names().await;
                                                         profile_names.set(names);
                                                         active_profile.set(Some(name));
+                                                        profile_dirty.set(false);
                                                     }
                                                 }
                                             });
@@ -1178,6 +1190,7 @@ pub fn App() -> Element {
                                                     if let Some(cfg) = api::get_config().await {
                                                         overlay_settings.set(cfg.overlay_settings);
                                                     }
+                                                    profile_dirty.set(false);
                                                     api::refresh_overlay_settings().await;
                                                     if let Some(status) = api::get_overlay_status().await {
                                                         apply_status(&status, &mut metric_overlays_enabled, &mut personal_enabled,
@@ -1210,6 +1223,8 @@ pub fn App() -> Element {
                                                     spawn(async move {
                                                         if let Err(err) = api::save_profile(&n).await {
                                                             toast.show(format!("Failed to save profile: {}", err), ToastSeverity::Normal);
+                                                        } else {
+                                                            profile_dirty.set(false);
                                                         }
                                                     });
                                                 }
@@ -1286,6 +1301,7 @@ pub fn App() -> Element {
                                         onclick: move |_| { spawn(async move {
                                             if api::toggle_overlay(OverlayType::Personal, personal_on).await {
                                                 personal_enabled.set(!personal_on);
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "Personal Stats"
@@ -1297,6 +1313,7 @@ pub fn App() -> Element {
                                             if api::toggle_overlay(OverlayType::Raid, raid_on).await {
                                                 raid_enabled.set(!raid_on);
                                                 if raid_on { rearrange_mode.set(false); }
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "Raid Frames"
@@ -1307,6 +1324,7 @@ pub fn App() -> Element {
                                         onclick: move |_| { spawn(async move {
                                             if api::toggle_overlay(OverlayType::Alerts, alerts_on).await {
                                                 alerts_enabled.set(!alerts_on);
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "Alerts"
@@ -1317,6 +1335,7 @@ pub fn App() -> Element {
                                         onclick: move |_| { spawn(async move {
                                             if api::toggle_overlay(OverlayType::CombatTime, combat_time_on).await {
                                                 combat_time_enabled.set(!combat_time_on);
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "Combat Time"
@@ -1334,6 +1353,7 @@ pub fn App() -> Element {
                                         onclick: move |_| { spawn(async move {
                                             if api::toggle_overlay(OverlayType::BossHealth, boss_health_on).await {
                                                 boss_health_enabled.set(!boss_health_on);
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "Boss Health"
@@ -1344,6 +1364,7 @@ pub fn App() -> Element {
                                         onclick: move |_| { spawn(async move {
                                             if api::toggle_overlay(OverlayType::Challenges, challenges_on).await {
                                                 challenges_enabled.set(!challenges_on);
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "Challenges"
@@ -1354,6 +1375,7 @@ pub fn App() -> Element {
                                         onclick: move |_| { spawn(async move {
                                             if api::toggle_overlay(OverlayType::TimersA, timers_on).await {
                                                 timers_enabled.set(!timers_on);
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "Timers A"
@@ -1364,6 +1386,7 @@ pub fn App() -> Element {
                                         onclick: move |_| { spawn(async move {
                                             if api::toggle_overlay(OverlayType::TimersB, timers_b_on).await {
                                                 timers_b_enabled.set(!timers_b_on);
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "Timers B"
@@ -1374,6 +1397,7 @@ pub fn App() -> Element {
                                         onclick: move |_| { spawn(async move {
                                             if api::toggle_overlay(OverlayType::Notes, notes_on).await {
                                                 notes_enabled.set(!notes_on);
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "Notes"
@@ -1391,6 +1415,7 @@ pub fn App() -> Element {
                                         onclick: move |_| { spawn(async move {
                                             if api::toggle_overlay(OverlayType::EffectsA, effects_a_on).await {
                                                 effects_a_enabled.set(!effects_a_on);
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "Effects A"
@@ -1401,6 +1426,7 @@ pub fn App() -> Element {
                                         onclick: move |_| { spawn(async move {
                                             if api::toggle_overlay(OverlayType::EffectsB, effects_b_on).await {
                                                 effects_b_enabled.set(!effects_b_on);
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "Effects B"
@@ -1411,6 +1437,7 @@ pub fn App() -> Element {
                                         onclick: move |_| { spawn(async move {
                                             if api::toggle_overlay(OverlayType::Cooldowns, cooldowns_on).await {
                                                 cooldowns_enabled.set(!cooldowns_on);
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "Cooldowns"
@@ -1421,6 +1448,7 @@ pub fn App() -> Element {
                                         onclick: move |_| { spawn(async move {
                                             if api::toggle_overlay(OverlayType::DotTracker, dot_tracker_on).await {
                                                 dot_tracker_enabled.set(!dot_tracker_on);
+                                                profile_dirty.set(true);
                                             }
                                         }); },
                                         "DOT Tracker"
@@ -1444,6 +1472,7 @@ pub fn App() -> Element {
                                                             let mut map = metric_overlays_enabled();
                                                             map.insert(ot, !is_on);
                                                             metric_overlays_enabled.set(map);
+                                                            profile_dirty.set(true);
                                                         }
                                                     }); },
                                                     "{ot.label()}"
@@ -1473,8 +1502,10 @@ pub fn App() -> Element {
                                     personal_enabled: personal_enabled,
                                     raid_enabled: raid_enabled,
                                     overlays_visible: overlays_visible,
+                                    profile_dirty: profile_dirty,
                                     on_close: move |_| settings_open.set(false),
                                     on_header_mousedown: move |_| {},
+                                    on_settings_saved: move |_| profile_dirty.set(true),
                                 }
                             }
                         }

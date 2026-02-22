@@ -27,8 +27,10 @@ pub fn SettingsPanel(
     personal_enabled: Signal<bool>,
     raid_enabled: Signal<bool>,
     overlays_visible: Signal<bool>,
+    profile_dirty: Signal<bool>,
     on_close: EventHandler<()>,
     on_header_mousedown: EventHandler<MouseEvent>,
+    on_settings_saved: EventHandler<()>,
 ) -> Element {
     // Local draft of settings being edited
     #[allow(clippy::redundant_closure)]
@@ -125,6 +127,7 @@ pub fn SettingsPanel(
                     settings.set(new_settings);
                     has_changes.set(false);
                     save_status.set("Settings saved!".to_string());
+                    on_settings_saved.call(());
                 }
             }
         }
@@ -176,6 +179,14 @@ pub fn SettingsPanel(
                 }
             }
 
+            // Profile unsaved changes indicator
+            if profile_dirty() && active_profile().is_some() {
+                div { class: "profile-unsaved-indicator",
+                    i { class: "fa-solid fa-circle-exclamation" }
+                    span { " Changes not saved to profile" }
+                }
+            }
+
             // ─────────────────────────────────────────────────────────────────
             // Profiles section (inline)
             // ─────────────────────────────────────────────────────────────────
@@ -214,6 +225,7 @@ pub fn SettingsPanel(
                                                                     toast.show(format!("Failed to load profile: {}", err), ToastSeverity::Normal);
                                                                 } else {
                                                                     active_profile.set(Some(pname.clone()));
+                                                                    profile_dirty.set(false);
                                                                     profile_status.set(format!("Loaded '{}'", pname));
                                                                     if let Some(config) = api::get_config().await {
                                                                         draft_settings.set(config.overlay_settings.clone());
@@ -249,6 +261,7 @@ pub fn SettingsPanel(
                                                                     toast.show(format!("Failed to save profile: {}", err), ToastSeverity::Normal);
                                                                 } else {
                                                                     active_profile.set(Some(pname.clone()));
+                                                                    profile_dirty.set(false);
                                                                     profile_status.set(format!("Saved '{}'", pname));
                                                                 }
                                                             });
@@ -307,6 +320,7 @@ pub fn SettingsPanel(
                                         profile_names.set(api::get_profile_names().await);
                                         active_profile.set(Some(name.clone()));
                                         new_profile_name.set(String::new());
+                                        profile_dirty.set(false);
                                         profile_status.set(format!("Created '{}'", name));
                                     }
                                 });
