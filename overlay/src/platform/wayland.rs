@@ -1511,9 +1511,14 @@ impl Dispatch<WlPointer, ()> for WaylandState {
                         (new_height as u32).clamp(MIN_OVERLAY_SIZE, MAX_OVERLAY_HEIGHT);
 
                     if new_width > 0 && new_height > 0 {
+                        // Store unsnapped values for accurate delta accumulation
                         state.pending_width = clamped_width;
                         state.pending_height = clamped_height;
-                        state.pending_resize = Some((clamped_width, clamped_height));
+                        // Snap only the value applied to the window
+                        state.pending_resize = Some((
+                            super::snap_size_to_grid(clamped_width),
+                            super::snap_size_to_grid(clamped_height),
+                        ));
                     }
 
                     // Update pointer for resize delta calculation
@@ -1611,8 +1616,8 @@ impl Dispatch<ZwpRelativePointerV1, ()> for WaylandState {
                 state.drag_accum_y += dy;
 
                 // Calculate new window position (relative to current output)
-                let new_x = state.drag_start_window_x + state.drag_accum_x as i32;
-                let new_y = state.drag_start_window_y + state.drag_accum_y as i32;
+                let new_x = super::snap_to_grid(state.drag_start_window_x + state.drag_accum_x as i32);
+                let new_y = super::snap_to_grid(state.drag_start_window_y + state.drag_accum_y as i32);
 
                 // Check if this position would cross into a different monitor
                 if let Some((out_x, out_y, _, _)) = state.bound_output_bounds {

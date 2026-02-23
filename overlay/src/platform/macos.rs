@@ -645,22 +645,27 @@ impl OverlayPlatform for MacOSOverlay {
                     let dx = global_x - self.drag_start_x;
                     let dy = self.drag_start_y - global_y; // Flip Y
                     self.set_position(
-                        self.drag_start_win_x + dx as i32,
-                        self.drag_start_win_y + dy as i32,
+                        super::snap_to_grid(self.drag_start_win_x + dx as i32),
+                        super::snap_to_grid(self.drag_start_win_y + dy as i32),
                     );
                 } else if self.is_resizing {
                     let dx = loc_x - self.resize_start_x;
                     let dy = self.resize_start_y - loc_y; // Flip Y
 
-                    let new_w = (self.pending_width as i32 + dx as i32)
+                    let raw_w = (self.pending_width as i32 + dx as i32)
                         .clamp(MIN_OVERLAY_SIZE as i32, MAX_OVERLAY_WIDTH as i32)
                         as u32;
-                    let new_h = (self.pending_height as i32 + dy as i32)
+                    let raw_h = (self.pending_height as i32 + dy as i32)
                         .clamp(MIN_OVERLAY_SIZE as i32, MAX_OVERLAY_HEIGHT as i32)
                         as u32;
+                    let snapped_w = super::snap_size_to_grid(raw_w);
+                    let snapped_h = super::snap_size_to_grid(raw_h);
 
-                    if new_w != self.width || new_h != self.height {
-                        self.set_size(new_w, new_h);
+                    if snapped_w != self.width || snapped_h != self.height {
+                        self.set_size(snapped_w, snapped_h);
+                        // Restore raw values for accurate delta accumulation
+                        self.pending_width = raw_w;
+                        self.pending_height = raw_h;
                         self.resize_start_x = loc_x;
                         self.resize_start_y = loc_y;
                     }

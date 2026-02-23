@@ -7,6 +7,20 @@ pub const MIN_OVERLAY_SIZE: u32 = 50;
 pub const MAX_OVERLAY_WIDTH: u32 = 1280;
 pub const MAX_OVERLAY_HEIGHT: u32 = 1024;
 pub const RESIZE_CORNER_SIZE: i32 = 20;
+pub const SNAP_GRID_SIZE: i32 = 10;
+
+/// Snap a value to the nearest grid point
+#[inline]
+pub fn snap_to_grid(value: i32) -> i32 {
+    ((value + SNAP_GRID_SIZE / 2) / SNAP_GRID_SIZE) * SNAP_GRID_SIZE
+}
+
+/// Snap a size (u32) to the nearest grid point, respecting min/max constraints
+#[inline]
+pub fn snap_size_to_grid(value: u32) -> u32 {
+    let v = value as i32;
+    ((v + SNAP_GRID_SIZE / 2) / SNAP_GRID_SIZE * SNAP_GRID_SIZE) as u32
+}
 
 #[cfg(all(unix, not(target_os = "macos")))]
 pub mod wayland;

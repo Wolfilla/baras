@@ -729,25 +729,30 @@ impl OverlayPlatform for WindowsOverlay {
                             let dx = pt.x - self.drag_start_screen_x;
                             let dy = pt.y - self.drag_start_screen_y;
                             self.set_position(
-                                self.drag_start_win_x + dx,
-                                self.drag_start_win_y + dy,
+                                super::snap_to_grid(self.drag_start_win_x + dx),
+                                super::snap_to_grid(self.drag_start_win_y + dy),
                             );
                         } else if self.is_resizing {
                             // Resize uses client coordinates (size changes, position doesn't)
                             let dx = x - self.resize_start_x;
                             let dy = y - self.resize_start_y;
-                            let new_w = (self.pending_width as i32 + dx)
+                            let raw_w = (self.pending_width as i32 + dx)
                                 .max(MIN_OVERLAY_SIZE as i32)
                                 .min(MAX_OVERLAY_WIDTH as i32)
                                 as u32;
-                            let new_h = (self.pending_height as i32 + dy)
+                            let raw_h = (self.pending_height as i32 + dy)
                                 .max(MIN_OVERLAY_SIZE as i32)
                                 .min(MAX_OVERLAY_HEIGHT as i32)
                                 as u32;
+                            let snapped_w = super::snap_size_to_grid(raw_w);
+                            let snapped_h = super::snap_size_to_grid(raw_h);
 
                             // Live resize - update immediately for visual feedback
-                            if new_w != self.width || new_h != self.height {
-                                self.set_size(new_w, new_h);
+                            if snapped_w != self.width || snapped_h != self.height {
+                                self.set_size(snapped_w, snapped_h);
+                                // Restore raw values for accurate delta accumulation
+                                self.pending_width = raw_w;
+                                self.pending_height = raw_h;
                                 // Update resize start for next delta
                                 self.resize_start_x = x;
                                 self.resize_start_y = y;
