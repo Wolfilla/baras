@@ -5,6 +5,10 @@
 - Implemented fix for data explorer elements not properly loading some of the time
 - Data explorer overview table columns all now sortable
 - NPCs can now be selected on all data explorer tabs
+- Combat log can now be filtered by ability/effect ID
+- Rebalanced width of combat log columns to give more space to effects and abilities
+- Combat log columns can now be sorted by clicking on header
+- Modify Charge events now properly display in combat log
 
 ## Overlays
 
@@ -13,6 +17,10 @@
 ## Effects
 
 - Added ability to specify AoE refresh for effects
+
+## TImers
+
+- Added ability ID to Apex flare cast timer
 
 ## Data Explorer
 
