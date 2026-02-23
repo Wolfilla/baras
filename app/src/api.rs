@@ -872,10 +872,10 @@ pub async fn install_update() -> Result<(), String> {
 // Re-export query types from shared types crate
 pub use baras_types::{
     AbilityBreakdown, AbilityUsageRow, BreakdownMode, CombatLogFilters, CombatLogFindMatch,
-    CombatLogRow, DamageTakenSummary, DataTab, EffectChartData, EffectWindow, EncounterTimeline,
-    EntityBreakdown, GcdSlot, GroupedEntityNames, HpPoint, NpcHealthRow, PhaseSegment,
-    PlayerDeath, RaidOverviewRow, RotationAnalysis, RotationCycle, RotationEvent, TimeRange,
-    TimeSeriesPoint,
+    CombatLogRow, CombatLogSortColumn, DamageTakenSummary, DataTab, EffectChartData, EffectWindow,
+    EncounterTimeline, EntityBreakdown, GcdSlot, GroupedEntityNames, HpPoint, NpcHealthRow,
+    PhaseSegment, PlayerDeath, RaidOverviewRow, RotationAnalysis, RotationCycle, RotationEvent,
+    SortDirection, TimeRange, TimeSeriesPoint,
 };
 
 /// Query ability breakdown for an encounter and data tab.
@@ -1239,6 +1239,8 @@ pub async fn query_combat_log(
     search_filter: Option<&str>,
     time_range: Option<&TimeRange>,
     event_filters: Option<&CombatLogFilters>,
+    sort_column: CombatLogSortColumn,
+    sort_direction: SortDirection,
 ) -> Option<Vec<CombatLogRow>> {
     let obj = js_sys::Object::new();
     if let Some(idx) = encounter_idx {
@@ -1275,6 +1277,10 @@ pub async fn query_combat_log(
     } else {
         js_set(&obj, "eventFilters", &JsValue::NULL);
     }
+    let sc_js = serde_wasm_bindgen::to_value(&sort_column).unwrap_or(JsValue::NULL);
+    js_set(&obj, "sortColumn", &sc_js);
+    let sd_js = serde_wasm_bindgen::to_value(&sort_direction).unwrap_or(JsValue::NULL);
+    js_set(&obj, "sortDirection", &sd_js);
     let result = invoke("query_combat_log", obj.into()).await;
     from_js(result)
 }
@@ -1333,6 +1339,8 @@ pub async fn query_combat_log_find(
     target_filter: Option<&str>,
     time_range: Option<&TimeRange>,
     event_filters: Option<&CombatLogFilters>,
+    sort_column: CombatLogSortColumn,
+    sort_direction: SortDirection,
 ) -> Option<Vec<CombatLogFindMatch>> {
     let obj = js_sys::Object::new();
     if let Some(idx) = encounter_idx {
@@ -1363,6 +1371,10 @@ pub async fn query_combat_log_find(
     } else {
         js_set(&obj, "eventFilters", &JsValue::NULL);
     }
+    let sc_js = serde_wasm_bindgen::to_value(&sort_column).unwrap_or(JsValue::NULL);
+    js_set(&obj, "sortColumn", &sc_js);
+    let sd_js = serde_wasm_bindgen::to_value(&sort_direction).unwrap_or(JsValue::NULL);
+    js_set(&obj, "sortDirection", &sd_js);
     let result = invoke("query_combat_log_find", obj.into()).await;
     from_js(result)
 }

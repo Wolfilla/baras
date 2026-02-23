@@ -13,9 +13,9 @@ use baras_core::encounter::EncounterState;
 use baras_core::game_data::Discipline;
 use baras_core::query::{
     AbilityBreakdown, BreakdownMode, CombatLogFilters, CombatLogFindMatch, CombatLogRow,
-    DamageTakenSummary, DataTab, EffectChartData, EffectWindow, EncounterTimeline,
-    EntityBreakdown, HpPoint, NpcHealthRow, PlayerDeath, RaidOverviewRow, TimeRange,
-    TimeSeriesPoint,
+    CombatLogSortColumn, DamageTakenSummary, DataTab, EffectChartData, EffectWindow,
+    EncounterTimeline, EntityBreakdown, HpPoint, NpcHealthRow, PlayerDeath, RaidOverviewRow,
+    SortDirection, TimeRange, TimeSeriesPoint,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -1018,6 +1018,8 @@ impl ServiceHandle {
         search_filter: Option<String>,
         time_range: Option<TimeRange>,
         event_filters: Option<CombatLogFilters>,
+        sort_column: CombatLogSortColumn,
+        sort_direction: SortDirection,
     ) -> Result<Vec<CombatLogRow>, String> {
         let session_guard = self.shared.session.read().await;
         let session = session_guard.as_ref().ok_or("No active session")?;
@@ -1051,6 +1053,8 @@ impl ServiceHandle {
                 search_filter.as_deref(),
                 time_range.as_ref(),
                 event_filters.as_ref(),
+                sort_column,
+                sort_direction,
             )
             .await
     }
@@ -1108,6 +1112,8 @@ impl ServiceHandle {
         target_filter: Option<String>,
         time_range: Option<TimeRange>,
         event_filters: Option<CombatLogFilters>,
+        sort_column: CombatLogSortColumn,
+        sort_direction: SortDirection,
     ) -> Result<Vec<CombatLogFindMatch>, String> {
         let session_guard = self.shared.session.read().await;
         let session = session_guard.as_ref().ok_or("No active session")?;
@@ -1139,6 +1145,8 @@ impl ServiceHandle {
                 target_filter.as_deref(),
                 time_range.as_ref(),
                 event_filters.as_ref(),
+                sort_column,
+                sort_direction,
             )
             .await;
 

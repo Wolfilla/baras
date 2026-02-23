@@ -4,9 +4,9 @@
 
 use baras_core::query::{
     AbilityBreakdown, AbilityUsageRow, BreakdownMode, CombatLogFilters, CombatLogFindMatch,
-    CombatLogRow, DamageTakenSummary, DataTab, EffectChartData, EffectWindow, EncounterTimeline,
-    EntityBreakdown, HpPoint, NpcHealthRow, PlayerDeath, RaidOverviewRow, RotationAnalysis,
-    TimeRange, TimeSeriesPoint,
+    CombatLogRow, CombatLogSortColumn, DamageTakenSummary, DataTab, EffectChartData, EffectWindow,
+    EncounterTimeline, EntityBreakdown, HpPoint, NpcHealthRow, PlayerDeath, RaidOverviewRow,
+    RotationAnalysis, SortDirection, TimeRange, TimeSeriesPoint,
 };
 use tauri::State;
 
@@ -196,6 +196,8 @@ pub async fn query_combat_log(
     search_filter: Option<String>,
     time_range: Option<TimeRange>,
     event_filters: Option<CombatLogFilters>,
+    sort_column: Option<CombatLogSortColumn>,
+    sort_direction: Option<SortDirection>,
 ) -> Result<Vec<CombatLogRow>, String> {
     handle
         .query_combat_log(
@@ -207,6 +209,8 @@ pub async fn query_combat_log(
             search_filter,
             time_range,
             event_filters,
+            sort_column.unwrap_or_default(),
+            sort_direction.unwrap_or_default(),
         )
         .await
 }
@@ -244,6 +248,8 @@ pub async fn query_combat_log_find(
     target_filter: Option<String>,
     time_range: Option<TimeRange>,
     event_filters: Option<CombatLogFilters>,
+    sort_column: Option<CombatLogSortColumn>,
+    sort_direction: Option<SortDirection>,
 ) -> Result<Vec<CombatLogFindMatch>, String> {
     handle
         .query_combat_log_find(
@@ -253,6 +259,8 @@ pub async fn query_combat_log_find(
             target_filter,
             time_range,
             event_filters,
+            sort_column.unwrap_or_default(),
+            sort_direction.unwrap_or_default(),
         )
         .await
 }

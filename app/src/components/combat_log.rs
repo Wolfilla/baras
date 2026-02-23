@@ -5,7 +5,7 @@
 use dioxus::prelude::*;
 use wasm_bindgen::JsCast;
 
-use crate::api::{self, CombatLogFilters, CombatLogFindMatch, CombatLogRow, GroupedEntityNames, TimeRange};
+use crate::api::{self, CombatLogFilters, CombatLogFindMatch, CombatLogRow, CombatLogSortColumn, GroupedEntityNames, SortDirection, TimeRange};
 use crate::components::ability_icon::AbilityIcon;
 use crate::types::CombatLogSessionState;
 use baras_types::formatting;
@@ -239,6 +239,10 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
     // Time format toggle: false = M:SS.dd (relative), true = total seconds
     let mut show_absolute_time = use_signal(|| false);
 
+    // Sort state (persisted across tab switches)
+    let mut log_sort_column = use_signal(|| state.peek().sort_column);
+    let mut log_sort_direction = use_signal(|| state.peek().sort_direction);
+
     // Find feature - searches all data via backend query
     let mut find_text = use_signal(String::new);
     let mut find_debounce = use_signal(String::new);
@@ -365,7 +369,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
         })
     };
 
-    // Load data when filters, time range, or encounter change
+    // Load data when filters, time range, sort, or encounter change
     use_effect(move || {
         let idx = *encounter_idx_signal.read();
         let tr = time_range_signal.read().clone();
@@ -378,6 +382,8 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
             Some(search)
         };
         let event_filters = build_event_filters();
+        let sort_col = *log_sort_column.read();
+        let sort_dir = *log_sort_direction.read();
 
         // Calculate load offset based on current scroll position
         let current_scroll = *scroll_top.peek();
@@ -415,6 +421,8 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                 search_opt.as_deref(),
                 tr_opt,
                 event_filters.as_ref(),
+                sort_col,
+                sort_dir,
             )
             .await
             {
@@ -475,6 +483,8 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
         let source = source_filter.read().clone();
         let target = target_filter.read().clone();
         let event_filters = build_event_filters();
+        let sort_col = *log_sort_column.read();
+        let sort_dir = *log_sort_direction.read();
 
         if find.is_empty() {
             find_matches.set(vec![]);
@@ -497,6 +507,8 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                 target.as_deref(),
                 tr_opt,
                 event_filters.as_ref(),
+                sort_col,
+                sort_dir,
             )
             .await
             {
@@ -535,7 +547,9 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
         let effects = *filter_effects.read();
         let other = *filter_other.read();
         let ids = *show_ids.read();
-        
+        let sort_col = *log_sort_column.read();
+        let sort_dir = *log_sort_direction.read();
+
         if let Ok(mut s) = state.try_write() {
             *s = CombatLogSessionState {
                 encounter_idx: Some(*encounter_idx_signal.peek()),
@@ -549,6 +563,8 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                 filter_other: other,
                 show_ids: ids,
                 scroll_offset: scroll,
+                sort_column: sort_col,
+                sort_direction: sort_dir,
             };
         }
     });
@@ -585,6 +601,8 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
             let search = search_debounce.read().clone();
             let new_offset = start_idx.saturating_sub(OVERSCAN) as u64;
             let event_filters = build_event_filters();
+            let sort_col = *log_sort_column.peek();
+            let sort_dir = *log_sort_direction.peek();
 
             spawn(async move {
                 let search_opt = if search.is_empty() {
@@ -607,6 +625,8 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                     search_opt.as_deref(),
                     tr_opt,
                     event_filters.as_ref(),
+                    sort_col,
+                    sort_dir,
                 )
                 .await
                 {
@@ -638,6 +658,53 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
     let absolute_time = *show_absolute_time.read();
     let highlighted_row_idx = *highlighted_row.read();
     let find_match_count = find_matches.read().len();
+    let active_sort_col = *log_sort_column.read();
+    let active_sort_dir = *log_sort_direction.read();
+
+    // Sort indicator for column headers
+    let sort_indicator = |col: CombatLogSortColumn| -> &'static str {
+        if active_sort_col == col {
+            match active_sort_dir {
+                SortDirection::Asc => " \u{25B2}",
+                SortDirection::Desc => " \u{25BC}",
+            }
+        } else {
+            ""
+        }
+    };
+    let sort_ind_time = sort_indicator(CombatLogSortColumn::Time);
+    let sort_ind_source = sort_indicator(CombatLogSortColumn::Source);
+    let sort_ind_type = sort_indicator(CombatLogSortColumn::Type);
+    let sort_ind_target = sort_indicator(CombatLogSortColumn::Target);
+    let sort_ind_ability = sort_indicator(CombatLogSortColumn::Ability);
+    let sort_ind_effect = sort_indicator(CombatLogSortColumn::Effect);
+    let sort_ind_value = sort_indicator(CombatLogSortColumn::Value);
+    let sort_ind_abs = sort_indicator(CombatLogSortColumn::Absorbed);
+    let sort_ind_over = sort_indicator(CombatLogSortColumn::Overheal);
+    let sort_ind_threat = sort_indicator(CombatLogSortColumn::Threat);
+
+    // Click handler for sortable column headers
+    let mut on_sort_click = move |col: CombatLogSortColumn| {
+        if *log_sort_column.peek() == col {
+            let toggled = log_sort_direction.peek().toggle();
+            log_sort_direction.set(toggled);
+        } else {
+            log_sort_column.set(col);
+            log_sort_direction.set(SortDirection::Desc);
+        }
+        // Reset scroll and find state on sort change
+        scroll_top.set(0.0);
+        loaded_offset.set(0);
+        find_matches.set(vec![]);
+        find_current_idx.set(0);
+        highlighted_row.set(None);
+        if let Some(window) = web_sys::window()
+            && let Some(doc) = window.document()
+            && let Some(elem) = doc.get_element_by_id("combat-log-scroll")
+        {
+            elem.set_scroll_top(0);
+        }
+    };
     let find_idx = *find_current_idx.read();
 
     rsx! {
@@ -974,7 +1041,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                     onmouseup: move |_| resizing_col.set(None),
                     onmouseleave: move |_| resizing_col.set(None),
 
-                    div { class: "log-cell log-time", style: "width: {col_time}px; min-width: {col_time}px;", "Time" }
+                    div { class: "log-cell log-time sortable", style: "width: {col_time}px; min-width: {col_time}px;", onclick: move |_| on_sort_click(CombatLogSortColumn::Time), "Time{sort_ind_time}" }
                     div {
                         class: "log-resize-handle",
                         onmousedown: move |e| {
@@ -984,7 +1051,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                             resize_start_width.set(*col_time.read());
                         },
                     }
-                    div { class: "log-cell log-source", style: "width: {col_source}px; min-width: {col_source}px;", "Source" }
+                    div { class: "log-cell log-source sortable", style: "width: {col_source}px; min-width: {col_source}px;", onclick: move |_| on_sort_click(CombatLogSortColumn::Source), "Source{sort_ind_source}" }
                     div {
                         class: "log-resize-handle",
                         onmousedown: move |e| {
@@ -994,7 +1061,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                             resize_start_width.set(*col_source.read());
                         },
                     }
-                    div { class: "log-cell log-type", style: "width: {col_type}px; min-width: {col_type}px;", "Type" }
+                    div { class: "log-cell log-type sortable", style: "width: {col_type}px; min-width: {col_type}px;", onclick: move |_| on_sort_click(CombatLogSortColumn::Type), "Type{sort_ind_type}" }
                     div {
                         class: "log-resize-handle",
                         onmousedown: move |e| {
@@ -1004,7 +1071,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                             resize_start_width.set(*col_type.read());
                         },
                     }
-                    div { class: "log-cell log-target", style: "width: {col_target}px; min-width: {col_target}px;", "Target" }
+                    div { class: "log-cell log-target sortable", style: "width: {col_target}px; min-width: {col_target}px;", onclick: move |_| on_sort_click(CombatLogSortColumn::Target), "Target{sort_ind_target}" }
                     div {
                         class: "log-resize-handle",
                         onmousedown: move |e| {
@@ -1014,7 +1081,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                             resize_start_width.set(*col_target.read());
                         },
                     }
-                    div { class: "log-cell log-ability", style: "width: {col_ability}px; min-width: {col_ability}px;", "Ability" }
+                    div { class: "log-cell log-ability sortable", style: "width: {col_ability}px; min-width: {col_ability}px;", onclick: move |_| on_sort_click(CombatLogSortColumn::Ability), "Ability{sort_ind_ability}" }
                     div {
                         class: "log-resize-handle",
                         onmousedown: move |e| {
@@ -1024,7 +1091,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                             resize_start_width.set(*col_ability.read());
                         },
                     }
-                    div { class: "log-cell log-effect", style: "width: {col_effect}px; min-width: {col_effect}px;", "Effect" }
+                    div { class: "log-cell log-effect sortable", style: "width: {col_effect}px; min-width: {col_effect}px;", onclick: move |_| on_sort_click(CombatLogSortColumn::Effect), "Effect{sort_ind_effect}" }
                     div {
                         class: "log-resize-handle",
                         onmousedown: move |e| {
@@ -1034,7 +1101,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                             resize_start_width.set(*col_effect.read());
                         },
                     }
-                    div { class: "log-cell log-value", style: "width: {col_value}px; min-width: {col_value}px;", "Value" }
+                    div { class: "log-cell log-value sortable", style: "width: {col_value}px; min-width: {col_value}px;", onclick: move |_| on_sort_click(CombatLogSortColumn::Value), "Value{sort_ind_value}" }
                     div {
                         class: "log-resize-handle",
                         onmousedown: move |e| {
@@ -1044,7 +1111,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                             resize_start_width.set(*col_value.read());
                         },
                     }
-                    div { class: "log-cell log-absorbed", style: "width: {col_abs}px; min-width: {col_abs}px;", "Abs" }
+                    div { class: "log-cell log-absorbed sortable", style: "width: {col_abs}px; min-width: {col_abs}px;", onclick: move |_| on_sort_click(CombatLogSortColumn::Absorbed), "Abs{sort_ind_abs}" }
                     div {
                         class: "log-resize-handle",
                         onmousedown: move |e| {
@@ -1054,7 +1121,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                             resize_start_width.set(*col_abs.read());
                         },
                     }
-                    div { class: "log-cell log-overheal log-overheal-header", style: "width: {col_over}px; min-width: {col_over}px;", title: "Overheal", "Over" }
+                    div { class: "log-cell log-overheal log-overheal-header sortable", style: "width: {col_over}px; min-width: {col_over}px;", title: "Overheal", onclick: move |_| on_sort_click(CombatLogSortColumn::Overheal), "Over{sort_ind_over}" }
                     div {
                         class: "log-resize-handle",
                         onmousedown: move |e| {
@@ -1084,7 +1151,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                             resize_start_width.set(*col_dmg_type.read());
                         },
                     }
-                    div { class: "log-cell log-threat", style: "width: {col_threat}px; min-width: {col_threat}px;", "Threat" }
+                    div { class: "log-cell log-threat sortable", style: "width: {col_threat}px; min-width: {col_threat}px;", onclick: move |_| on_sort_click(CombatLogSortColumn::Threat), "Threat{sort_ind_threat}" }
                 }
 
                 // Virtual scroll container

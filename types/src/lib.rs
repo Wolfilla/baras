@@ -2622,6 +2622,56 @@ pub enum SortDirection {
     Asc,
 }
 
+impl SortDirection {
+    pub fn sql(&self) -> &'static str {
+        match self {
+            SortDirection::Asc => "ASC",
+            SortDirection::Desc => "DESC",
+        }
+    }
+
+    pub fn toggle(&self) -> Self {
+        match self {
+            SortDirection::Asc => SortDirection::Desc,
+            SortDirection::Desc => SortDirection::Asc,
+        }
+    }
+}
+
+/// Sort column for combat log viewer (server-side sort for paginated virtual scrolling)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CombatLogSortColumn {
+    #[default]
+    Time,
+    Source,
+    Target,
+    Type,
+    Ability,
+    Effect,
+    Value,
+    Absorbed,
+    Overheal,
+    Threat,
+}
+
+impl CombatLogSortColumn {
+    pub fn sql_column(&self) -> &'static str {
+        match self {
+            CombatLogSortColumn::Time => "combat_time_secs",
+            CombatLogSortColumn::Source => "source_name",
+            CombatLogSortColumn::Target => "target_name",
+            CombatLogSortColumn::Type => "effect_type_id",
+            CombatLogSortColumn::Ability => "ability_name",
+            CombatLogSortColumn::Effect => "effect_name",
+            CombatLogSortColumn::Value => "COALESCE(dmg_effective, 0) + COALESCE(heal_effective, 0)",
+            CombatLogSortColumn::Absorbed => "COALESCE(dmg_absorbed, 0)",
+            CombatLogSortColumn::Overheal => "GREATEST(COALESCE(heal_amount, 0) - COALESCE(heal_effective, 0), 0)",
+            CombatLogSortColumn::Threat => "COALESCE(threat, 0.0)",
+        }
+    }
+}
+
 /// Data Explorer session state
 #[derive(Debug, Clone, PartialEq)]
 pub struct DataExplorerState {
@@ -2693,7 +2743,7 @@ pub struct CombatLogSessionState {
     pub encounter_idx: Option<u32>,
     /// Source filter
     pub source_filter: Option<String>,
-    /// Target filter  
+    /// Target filter
     pub target_filter: Option<String>,
     /// Search text
     pub search_text: String,
@@ -2707,6 +2757,10 @@ pub struct CombatLogSessionState {
     pub show_ids: bool,
     /// Scroll position
     pub scroll_offset: f64,
+    /// Sort column
+    pub sort_column: CombatLogSortColumn,
+    /// Sort direction
+    pub sort_direction: SortDirection,
 }
 
 impl Default for CombatLogSessionState {
@@ -2723,6 +2777,8 @@ impl Default for CombatLogSessionState {
             filter_other: true,
             show_ids: true,
             scroll_offset: 0.0,
+            sort_column: CombatLogSortColumn::default(),
+            sort_direction: SortDirection::default(),
         }
     }
 }

@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::game_data::{effect_id, effect_type_id};
+use baras_types::{CombatLogSortColumn, SortDirection};
 
 /// Build search clause supporting case-insensitive search and OR logic.
 /// Search terms separated by " OR " are combined with OR logic.
@@ -96,6 +97,8 @@ impl EncounterQuery<'_> {
         search_filter: Option<&str>,
         time_range: Option<&TimeRange>,
         event_filters: Option<&CombatLogFilters>,
+        sort_column: CombatLogSortColumn,
+        sort_direction: SortDirection,
     ) -> Result<Vec<CombatLogRow>, String> {
         // Always exclude Spend/Restore events (energy/resource changes)
         let mut where_clauses = vec![
@@ -148,6 +151,8 @@ impl EncounterQuery<'_> {
         }
 
         let where_clause = where_clauses.join(" AND ");
+        let order_col = sort_column.sql_column();
+        let order_dir = sort_direction.sql();
 
         let batches = self
             .sql(&format!(
@@ -177,7 +182,7 @@ impl EncounterQuery<'_> {
                 target_class_id
             FROM events
             WHERE {where_clause}
-            ORDER BY combat_time_secs
+            ORDER BY {order_col} {order_dir}, combat_time_secs
             LIMIT {limit} OFFSET {offset}
         "#
             ))
@@ -373,6 +378,8 @@ impl EncounterQuery<'_> {
         target_filter: Option<&str>,
         time_range: Option<&TimeRange>,
         event_filters: Option<&CombatLogFilters>,
+        sort_column: CombatLogSortColumn,
+        sort_direction: SortDirection,
     ) -> Result<Vec<CombatLogFindMatch>, String> {
         if find_text.is_empty() {
             return Ok(vec![]);
@@ -435,13 +442,16 @@ impl EncounterQuery<'_> {
 
         // CTE: number ALL rows in base result, then filter for find matches
         // This gives us the position in the FULL list for correct scrolling
+        let order_col = sort_column.sql_column();
+        let order_dir = sort_direction.sql();
+
         let batches = self
             .sql(&format!(
                 r#"
                 WITH numbered AS (
                     SELECT
                         line_number,
-                        CAST(ROW_NUMBER() OVER (ORDER BY combat_time_secs) - 1 AS BIGINT) as pos,
+                        CAST(ROW_NUMBER() OVER (ORDER BY {order_col} {order_dir}, combat_time_secs) - 1 AS BIGINT) as pos,
                         source_name as src,
                         target_name as tgt,
                         ability_name as abl,
