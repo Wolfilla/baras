@@ -23,6 +23,7 @@ const EFFECT_TYPE_REMOVEEFFECT: i64 = 836045448945478;
 const EFFECT_TYPE_EVENT: i64 = 836045448945472;
 const EFFECT_TYPE_SPEND: i64 = 836045448945473;
 const EFFECT_TYPE_RESTORE: i64 = 836045448945476;
+const EFFECT_TYPE_MODIFYCHARGES: i64 = 836045448953666;
 
 // Effect IDs for mapping
 const EFFECT_DAMAGE: i64 = 836045448945501;
@@ -101,6 +102,7 @@ fn readable_event_type(row: &CombatLogRow) -> &'static str {
         },
         EFFECT_TYPE_SPEND => "Spend",
         EFFECT_TYPE_RESTORE => "Restore",
+        EFFECT_TYPE_MODIFYCHARGES => "Modify Charges",
         _ => "",
     }
 }

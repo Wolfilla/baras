@@ -66,12 +66,14 @@ fn build_event_filter_clause(filters: &CombatLogFilters) -> Option<String> {
     }
     if filters.other {
         // Other EVENT types not covered by actions (TargetSet, Death, EnterCombat, etc.)
+        // Includes ModifyCharges and other misc event types
         conditions.push(format!(
-            "(effect_type_id = {} AND effect_id NOT IN ({}, {}, {}))",
+            "((effect_type_id = {} AND effect_id NOT IN ({}, {}, {})) OR effect_type_id = {})",
             effect_type_id::EVENT,
             effect_id::ABILITYACTIVATE,
             effect_id::ABILITYDEACTIVATE,
-            effect_id::ABILITYINTERRUPT
+            effect_id::ABILITYINTERRUPT,
+            effect_type_id::MODIFYCHARGES
         ));
     }
 
@@ -153,6 +155,7 @@ impl EncounterQuery<'_> {
         let where_clause = where_clauses.join(" AND ");
         let order_col = sort_column.sql_column();
         let order_dir = sort_direction.sql();
+        let modify_charges_id = effect_type_id::MODIFYCHARGES;
 
         let batches = self
             .sql(&format!(
@@ -169,7 +172,9 @@ impl EncounterQuery<'_> {
                 ability_name,
                 ability_id,
                 effect_name,
-                COALESCE(dmg_effective, 0) + COALESCE(heal_effective, 0) as value,
+                CASE WHEN effect_type_id = {modify_charges_id} THEN charges
+                     ELSE COALESCE(dmg_effective, 0) + COALESCE(heal_effective, 0)
+                END as value,
                 COALESCE(dmg_absorbed, 0) as absorbed,
                 GREATEST(COALESCE(heal_amount, 0) - COALESCE(heal_effective, 0), 0) as overheal,
                 COALESCE(threat, 0.0) as threat,
