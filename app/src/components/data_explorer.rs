@@ -1113,6 +1113,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         };
 
         selected_source.set(new_source.clone());
+        usage_selected_abilities.set(Vec::new());
 
         // In Rotation mode, just set the source - the RotationView handles its own queries
         let Some(tab) = mode.tab() else {
