@@ -1461,7 +1461,7 @@ display_target = "timers_a"
 
 [boss.timer.trigger]
 type = "ability_cast"
-abilities = []
+abilities = [4296410405011456]
 source = "any_player"
 target = "any"
 
