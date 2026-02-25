@@ -1386,7 +1386,7 @@ show_on_hp_overlay = true
 name = "IZAX"
 ids = [4108097563918336]
 is_boss = true
-is_kill_target = true
+is_kill_target = false
 
 [[boss.phases]]
 id = "izax_p5"
