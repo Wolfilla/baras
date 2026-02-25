@@ -13,3 +13,4 @@
 ## Timers
 
 - Apex Vanguard Mass Target Lock P4 timer no longer fires on combat start
+- XR-53 timers have been overhauled by Keetsune. Several are disabled by default on his recommendation.
