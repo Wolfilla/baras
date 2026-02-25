@@ -6,12 +6,14 @@
 //! Trigger matching delegates to the unified `Trigger::matches_*()` methods in
 //! `dsl/triggers/mod.rs` to ensure consistent behavior across timers, phases, and counters.
 
-use crate::combat_log::{CombatEvent, EntityType};
-use crate::dsl::{EntityDefinition, EntityFilterMatching, Trigger};
+use crate::combat_log::CombatEvent;
+use crate::dsl::Trigger;
 use crate::game_data::{effect_id, effect_type_id};
 use crate::state::SessionCache;
+use crate::timers::matches_source_target_filters;
 
 use super::GameSignal;
+use super::phase::FilterContext;
 
 /// Check for counter increments/decrements based on events and emit CounterChanged signals.
 pub fn check_counter_increments(
@@ -20,22 +22,33 @@ pub fn check_counter_increments(
     current_signals: &[GameSignal],
 ) -> Vec<GameSignal> {
     // Clone the Arc (cheap) to hold definitions while we mutate cache
-    let (definitions, def_idx) = {
+    let (definitions, def_idx, boss_ids, local_player_id, current_target_id) = {
         let Some(enc) = cache.current_encounter() else {
             return Vec::new();
         };
         let Some(idx) = enc.active_boss_idx() else {
             return Vec::new();
         };
-        (enc.boss_definitions_arc(), idx)
+        let boss_ids = enc.boss_entity_ids();
+        let local_player_id = Some(cache.player.id).filter(|&id| id != 0);
+        let current_target_id =
+            local_player_id.and_then(|pid| enc.local_player_target_id(pid));
+        (enc.boss_definitions_arc(), idx, boss_ids, local_player_id, current_target_id)
     };
     let def = &definitions[def_idx];
+
+    let filter_ctx = FilterContext {
+        entities: &def.entities,
+        local_player_id,
+        current_target_id,
+        boss_entity_ids: &boss_ids,
+    };
 
     let mut signals = Vec::new();
 
     for counter in &def.counters {
         // Check increment_on trigger
-        if check_counter_trigger(&counter.increment_on, event, current_signals, &def.entities) {
+        if check_counter_trigger(&counter.increment_on, event, current_signals, &filter_ctx) {
             let Some(enc) = cache.current_encounter_mut() else {
                 tracing::error!(
                     "BUG: encounter missing in check_counter_increments (increment_on)"
@@ -58,7 +71,7 @@ pub fn check_counter_increments(
 
         // Check decrement_on trigger (always decrements)
         if let Some(ref decrement_trigger) = counter.decrement_on
-            && check_counter_trigger(decrement_trigger, event, current_signals, &def.entities)
+            && check_counter_trigger(decrement_trigger, event, current_signals, &filter_ctx)
         {
             let Some(enc) = cache.current_encounter_mut() else {
                 tracing::error!(
@@ -81,7 +94,7 @@ pub fn check_counter_increments(
         }
 
         // Check reset_on trigger (resets to initial_value)
-        if check_counter_trigger(&counter.reset_on, event, current_signals, &def.entities) {
+        if check_counter_trigger(&counter.reset_on, event, current_signals, &filter_ctx) {
             let Some(enc) = cache.current_encounter_mut() else {
                 tracing::error!("BUG: encounter missing in check_counter_increments (reset_on)");
                 continue;
@@ -223,15 +236,15 @@ pub fn check_counter_trigger(
     trigger: &Trigger,
     event: &CombatEvent,
     current_signals: &[GameSignal],
-    entities: &[EntityDefinition],
+    filter_ctx: &FilterContext,
 ) -> bool {
     // Try event-based triggers first (from CombatEvent)
-    if check_event_based_trigger(trigger, event, entities) {
+    if check_event_based_trigger(trigger, event, filter_ctx) {
         return true;
     }
 
     // Then check signal-based triggers (from GameSignal)
-    check_signal_based_trigger(trigger, current_signals, entities)
+    check_signal_based_trigger(trigger, current_signals, filter_ctx)
 }
 
 /// Check event-based triggers (AbilityCast, EffectApplied, EffectRemoved).
@@ -239,7 +252,7 @@ pub fn check_counter_trigger(
 fn check_event_based_trigger(
     trigger: &Trigger,
     event: &CombatEvent,
-    entities: &[EntityDefinition],
+    filter_ctx: &FilterContext,
 ) -> bool {
     match trigger {
         Trigger::AbilityCast { .. } => {
@@ -254,8 +267,8 @@ fn check_event_based_trigger(
                 return false;
             }
 
-            // Check source/target filters
-            check_event_source_target(trigger, event, entities)
+            // Check source/target filters using full EntityFilter::matches()
+            check_event_filters(trigger, event, filter_ctx)
         }
 
         Trigger::EffectApplied { .. } => {
@@ -270,8 +283,8 @@ fn check_event_based_trigger(
                 return false;
             }
 
-            // Check source/target filters
-            check_event_source_target(trigger, event, entities)
+            // Check source/target filters using full EntityFilter::matches()
+            check_event_filters(trigger, event, filter_ctx)
         }
 
         Trigger::EffectRemoved { .. } => {
@@ -286,65 +299,39 @@ fn check_event_based_trigger(
                 return false;
             }
 
-            // Check source/target filters
-            check_event_source_target(trigger, event, entities)
+            // Check source/target filters using full EntityFilter::matches()
+            check_event_filters(trigger, event, filter_ctx)
         }
 
         Trigger::AnyOf { conditions } => conditions
             .iter()
-            .any(|c| check_event_based_trigger(c, event, entities)),
+            .any(|c| check_event_based_trigger(c, event, filter_ctx)),
 
         _ => false,
     }
 }
 
-/// Check source/target filters for event-based triggers.
-fn check_event_source_target(
+/// Check source/target filters for event-based triggers using full EntityFilter::matches().
+fn check_event_filters(
     trigger: &Trigger,
     event: &CombatEvent,
-    entities: &[EntityDefinition],
+    filter_ctx: &FilterContext,
 ) -> bool {
-    // Check source filter
-    if let Some(source_filter) = trigger.source_filter() {
-        if !source_filter.is_any() {
-            if source_filter.is_local_player() {
-                if event.source_entity.entity_type != EntityType::Player {
-                    return false;
-                }
-            } else {
-                let source_name = crate::context::resolve(event.source_entity.name);
-                if !source_filter.matches_source_target(
-                    entities,
-                    event.source_entity.class_id,
-                    source_name,
-                ) {
-                    return false;
-                }
-            }
-        }
-    }
-
-    // Check target filter
-    if let Some(target_filter) = trigger.target_filter() {
-        if !target_filter.is_any() {
-            if target_filter.is_local_player() {
-                if event.target_entity.entity_type != EntityType::Player {
-                    return false;
-                }
-            } else {
-                let target_name = crate::context::resolve(event.target_entity.name);
-                if !target_filter.matches_source_target(
-                    entities,
-                    event.target_entity.class_id,
-                    target_name,
-                ) {
-                    return false;
-                }
-            }
-        }
-    }
-
-    true
+    matches_source_target_filters(
+        trigger,
+        filter_ctx.entities,
+        event.source_entity.log_id,
+        event.source_entity.entity_type,
+        event.source_entity.name,
+        event.source_entity.class_id,
+        event.target_entity.log_id,
+        event.target_entity.entity_type,
+        event.target_entity.name,
+        event.target_entity.class_id,
+        filter_ctx.local_player_id,
+        filter_ctx.current_target_id,
+        filter_ctx.boss_entity_ids,
+    )
 }
 
 /// Check signal-based triggers (everything derived from GameSignal).
@@ -352,7 +339,7 @@ fn check_event_source_target(
 fn check_signal_based_trigger(
     trigger: &Trigger,
     signals: &[GameSignal],
-    entities: &[EntityDefinition],
+    filter_ctx: &FilterContext,
 ) -> bool {
     match trigger {
         // Combat state (simple signal checks)
@@ -375,7 +362,7 @@ fn check_signal_based_trigger(
             } = s
             {
                 trigger.matches_boss_hp_below(
-                    entities,
+                    filter_ctx.entities,
                     *npc_id,
                     entity_name,
                     *old_hp_percent,
@@ -394,7 +381,7 @@ fn check_signal_based_trigger(
                 ..
             } = s
             {
-                trigger.matches_npc_appears(entities, *npc_id, entity_name)
+                trigger.matches_npc_appears(filter_ctx.entities, *npc_id, entity_name)
             } else {
                 false
             }
@@ -407,7 +394,7 @@ fn check_signal_based_trigger(
                 ..
             } = s
             {
-                trigger.matches_entity_death(entities, *npc_id, entity_name)
+                trigger.matches_entity_death(filter_ctx.entities, *npc_id, entity_name)
             } else {
                 false
             }
@@ -459,10 +446,14 @@ fn check_signal_based_trigger(
             if let GameSignal::DamageTaken {
                 ability_id,
                 ability_name,
-                source_npc_id,
+                source_id,
+                source_entity_type,
                 source_name,
-                target_npc_id,
+                source_npc_id,
+                target_id,
+                target_entity_type,
                 target_name,
+                target_npc_id,
                 ..
             } = s
             {
@@ -473,14 +464,21 @@ fn check_signal_based_trigger(
                     return false;
                 }
 
-                // Check source/target filters
-                check_signal_source_target(
+                // Check source/target filters using full EntityFilter::matches()
+                matches_source_target_filters(
                     trigger,
-                    entities,
-                    *source_npc_id,
+                    filter_ctx.entities,
+                    *source_id,
+                    *source_entity_type,
                     *source_name,
-                    *target_npc_id,
+                    *source_npc_id,
+                    *target_id,
+                    *target_entity_type,
                     *target_name,
+                    *target_npc_id,
+                    filter_ctx.local_player_id,
+                    filter_ctx.current_target_id,
+                    filter_ctx.boss_entity_ids,
                 )
             } else {
                 false
@@ -492,10 +490,14 @@ fn check_signal_based_trigger(
             if let GameSignal::HealingDone {
                 ability_id,
                 ability_name,
-                source_npc_id,
+                source_id,
+                source_entity_type,
                 source_name,
-                target_npc_id,
+                source_npc_id,
+                target_id,
+                target_entity_type,
                 target_name,
+                target_npc_id,
                 ..
             } = s
             {
@@ -505,13 +507,21 @@ fn check_signal_based_trigger(
                     return false;
                 }
 
-                check_signal_source_target(
+                // Check source/target filters using full EntityFilter::matches()
+                matches_source_target_filters(
                     trigger,
-                    entities,
-                    *source_npc_id,
+                    filter_ctx.entities,
+                    *source_id,
+                    *source_entity_type,
                     *source_name,
-                    *target_npc_id,
+                    *source_npc_id,
+                    *target_id,
+                    *target_entity_type,
                     *target_name,
+                    *target_npc_id,
+                    filter_ctx.local_player_id,
+                    filter_ctx.current_target_id,
+                    filter_ctx.boss_entity_ids,
                 )
             } else {
                 false
@@ -538,36 +548,8 @@ fn check_signal_based_trigger(
         // Composition
         Trigger::AnyOf { conditions } => conditions
             .iter()
-            .any(|c| check_signal_based_trigger(c, signals, entities)),
+            .any(|c| check_signal_based_trigger(c, signals, filter_ctx)),
     }
 }
 
-/// Check source/target filters for signal-based triggers (DamageTaken).
-fn check_signal_source_target(
-    trigger: &Trigger,
-    entities: &[EntityDefinition],
-    source_npc_id: i64,
-    source_name: crate::context::IStr,
-    target_npc_id: i64,
-    target_name: crate::context::IStr,
-) -> bool {
-    if let Some(source_filter) = trigger.source_filter() {
-        if !source_filter.is_any() {
-            let source_name_str = crate::context::resolve(source_name);
-            if !source_filter.matches_source_target(entities, source_npc_id, source_name_str) {
-                return false;
-            }
-        }
-    }
 
-    if let Some(target_filter) = trigger.target_filter() {
-        if !target_filter.is_any() {
-            let target_name_str = crate::context::resolve(target_name);
-            if !target_filter.matches_source_target(entities, target_npc_id, target_name_str) {
-                return false;
-            }
-        }
-    }
-
-    true
-}

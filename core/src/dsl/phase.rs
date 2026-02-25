@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::condition::Condition;
 use super::triggers::Trigger;
 use super::CounterCondition;
 
@@ -36,8 +37,13 @@ pub struct PhaseDefinition {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preceded_by: Option<String>,
 
-    /// Only activate when counter meets condition (guard)
-    /// e.g., trandos phase only fires when siege_droid_deaths >= 3
+    /// State conditions that must be satisfied for this phase to activate.
+    /// Implicitly AND'd — all conditions must be true.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conditions: Vec<Condition>,
+
+    /// DEPRECATED: Use `conditions` with `counter_compare` instead.
+    /// Only activate when counter meets condition (guard).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub counter_condition: Option<CounterCondition>,
 

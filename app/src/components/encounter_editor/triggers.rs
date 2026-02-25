@@ -127,7 +127,7 @@ pub fn EntityFilterDropdown(
 
 /// Dropdown selector for boss entities with chip display
 #[component]
-fn BossSelector(
+pub fn BossSelector(
     selected: Vec<EntitySelector>,
     available_bosses: Vec<String>,
     on_change: EventHandler<Vec<EntitySelector>>,

@@ -7,13 +7,13 @@ use dioxus::prelude::*;
 
 use crate::api;
 use crate::types::{
-    AlertTrigger, AudioConfig, BossTimerDefinition, BossWithPath, EncounterItem,
+    AlertTrigger, AudioConfig, BossTimerDefinition, BossWithPath, Condition, EncounterItem,
     TimerDisplayTarget, Trigger, timer_alert_label,
 };
 use crate::utils::parse_hex_color;
 
 use super::InlineNameCreator;
-use super::conditions::CounterConditionEditor;
+use super::conditions::{ConditionsEditor, CounterConditionEditor};
 use super::tabs::EncounterData;
 use super::triggers::ComposableTriggerEditor;
 
@@ -33,6 +33,7 @@ fn default_timer(name: String) -> BossTimerDefinition {
         alert_on: AlertTrigger::default(),
         alert_text: None,
         color: [255, 128, 0, 255], // Orange
+        conditions: vec![],
         phases: vec![],
         counter_condition: None,
         difficulties: vec![
@@ -674,44 +675,83 @@ fn TimerEditForm(
                             }
 
                             // ─── Conditions subsection ─────────────────────────
-                            span { class: "text-sm font-bold text-secondary mt-sm", "Conditions" }
-
-                            div { class: "form-row-hz mt-xs",
-                                label { class: "flex items-center",
-                                    "Phases"
-                                    span {
-                                        class: "help-icon",
-                                        title: "Only active during these encounter phases. Empty = all phases",
-                                        "?"
-                                    }
-                                }
-                                PhaseSelector {
-                                    selected: draft().phases.clone(),
-                                    available: encounter_data.phase_ids(),
-                                    on_change: move |p| {
-                                        let mut d = draft();
-                                        d.phases = p;
-                                        draft.set(d);
-                                    }
+                            span { class: "text-sm font-bold text-secondary mt-sm",
+                                "Conditions"
+                                span {
+                                    class: "help-icon",
+                                    title: "State conditions that must ALL be true for this timer to be active. Use for phase, counter, HP, or entity state guards.",
+                                    "?"
                                 }
                             }
 
-                            div { class: "form-row-hz",
-                                label { class: "flex items-center",
-                                    "Counter"
-                                    span {
-                                        class: "help-icon",
-                                        title: "Only active when the specified counter meets this condition",
-                                        "?"
+                            ConditionsEditor {
+                                conditions: draft().conditions.clone(),
+                                encounter_data: encounter_data.clone(),
+                                on_change: move |c| {
+                                    let mut d = draft();
+                                    d.conditions = c;
+                                    draft.set(d);
+                                }
+                            }
+
+                            // Legacy fields: show migration banner if old fields have values
+                            if !draft().phases.is_empty() || draft().counter_condition.is_some() {
+                                div { class: "legacy-conditions-banner",
+                                    i { class: "fa-solid fa-circle-info" }
+                                    span { "Legacy phase/counter fields detected." }
+                                    button {
+                                        class: "btn btn-sm",
+                                        title: "Move legacy phase and counter conditions into the new Conditions system",
+                                        onclick: move |_| {
+                                            let mut d = draft();
+                                            // Migrate phases -> PhaseActive condition
+                                            if !d.phases.is_empty() {
+                                                d.conditions.push(Condition::PhaseActive {
+                                                    phase_ids: d.phases.clone(),
+                                                });
+                                                d.phases.clear();
+                                            }
+                                            // Migrate counter_condition -> CounterCompare condition
+                                            if let Some(cc) = d.counter_condition.take() {
+                                                d.conditions.push(Condition::CounterCompare {
+                                                    counter_id: cc.counter_id,
+                                                    operator: cc.operator,
+                                                    value: cc.value,
+                                                });
+                                            }
+                                            draft.set(d);
+                                        },
+                                        "Migrate"
                                     }
                                 }
-                                CounterConditionEditor {
-                                    condition: draft().counter_condition.clone(),
-                                    counters: encounter_data.counter_ids(),
-                                    on_change: move |c| {
-                                        let mut d = draft();
-                                        d.counter_condition = c;
-                                        draft.set(d);
+
+                                div { class: "form-row-hz mt-xs",
+                                    label { class: "flex items-center text-tertiary",
+                                        "Phases (legacy)"
+                                    }
+                                    PhaseSelector {
+                                        selected: draft().phases.clone(),
+                                        available: encounter_data.phase_ids(),
+                                        on_change: move |p| {
+                                            let mut d = draft();
+                                            d.phases = p;
+                                            draft.set(d);
+                                        }
+                                    }
+                                }
+
+                                div { class: "form-row-hz",
+                                    label { class: "flex items-center text-tertiary",
+                                        "Counter (legacy)"
+                                    }
+                                    CounterConditionEditor {
+                                        condition: draft().counter_condition.clone(),
+                                        counters: encounter_data.counter_ids(),
+                                        on_change: move |c| {
+                                            let mut d = draft();
+                                            d.counter_condition = c;
+                                            draft.set(d);
+                                        }
                                     }
                                 }
                             }

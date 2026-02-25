@@ -6,9 +6,9 @@
 use dioxus::prelude::*;
 
 use crate::api;
-use crate::types::{BossWithPath, EncounterItem, PhaseDefinition, Trigger};
+use crate::types::{BossWithPath, Condition, EncounterItem, PhaseDefinition, Trigger};
 
-use super::conditions::CounterConditionEditor;
+use super::conditions::{ConditionsEditor, CounterConditionEditor};
 use super::tabs::EncounterData;
 use super::triggers::ComposableTriggerEditor;
 use super::InlineNameCreator;
@@ -26,6 +26,7 @@ fn default_phase(name: String) -> PhaseDefinition {
         start_trigger: Trigger::CombatStart,
         end_trigger: None,
         preceded_by: None,
+        conditions: vec![],
         counter_condition: None,
         resets_counters: vec![],
     }
@@ -346,22 +347,61 @@ fn PhaseEditForm(
                             }
                         }
 
-                        div { class: "form-row-hz",
-                            label { class: "flex items-center",
-                                "Counter"
+                        div { class: "form-row-hz", style: "align-items: flex-start;",
+                            label { class: "flex items-center", style: "padding-top: 6px;",
+                                "Conditions"
                                 span {
                                     class: "help-icon",
-                                    title: "Only activate when the specified counter meets this condition",
+                                    title: "State conditions that must ALL be true for this phase to activate",
                                     "?"
                                 }
                             }
-                            CounterConditionEditor {
-                                condition: draft().counter_condition.clone(),
-                                counters: encounter_data.counter_ids(),
-                                on_change: move |cond| {
+                            ConditionsEditor {
+                                conditions: draft().conditions.clone(),
+                                encounter_data: encounter_data.clone(),
+                                on_change: move |c| {
                                     let mut d = draft();
-                                    d.counter_condition = cond;
+                                    d.conditions = c;
                                     draft.set(d);
+                                }
+                            }
+                        }
+
+                        // Legacy counter condition: show migration banner if old field has value
+                        if draft().counter_condition.is_some() {
+                            div { class: "legacy-conditions-banner",
+                                i { class: "fa-solid fa-circle-info" }
+                                span { "Legacy counter condition detected." }
+                                button {
+                                    class: "btn btn-sm",
+                                    title: "Move legacy counter condition into the new Conditions system",
+                                    onclick: move |_| {
+                                        let mut d = draft();
+                                        if let Some(cc) = d.counter_condition.take() {
+                                            d.conditions.push(Condition::CounterCompare {
+                                                counter_id: cc.counter_id,
+                                                operator: cc.operator,
+                                                value: cc.value,
+                                            });
+                                        }
+                                        draft.set(d);
+                                    },
+                                    "Migrate"
+                                }
+                            }
+
+                            div { class: "form-row-hz",
+                                label { class: "flex items-center text-tertiary",
+                                    "Counter (legacy)"
+                                }
+                                CounterConditionEditor {
+                                    condition: draft().counter_condition.clone(),
+                                    counters: encounter_data.counter_ids(),
+                                    on_change: move |cond| {
+                                        let mut d = draft();
+                                        d.counter_condition = cond;
+                                        draft.set(d);
+                                    }
                                 }
                             }
                         }

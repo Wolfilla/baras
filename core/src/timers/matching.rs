@@ -2,7 +2,6 @@
 //!
 //! Contains entity filter matching and definition context checking.
 
-use hashbrown::HashMap;
 use std::collections::HashSet;
 
 use crate::combat_log::EntityType;
@@ -14,8 +13,9 @@ use crate::encounter::CombatEncounter;
 
 use super::TimerDefinition;
 
-/// Check if source/target filters pass for a trigger
-pub(super) fn matches_source_target_filters(
+/// Check if source/target filters pass for a trigger.
+/// Used by timers, phases, victory triggers, and counters.
+pub fn matches_source_target_filters(
     trigger: &Trigger,
     entities: &[EntityDefinition],
     source_id: i64,
@@ -72,16 +72,14 @@ pub(super) fn is_definition_active(
     encounter: Option<&CombatEncounter>,
 ) -> bool {
     // Extract context from encounter
-    let (area_id, area_name, boss_name, difficulty, current_phase, counters) = match encounter {
+    let (area_id, area_name, boss_name, difficulty) = match encounter {
         Some(enc) => (
             enc.area_id,
             enc.area_name.as_deref(),
             enc.active_boss.as_ref().map(|b| b.name.as_str()),
             enc.difficulty,
-            enc.current_phase.as_deref(),
-            &enc.counters,
         ),
-        None => (None, None, None, None, None, &*EMPTY_COUNTERS),
+        None => (None, None, None, None),
     };
 
     // First check basic context (area, boss, difficulty)
@@ -89,28 +87,21 @@ pub(super) fn is_definition_active(
         return false;
     }
 
-    // Check phase filter
-    if !def.phases.is_empty() {
-        if let Some(current) = current_phase {
-            if !def.phases.iter().any(|p| p == current) {
-                return false;
-            }
-        } else {
-            return false; // Timer requires phase but none active
+    // Check conditions (new unified system + legacy phases/counter_condition)
+    if let Some(enc) = encounter {
+        if !enc.evaluate_merged_conditions(
+            &def.conditions,
+            &def.phases,
+            def.counter_condition.as_ref(),
+        ) {
+            return false;
         }
-    }
-
-    // Check counter condition
-    if let Some(ref cond) = def.counter_condition {
-        let value = counters.get(&cond.counter_id).copied().unwrap_or(0);
-        if !cond.operator.evaluate(value, cond.value) {
+    } else {
+        // No encounter context — fail if any conditions are specified
+        if !def.conditions.is_empty() || !def.phases.is_empty() || def.counter_condition.is_some() {
             return false;
         }
     }
 
     true
 }
-
-/// Empty counters for when no encounter is available
-static EMPTY_COUNTERS: std::sync::LazyLock<HashMap<String, u32>> =
-    std::sync::LazyLock::new(HashMap::new);

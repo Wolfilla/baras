@@ -633,6 +633,7 @@ fn test_bestia_complete_encounter() {
             boss: None,
             display_target: Default::default(),
             difficulties: Vec::new(),
+            conditions: Vec::new(),
             phases: Vec::new(),
             counter_condition: None,
             per_target: bt.per_target,

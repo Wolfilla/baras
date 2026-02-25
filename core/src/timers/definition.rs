@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::dsl::AudioConfig;
+use crate::dsl::Condition;
 use crate::dsl::CounterCondition;
 use crate::dsl::EntityDefinition;
 use crate::dsl::Trigger;
@@ -125,12 +126,19 @@ pub struct TimerDefinition {
     #[serde(default)]
     pub difficulties: Vec<String>,
 
-    // ─── Phase/Counter Conditions (optional) ─────────────────────────────────
-    /// Only active during these phases (empty = all phases)
+    // ─── Conditions (state guards) ──────────────────────────────────────────
+    /// State conditions that must be satisfied for this timer to be active.
+    /// Implicitly AND'd — all conditions must be true.
+    #[serde(default)]
+    pub conditions: Vec<Condition>,
+
+    /// DEPRECATED: Use `conditions` with `phase_active` instead.
+    /// Only active during these phases (empty = all phases).
     #[serde(default)]
     pub phases: Vec<String>,
 
-    /// Only active when counter meets condition
+    /// DEPRECATED: Use `conditions` with `counter_compare` instead.
+    /// Only active when counter meets condition.
     #[serde(default)]
     pub counter_condition: Option<CounterCondition>,
 

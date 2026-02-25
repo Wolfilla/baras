@@ -768,9 +768,27 @@ impl EventProcessor {
             }
         }
 
+        // Check victory conditions (state guards) first
+        if !boss_def.victory_conditions.is_empty()
+            && !enc.evaluate_conditions(&boss_def.victory_conditions)
+        {
+            return; // Victory conditions not met
+        }
+
+        // Build filter context for source/target checking
+        let boss_ids = enc.boss_entity_ids();
+        let local_player_id = Some(cache.player.id).filter(|&id| id != 0);
+        let current_target_id = local_player_id.and_then(|pid| enc.local_player_target_id(pid));
+        let filter_ctx = phase::FilterContext {
+            entities: &boss_def.entities,
+            local_player_id,
+            current_target_id,
+            boss_entity_ids: &boss_ids,
+        };
+
         // Check if trigger matches (needs immutable borrow)
         let trigger_fired = if let Some(ref trigger) = boss_def.victory_trigger {
-            check_victory_trigger(trigger, event, signals, &boss_def.entities)
+            check_victory_trigger(trigger, event, signals, &boss_def.entities, &filter_ctx)
         } else {
             false
         };
@@ -1062,6 +1080,7 @@ fn check_victory_trigger(
     event: &crate::combat_log::CombatEvent,
     signals: &[GameSignal],
     entities: &[crate::dsl::EntityDefinition],
+    filter_ctx: &phase::FilterContext,
 ) -> bool {
     use crate::dsl::Trigger;
 
@@ -1069,7 +1088,9 @@ fn check_victory_trigger(
         // Event-based triggers (ability casts, effects)
         Trigger::AbilityCast { .. }
         | Trigger::EffectApplied { .. }
-        | Trigger::EffectRemoved { .. } => phase::check_ability_trigger(trigger, event),
+        | Trigger::EffectRemoved { .. } => {
+            phase::check_ability_trigger(trigger, event, Some(filter_ctx))
+        }
 
         // Signal-based triggers: HP thresholds
         Trigger::BossHpBelow { .. } => signals.iter().any(|s| {
@@ -1144,7 +1165,7 @@ fn check_victory_trigger(
         // Composition: AnyOf
         Trigger::AnyOf { conditions } => conditions
             .iter()
-            .any(|c| check_victory_trigger(c, event, signals, entities)),
+            .any(|c| check_victory_trigger(c, event, signals, entities, filter_ctx)),
 
         // Other triggers not supported for victory conditions
         _ => false,

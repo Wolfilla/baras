@@ -35,6 +35,7 @@ fn make_timer(id: &str, name: &str, trigger: TimerTrigger, duration: f32) -> Tim
         boss: None,
         display_target: Default::default(),
         difficulties: Vec::new(),
+        conditions: Vec::new(),
         phases: Vec::new(),
         counter_condition: None,
         per_target: true, // Tests use per-target behavior by default

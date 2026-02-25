@@ -291,7 +291,8 @@ impl Trigger {
     /// Returns `None` for triggers that don't have a target filter (treated as "any").
     pub fn target_filter(&self) -> Option<&EntityFilter> {
         match self {
-            Self::EffectApplied { target, .. }
+            Self::AbilityCast { target, .. }
+            | Self::EffectApplied { target, .. }
             | Self::EffectRemoved { target, .. }
             | Self::DamageTaken { target, .. }
             | Self::HealingTaken { target, .. }

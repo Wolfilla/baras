@@ -7,7 +7,8 @@ use hashbrown::HashSet;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    ChallengeDefinition, CounterCondition, CounterDefinition, CounterTrigger, PhaseDefinition,
+    ChallengeDefinition, Condition, CounterCondition, CounterDefinition, CounterTrigger,
+    PhaseDefinition,
 };
 use crate::dsl::audio::AudioConfig;
 use baras_types::AlertTrigger;
@@ -224,6 +225,11 @@ pub struct BossEncounterDefinition {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub victory_trigger_difficulties: Vec<String>,
 
+    /// State conditions that must be satisfied for the victory trigger to fire.
+    /// Implicitly AND'd — all conditions must be true.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub victory_conditions: Vec<Condition>,
+
     #[serde(skip)]
     pub all_npc_ids: HashSet<i64>,
 }
@@ -284,11 +290,22 @@ pub struct BossTimerDefinition {
     )]
     pub color: [u8; 4],
 
-    /// Only active during these phases (empty = all phases)
+    /// State conditions that must be satisfied for this timer to be active.
+    /// Implicitly AND'd — all conditions must be true.
+    /// Replaces the old `phases` and `counter_condition` fields (which are still
+    /// accepted for backward compatibility but merged into conditions at runtime).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conditions: Vec<Condition>,
+
+    /// DEPRECATED: Use `conditions` with `phase_active` instead.
+    /// Only active during these phases (empty = all phases).
+    /// Kept for backward compatibility — merged into conditions at runtime.
     #[serde(default, skip_serializing_if = "crate::serde_defaults::is_empty_vec")]
     pub phases: Vec<String>,
 
-    /// Only active when counter meets condition
+    /// DEPRECATED: Use `conditions` with `counter_compare` instead.
+    /// Only active when counter meets condition.
+    /// Kept for backward compatibility — merged into conditions at runtime.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub counter_condition: Option<CounterCondition>,
 
@@ -389,6 +406,7 @@ impl BossTimerDefinition {
             encounters: vec![area_name.to_string()], // Kept for logging/legacy
             boss: Some(boss_name.to_string()),
             difficulties: self.difficulties.clone(),
+            conditions: self.conditions.clone(),
             phases: self.phases.clone(),
             counter_condition: self.counter_condition.clone(),
             // Boss timers default to single-instance (per_target = false)

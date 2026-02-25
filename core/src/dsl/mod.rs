@@ -17,6 +17,7 @@
 
 mod audio;
 mod challenge;
+pub mod condition;
 mod counter;
 mod definition;
 mod entity_filter;
@@ -27,6 +28,7 @@ pub mod triggers;
 
 pub use audio::*;
 pub use challenge::*;
+pub use condition::*;
 pub use counter::*;
 pub use definition::*;
 pub use entity_filter::*;

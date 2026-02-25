@@ -507,6 +507,149 @@ impl CombatEncounter {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    // Condition Evaluation
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// Evaluate a single state condition against current encounter state.
+    pub fn evaluate_condition(&self, condition: &crate::dsl::Condition) -> bool {
+        use crate::dsl::Condition;
+        match condition {
+            Condition::PhaseActive { phase_ids } => self.is_in_any_phase(phase_ids),
+
+            Condition::CounterCompare {
+                counter_id,
+                operator,
+                value,
+            } => {
+                let current = self.get_counter(counter_id);
+                operator.evaluate(current, *value)
+            }
+
+            Condition::BossHpBelow {
+                hp_percent,
+                selector,
+            } => self.check_boss_hp_condition(*hp_percent, selector, |hp, threshold| {
+                hp < threshold
+            }),
+
+            Condition::BossHpAbove {
+                hp_percent,
+                selector,
+            } => self.check_boss_hp_condition(*hp_percent, selector, |hp, threshold| {
+                hp > threshold
+            }),
+
+            Condition::EntityAlive { selector } => {
+                self.check_entity_alive_condition(selector, false)
+            }
+
+            Condition::EntityDead { selector } => {
+                self.check_entity_alive_condition(selector, true)
+            }
+
+            Condition::AllOf { conditions } => {
+                conditions.iter().all(|c| self.evaluate_condition(c))
+            }
+
+            Condition::AnyOf { conditions } => {
+                conditions.iter().any(|c| self.evaluate_condition(c))
+            }
+
+            Condition::Not { condition } => !self.evaluate_condition(condition),
+        }
+    }
+
+    /// Evaluate all conditions (implicitly AND'd). Returns true if all are met.
+    /// An empty conditions list always returns true.
+    pub fn evaluate_conditions(&self, conditions: &[crate::dsl::Condition]) -> bool {
+        conditions.iter().all(|c| self.evaluate_condition(c))
+    }
+
+    /// Evaluate merged conditions: combines new `conditions` field with legacy
+    /// `phases` and `counter_condition` fields for backward compatibility.
+    pub fn evaluate_merged_conditions(
+        &self,
+        conditions: &[crate::dsl::Condition],
+        phases: &[String],
+        counter_condition: Option<&CounterCondition>,
+    ) -> bool {
+        // Check new-style conditions
+        if !conditions.iter().all(|c| self.evaluate_condition(c)) {
+            return false;
+        }
+
+        // Check legacy phases
+        if !phases.is_empty() && !self.is_in_any_phase(phases) {
+            return false;
+        }
+
+        // Check legacy counter condition
+        if let Some(cond) = counter_condition {
+            if !self.check_counter_condition(cond) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Helper: check if any boss NPC matching the selector satisfies the HP comparison.
+    fn check_boss_hp_condition(
+        &self,
+        hp_percent: f32,
+        selector: &[baras_types::EntitySelector],
+        compare: impl Fn(f32, f32) -> bool,
+    ) -> bool {
+        let entities = self
+            .active_boss_definition()
+            .map(|d| d.entities.as_slice())
+            .unwrap_or(&[]);
+
+        for npc in self.npcs.values() {
+            if selector.is_empty() {
+                // No selector = check any boss NPC
+                if !npc.is_boss {
+                    continue;
+                }
+            } else {
+                use crate::dsl::EntitySelectorExt;
+                let name = crate::context::resolve(npc.name);
+                if !selector.matches_with_roster(entities, npc.class_id, Some(name)) {
+                    continue;
+                }
+            }
+
+            if compare(npc.hp_percent(), hp_percent) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Helper: check if any entity matching the selector is alive (or dead).
+    fn check_entity_alive_condition(
+        &self,
+        selector: &[baras_types::EntitySelector],
+        want_dead: bool,
+    ) -> bool {
+        let entities = self
+            .active_boss_definition()
+            .map(|d| d.entities.as_slice())
+            .unwrap_or(&[]);
+
+        for npc in self.npcs.values() {
+            use crate::dsl::EntitySelectorExt;
+            let name = crate::context::resolve(npc.name);
+            if selector.matches_with_roster(entities, npc.class_id, Some(name)) {
+                if npc.is_dead == want_dead {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     // Combat Time
     // ═══════════════════════════════════════════════════════════════════════
 
@@ -565,6 +708,29 @@ impl CombatEncounter {
                 .collect(),
             boss_npc_ids: boss_npc_ids.to_vec(),
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Entity Filter Context Helpers
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// Build the set of runtime entity IDs for boss NPCs.
+    /// Used for `EntityFilter::Boss` / `NpcExceptBoss` matching in source/target filters.
+    pub fn boss_entity_ids(&self) -> std::collections::HashSet<i64> {
+        self.npcs
+            .values()
+            .filter(|n| n.is_boss)
+            .map(|n| n.log_id)
+            .collect()
+    }
+
+    /// Get the local player's current target entity ID.
+    /// Returns `None` if the player isn't tracked or has no target.
+    pub fn local_player_target_id(&self, local_player_id: i64) -> Option<i64> {
+        self.players
+            .get(&local_player_id)
+            .map(|p| p.current_target_id)
+            .filter(|&id| id != 0)
     }
 
     // ═══════════════════════════════════════════════════════════════════════

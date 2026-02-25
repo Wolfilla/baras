@@ -302,7 +302,8 @@ impl EffectDefinition {
             Trigger::EffectApplied { source, .. }
             | Trigger::EffectRemoved { source, .. }
             | Trigger::AbilityCast { source, .. }
-            | Trigger::DamageTaken { source, .. } => source,
+            | Trigger::DamageTaken { source, .. }
+            | Trigger::HealingTaken { source, .. } => source,
             _ => &EntityFilter::Any,
         }
     }
@@ -313,7 +314,8 @@ impl EffectDefinition {
             Trigger::EffectApplied { target, .. }
             | Trigger::EffectRemoved { target, .. }
             | Trigger::AbilityCast { target, .. }
-            | Trigger::DamageTaken { target, .. } => target,
+            | Trigger::DamageTaken { target, .. }
+            | Trigger::HealingTaken { target, .. } => target,
             _ => &EntityFilter::Any,
         }
     }

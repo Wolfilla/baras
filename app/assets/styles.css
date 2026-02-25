@@ -5049,6 +5049,115 @@ details[open] .collapsible-summary::before {
   background: var(--color-error-bg-hover);
 }
 
+/* ─── State Conditions Editor ─────────────────────────────────────────── */
+
+.conditions-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+}
+
+.conditions-editor-empty {
+  color: var(--text-tertiary);
+  font-size: 0.85em;
+  font-style: italic;
+  padding: 0.3em 0;
+}
+
+/* Condition card (each condition in the list) */
+.condition-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
+.condition-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* AllOf composite - green accent */
+.composite-condition--all-of {
+  background: rgba(30, 50, 30, 0.4);
+  border: 1px solid rgba(100, 180, 100, 0.35);
+  border-radius: var(--radius-md);
+  padding: 0.5em;
+}
+
+.composite-condition--all-of > .composite-header > .composite-label {
+  color: #8d8;
+}
+
+.composite-condition--all-of > .composite-conditions {
+  border-left-color: rgba(100, 180, 100, 0.35);
+}
+
+/* AnyOf composite - blue accent (matches trigger style) */
+.composite-condition--any-of {
+  background: rgba(30, 40, 55, 0.4);
+  border: 1px solid rgba(100, 140, 180, 0.35);
+  border-radius: var(--radius-md);
+  padding: 0.5em;
+}
+
+.composite-condition--any-of > .composite-header > .composite-label {
+  color: #8cf;
+}
+
+.composite-condition--any-of > .composite-conditions {
+  border-left-color: rgba(100, 140, 180, 0.35);
+}
+
+/* Not condition - red/orange tint */
+.condition-not {
+  background: rgba(60, 25, 25, 0.4);
+  border: 1px solid rgba(255, 100, 100, 0.35);
+  border-radius: var(--radius-md);
+  padding: 0.5em;
+}
+
+.condition-not > .composite-header > .composite-label {
+  color: #f88;
+}
+
+.condition-not > .composite-conditions {
+  border-left-color: rgba(255, 100, 100, 0.35);
+}
+
+/* Simple condition - subtle card */
+.condition-simple {
+  background: rgba(40, 50, 60, 0.3);
+  border: 1px solid rgba(100, 120, 140, 0.2);
+  border-radius: var(--radius-md);
+  padding: 0.4em 0.5em;
+}
+
+.condition-simple-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.4em;
+  margin-top: 0.3em;
+}
+
+/* Legacy migration banner */
+.legacy-conditions-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.4em 0.6em;
+  background: rgba(80, 70, 30, 0.3);
+  border: 1px solid rgba(200, 180, 80, 0.3);
+  border-radius: var(--radius-md);
+  font-size: 0.8em;
+  color: rgba(220, 200, 120, 0.9);
+}
+
+.legacy-conditions-banner .btn-sm {
+  font-size: 0.8em;
+  padding: 0.15em 0.5em;
+}
+
 .btn-add-condition {
   padding: 0.25em 0.5em;
   background: var(--color-success-bg);

@@ -5,11 +5,14 @@
 
 use chrono::NaiveDateTime;
 
+use std::collections::HashSet;
+
 use crate::combat_log::CombatEvent;
 use crate::dsl::EntityDefinition;
 use crate::dsl::Trigger;
 use crate::game_data::{effect_id, effect_type_id};
 use crate::state::SessionCache;
+use crate::timers::matches_source_target_filters;
 
 use super::GameSignal;
 
@@ -36,7 +39,6 @@ pub fn check_hp_phase_transitions(
         };
 
         let def = &enc.boss_definitions()[def_idx];
-
         let mut found = None;
         for phase in &def.phases {
             if enc.current_phase.as_ref() == Some(&phase.id) {
@@ -50,10 +52,13 @@ pub fn check_hp_phase_transitions(
                 }
             }
 
-            if let Some(ref cond) = phase.counter_condition {
-                if !enc.check_counter_condition(cond) {
-                    continue;
-                }
+            // Check conditions (new unified + legacy counter_condition)
+            if !enc.evaluate_merged_conditions(
+                &phase.conditions,
+                &[],
+                phase.counter_condition.as_ref(),
+            ) {
+                continue;
             }
 
             if check_hp_trigger(
@@ -118,6 +123,17 @@ pub fn check_ability_phase_transitions(
 
         let def = &enc.boss_definitions()[def_idx];
 
+        // Build filter context for source/target checking
+        let boss_ids = enc.boss_entity_ids();
+        let local_player_id = Some(cache.player.id).filter(|&id| id != 0);
+        let current_target_id = local_player_id.and_then(|pid| enc.local_player_target_id(pid));
+        let filter_ctx = FilterContext {
+            entities: &def.entities,
+            local_player_id,
+            current_target_id,
+            boss_entity_ids: &boss_ids,
+        };
+
         let mut found = None;
         for phase in &def.phases {
             if enc.current_phase.as_ref() == Some(&phase.id) {
@@ -131,14 +147,22 @@ pub fn check_ability_phase_transitions(
                 }
             }
 
-            if let Some(ref cond) = phase.counter_condition {
-                if !enc.check_counter_condition(cond) {
-                    continue;
-                }
+            // Check conditions (new unified + legacy counter_condition)
+            if !enc.evaluate_merged_conditions(
+                &phase.conditions,
+                &[],
+                phase.counter_condition.as_ref(),
+            ) {
+                continue;
             }
 
-            let trigger_matched = check_ability_trigger(&phase.start_trigger, event)
-                || check_signal_phase_trigger(&phase.start_trigger, &def.entities, current_signals);
+            let trigger_matched =
+                check_ability_trigger(&phase.start_trigger, event, Some(&filter_ctx))
+                    || check_signal_phase_trigger(
+                        &phase.start_trigger,
+                        &def.entities,
+                        current_signals,
+                    );
 
             if trigger_matched {
                 // Capture data needed for mutation and signal construction
@@ -209,10 +233,13 @@ pub fn check_entity_phase_transitions(
                 }
             }
 
-            if let Some(ref cond) = phase.counter_condition {
-                if !enc.check_counter_condition(cond) {
-                    continue;
-                }
+            // Check conditions (new unified + legacy counter_condition)
+            if !enc.evaluate_merged_conditions(
+                &phase.conditions,
+                &[],
+                phase.counter_condition.as_ref(),
+            ) {
+                continue;
             }
 
             if check_signal_phase_trigger(&phase.start_trigger, &def.entities, current_signals) {
@@ -303,10 +330,13 @@ pub fn check_time_phase_transitions(
                 }
             }
 
-            if let Some(ref cond) = phase.counter_condition {
-                if !enc.check_counter_condition(cond) {
-                    continue;
-                }
+            // Check conditions (new unified + legacy counter_condition)
+            if !enc.evaluate_merged_conditions(
+                &phase.conditions,
+                &[],
+                phase.counter_condition.as_ref(),
+            ) {
+                continue;
             }
 
             if check_time_trigger(&phase.start_trigger, old_time, new_time) {
@@ -374,8 +404,19 @@ pub fn check_phase_end_triggers(
         return Vec::new();
     };
 
+    // Build filter context for source/target checking
+    let boss_ids = enc.boss_entity_ids();
+    let local_player_id = Some(cache.player.id).filter(|&id| id != 0);
+    let current_target_id = local_player_id.and_then(|pid| enc.local_player_target_id(pid));
+    let filter_ctx = FilterContext {
+        entities: &def.entities,
+        local_player_id,
+        current_target_id,
+        boss_entity_ids: &boss_ids,
+    };
+
     // Check ability/effect-based triggers
-    if check_ability_trigger(end_trigger, event) {
+    if check_ability_trigger(end_trigger, event, Some(&filter_ctx)) {
         return vec![GameSignal::PhaseEndTriggered {
             phase_id: current_phase_id.clone(),
             timestamp: event.timestamp,
@@ -440,13 +481,27 @@ pub fn check_hp_trigger(
 
 /// Check if an ability/effect-based phase trigger is satisfied.
 /// First checks event type, then delegates to unified Trigger methods.
-pub fn check_ability_trigger(trigger: &Trigger, event: &CombatEvent) -> bool {
+/// Context needed for source/target filter evaluation in phase/victory triggers.
+pub struct FilterContext<'a> {
+    pub entities: &'a [EntityDefinition],
+    pub local_player_id: Option<i64>,
+    pub current_target_id: Option<i64>,
+    pub boss_entity_ids: &'a HashSet<i64>,
+}
+
+pub fn check_ability_trigger(
+    trigger: &Trigger,
+    event: &CombatEvent,
+    filter_ctx: Option<&FilterContext>,
+) -> bool {
     // Check AbilityCast triggers
     if event.effect.effect_id == effect_id::ABILITYACTIVATE {
         let ability_id = event.action.action_id as u64;
         let ability_name = crate::context::resolve(event.action.name);
         if trigger.matches_ability(ability_id, Some(ability_name)) {
-            return true;
+            if check_event_filters(trigger, event, filter_ctx) {
+                return true;
+            }
         }
     }
 
@@ -455,7 +510,9 @@ pub fn check_ability_trigger(trigger: &Trigger, event: &CombatEvent) -> bool {
         let effect_id = event.effect.effect_id as u64;
         let effect_name = crate::context::resolve(event.effect.effect_name);
         if trigger.matches_effect_applied(effect_id, Some(effect_name)) {
-            return true;
+            if check_event_filters(trigger, event, filter_ctx) {
+                return true;
+            }
         }
     }
 
@@ -468,17 +525,49 @@ pub fn check_ability_trigger(trigger: &Trigger, event: &CombatEvent) -> bool {
         let effect_name = crate::context::resolve(event.effect.effect_name);
         // First try matching the effect being removed
         if trigger.matches_effect_removed(effect_id, Some(effect_name)) {
-            return true;
+            if check_event_filters(trigger, event, filter_ctx) {
+                return true;
+            }
         }
         // Also try matching the ability doing the removing (e.g., Dying Light)
         let action_id = event.action.action_id as u64;
         let action_name = crate::context::resolve(event.action.name);
         if trigger.matches_effect_removed(action_id, Some(action_name)) {
-            return true;
+            if check_event_filters(trigger, event, filter_ctx) {
+                return true;
+            }
         }
     }
 
     false
+}
+
+/// Check source/target filters for an event-based trigger.
+/// Returns true (passes) if no filter context is available (backward compat).
+fn check_event_filters(
+    trigger: &Trigger,
+    event: &CombatEvent,
+    filter_ctx: Option<&FilterContext>,
+) -> bool {
+    let Some(ctx) = filter_ctx else {
+        return true; // No context = no filtering
+    };
+
+    matches_source_target_filters(
+        trigger,
+        ctx.entities,
+        event.source_entity.log_id,
+        event.source_entity.entity_type,
+        event.source_entity.name,
+        event.source_entity.class_id,
+        event.target_entity.log_id,
+        event.target_entity.entity_type,
+        event.target_entity.name,
+        event.target_entity.class_id,
+        ctx.local_player_id,
+        ctx.current_target_id,
+        ctx.boss_entity_ids,
+    )
 }
 
 /// Check if a signal-based phase trigger is satisfied (NpcAppears, EntityDeath, etc.).

@@ -374,6 +374,8 @@ pub struct BossTimerDefinition {
     #[serde(default = "default_timer_color")]
     pub color: [u8; 4],
     #[serde(default)]
+    pub conditions: Vec<Condition>,
+    #[serde(default)]
     pub phases: Vec<String>,
     #[serde(default)]
     pub counter_condition: Option<CounterCondition>,
@@ -418,6 +420,8 @@ pub struct PhaseDefinition {
     pub end_trigger: Option<Trigger>,
     #[serde(default)]
     pub preceded_by: Option<String>,
+    #[serde(default)]
+    pub conditions: Vec<Condition>,
     #[serde(default)]
     pub counter_condition: Option<CounterCondition>,
     #[serde(default)]
@@ -709,6 +713,78 @@ pub struct CounterCondition {
     #[serde(default)]
     pub operator: ComparisonOp,
     pub value: u32,
+}
+
+/// State-based condition for gating triggers, timers, phases, and victory triggers.
+///
+/// Unlike triggers (which fire on events), conditions check current encounter state.
+/// Supports recursive composition via `AllOf`, `AnyOf`, and `Not`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Condition {
+    /// True when the encounter is in one of the specified phases.
+    PhaseActive { phase_ids: Vec<String> },
+    /// True when a counter satisfies the comparison.
+    CounterCompare {
+        counter_id: String,
+        #[serde(default)]
+        operator: ComparisonOp,
+        value: u32,
+    },
+    /// True when a boss's HP is below a threshold.
+    BossHpBelow {
+        hp_percent: f32,
+        #[serde(default)]
+        selector: Vec<EntitySelector>,
+    },
+    /// True when a boss's HP is above a threshold.
+    BossHpAbove {
+        hp_percent: f32,
+        #[serde(default)]
+        selector: Vec<EntitySelector>,
+    },
+    /// True when a specific entity is alive.
+    EntityAlive { selector: Vec<EntitySelector> },
+    /// True when a specific entity is dead.
+    EntityDead { selector: Vec<EntitySelector> },
+    /// All sub-conditions must be true (AND logic).
+    AllOf { conditions: Vec<Condition> },
+    /// Any sub-condition must be true (OR logic).
+    AnyOf { conditions: Vec<Condition> },
+    /// Negation: true when the inner condition is false.
+    Not { condition: Box<Condition> },
+}
+
+impl Condition {
+    /// Returns a human-readable label for this condition type.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::PhaseActive { .. } => "Phase Active",
+            Self::CounterCompare { .. } => "Counter Compare",
+            Self::BossHpBelow { .. } => "Boss HP Below",
+            Self::BossHpAbove { .. } => "Boss HP Above",
+            Self::EntityAlive { .. } => "Entity Alive",
+            Self::EntityDead { .. } => "Entity Dead",
+            Self::AllOf { .. } => "All Of (AND)",
+            Self::AnyOf { .. } => "Any Of (OR)",
+            Self::Not { .. } => "Not",
+        }
+    }
+
+    /// Returns the snake_case type name for this condition.
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Self::PhaseActive { .. } => "phase_active",
+            Self::CounterCompare { .. } => "counter_compare",
+            Self::BossHpBelow { .. } => "boss_hp_below",
+            Self::BossHpAbove { .. } => "boss_hp_above",
+            Self::EntityAlive { .. } => "entity_alive",
+            Self::EntityDead { .. } => "entity_dead",
+            Self::AllOf { .. } => "all_of",
+            Self::AnyOf { .. } => "any_of",
+            Self::Not { .. } => "not",
+        }
+    }
 }
 
 /// Challenge metric types

@@ -31,6 +31,7 @@ pub use active::{ActiveTimer, TimerKey};
 pub use definition::{TimerConfig, TimerDefinition, TimerDisplayTarget, TimerTrigger};
 pub use error::TimerError;
 pub use manager::{FiredAlert, TimerManager};
+pub use matching::matches_source_target_filters;
 pub use preferences::{
     PreferencesError, TimerPreference, TimerPreferences, boss_timer_key, standalone_timer_key,
 };
