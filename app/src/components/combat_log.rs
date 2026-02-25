@@ -219,9 +219,9 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
             Some(target.clone())
         } else if should_restore_filters { state.peek().target_filter.clone() } else { None }
     });
-    // Search text only restores on same-encounter revisit
+    // Search text persists across encounters (like source/target filters)
     let mut search_text = use_signal(|| {
-        if should_restore_position {
+        if should_restore_filters {
             state.peek().search_text.clone()
         } else {
             String::new()
@@ -309,11 +309,9 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
         if current != prev {
             prev_encounter_idx.set(current);
 
-            // Reset scroll position and search text
+            // Reset scroll position (search text persists across encounters)
             scroll_top.set(0.0);
             loaded_offset.set(0);
-            search_text.set(String::new());
-            search_debounce.set(String::new());
 
             // Preserve source/target filters and event type toggles across encounters
             // so users can track the same entities across pulls
