@@ -7,8 +7,7 @@ use dioxus::prelude::*;
 
 use super::tabs::EncounterData;
 use super::timers::PhaseSelector;
-use super::triggers::{BossSelector, EntitySelectorEditor};
-use crate::types::{ComparisonOp, Condition, CounterCondition, EntitySelector};
+use crate::types::{ComparisonOp, Condition, CounterCondition};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Legacy Counter Condition Editor (kept for backward compat display)
@@ -447,10 +446,6 @@ fn condition_type_name(condition: &Condition) -> &'static str {
     match condition {
         Condition::PhaseActive { .. } => "phase_active",
         Condition::CounterCompare { .. } => "counter_compare",
-        Condition::BossHpBelow { .. } => "boss_hp_below",
-        Condition::BossHpAbove { .. } => "boss_hp_above",
-        Condition::EntityAlive { .. } => "entity_alive",
-        Condition::EntityDead { .. } => "entity_dead",
         Condition::AllOf { .. } => "all_of",
         Condition::AnyOf { .. } => "any_of",
         Condition::Not { .. } => "not",
@@ -466,16 +461,6 @@ fn default_condition_for_type(type_name: &str, current: &Condition) -> Condition
             operator: ComparisonOp::Gte,
             value: 1,
         },
-        "boss_hp_below" => Condition::BossHpBelow {
-            hp_percent: 30.0,
-            selector: vec![],
-        },
-        "boss_hp_above" => Condition::BossHpAbove {
-            hp_percent: 50.0,
-            selector: vec![],
-        },
-        "entity_alive" => Condition::EntityAlive { selector: vec![] },
-        "entity_dead" => Condition::EntityDead { selector: vec![] },
         // Composite: wrap current condition
         "all_of" => Condition::AllOf {
             conditions: vec![current.clone()],
@@ -514,10 +499,6 @@ fn SimpleConditionEditor(
                     },
                     option { value: "phase_active", selected: type_name == "phase_active", "Phase Active" }
                     option { value: "counter_compare", selected: type_name == "counter_compare", "Counter Compare" }
-                    option { value: "boss_hp_below", selected: type_name == "boss_hp_below", "Boss HP Below" }
-                    option { value: "boss_hp_above", selected: type_name == "boss_hp_above", "Boss HP Above" }
-                    option { value: "entity_alive", selected: type_name == "entity_alive", "Entity Alive" }
-                    option { value: "entity_dead", selected: type_name == "entity_dead", "Entity Dead" }
                     // Composite wrappers
                     option { value: "all_of", selected: type_name == "all_of", "All Of (AND)" }
                     option { value: "any_of", selected: type_name == "any_of", "Any Of (OR)" }
@@ -540,40 +521,6 @@ fn SimpleConditionEditor(
                             counter_id: counter_id.clone(),
                             operator: *operator,
                             value: *value,
-                            encounter_data: encounter_data.clone(),
-                            on_change: on_change,
-                        }
-                    },
-                    Condition::BossHpBelow { hp_percent, selector } => rsx! {
-                        BossHpEditor {
-                            hp_percent: *hp_percent,
-                            selector: selector.clone(),
-                            is_below: true,
-                            encounter_data: encounter_data.clone(),
-                            on_change: on_change,
-                        }
-                    },
-                    Condition::BossHpAbove { hp_percent, selector } => rsx! {
-                        BossHpEditor {
-                            hp_percent: *hp_percent,
-                            selector: selector.clone(),
-                            is_below: false,
-                            encounter_data: encounter_data.clone(),
-                            on_change: on_change,
-                        }
-                    },
-                    Condition::EntityAlive { selector } => rsx! {
-                        EntityStateEditor {
-                            selector: selector.clone(),
-                            is_alive: true,
-                            encounter_data: encounter_data.clone(),
-                            on_change: on_change,
-                        }
-                    },
-                    Condition::EntityDead { selector } => rsx! {
-                        EntityStateEditor {
-                            selector: selector.clone(),
-                            is_alive: false,
                             encounter_data: encounter_data.clone(),
                             on_change: on_change,
                         }
@@ -712,101 +659,6 @@ fn CounterCompareEditor(
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-/// Boss HP condition: HP percent input + optional boss selector
-#[component]
-fn BossHpEditor(
-    hp_percent: f32,
-    selector: Vec<EntitySelector>,
-    is_below: bool,
-    encounter_data: EncounterData,
-    on_change: EventHandler<Condition>,
-) -> Element {
-    let label = if is_below { "below" } else { "above" };
-
-    rsx! {
-        div { class: "flex-col gap-xs",
-            div { class: "flex items-center gap-xs",
-                span { class: "text-sm text-secondary", "HP {label}" }
-                input {
-                    r#type: "number",
-                    class: "input-inline",
-                    style: "width: 70px;",
-                    min: "0",
-                    max: "100",
-                    step: "0.1",
-                    value: "{hp_percent}",
-                    oninput: {
-                        let sel = selector.clone();
-                        move |e| {
-                            if let Ok(pct) = e.value().parse::<f32>() {
-                                if is_below {
-                                    on_change.call(Condition::BossHpBelow {
-                                        hp_percent: pct,
-                                        selector: sel.clone(),
-                                    });
-                                } else {
-                                    on_change.call(Condition::BossHpAbove {
-                                        hp_percent: pct,
-                                        selector: sel.clone(),
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-                span { class: "text-sm text-secondary", "%" }
-            }
-
-            BossSelector {
-                selected: selector.clone(),
-                available_bosses: encounter_data.boss_entity_names(),
-                on_change: move |new_sel| {
-                    if is_below {
-                        on_change.call(Condition::BossHpBelow {
-                            hp_percent,
-                            selector: new_sel,
-                        });
-                    } else {
-                        on_change.call(Condition::BossHpAbove {
-                            hp_percent,
-                            selector: new_sel,
-                        });
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Entity Alive/Dead condition: entity selector
-#[component]
-fn EntityStateEditor(
-    selector: Vec<EntitySelector>,
-    is_alive: bool,
-    encounter_data: EncounterData,
-    on_change: EventHandler<Condition>,
-) -> Element {
-    let label: &str = if is_alive {
-        "Entities (must be alive)"
-    } else {
-        "Entities (must be dead)"
-    };
-
-    rsx! {
-        EntitySelectorEditor {
-            label: label,
-            selectors: selector.clone(),
-            on_change: move |new_sel| {
-                if is_alive {
-                    on_change.call(Condition::EntityAlive { selector: new_sel });
-                } else {
-                    on_change.call(Condition::EntityDead { selector: new_sel });
                 }
             }
         }

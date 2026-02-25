@@ -525,28 +525,6 @@ impl CombatEncounter {
                 operator.evaluate(current, *value)
             }
 
-            Condition::BossHpBelow {
-                hp_percent,
-                selector,
-            } => self.check_boss_hp_condition(*hp_percent, selector, |hp, threshold| {
-                hp < threshold
-            }),
-
-            Condition::BossHpAbove {
-                hp_percent,
-                selector,
-            } => self.check_boss_hp_condition(*hp_percent, selector, |hp, threshold| {
-                hp > threshold
-            }),
-
-            Condition::EntityAlive { selector } => {
-                self.check_entity_alive_condition(selector, false)
-            }
-
-            Condition::EntityDead { selector } => {
-                self.check_entity_alive_condition(selector, true)
-            }
-
             Condition::AllOf { conditions } => {
                 conditions.iter().all(|c| self.evaluate_condition(c))
             }
@@ -591,62 +569,6 @@ impl CombatEncounter {
         }
 
         true
-    }
-
-    /// Helper: check if any boss NPC matching the selector satisfies the HP comparison.
-    fn check_boss_hp_condition(
-        &self,
-        hp_percent: f32,
-        selector: &[baras_types::EntitySelector],
-        compare: impl Fn(f32, f32) -> bool,
-    ) -> bool {
-        let entities = self
-            .active_boss_definition()
-            .map(|d| d.entities.as_slice())
-            .unwrap_or(&[]);
-
-        for npc in self.npcs.values() {
-            if selector.is_empty() {
-                // No selector = check any boss NPC
-                if !npc.is_boss {
-                    continue;
-                }
-            } else {
-                use crate::dsl::EntitySelectorExt;
-                let name = crate::context::resolve(npc.name);
-                if !selector.matches_with_roster(entities, npc.class_id, Some(name)) {
-                    continue;
-                }
-            }
-
-            if compare(npc.hp_percent(), hp_percent) {
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Helper: check if any entity matching the selector is alive (or dead).
-    fn check_entity_alive_condition(
-        &self,
-        selector: &[baras_types::EntitySelector],
-        want_dead: bool,
-    ) -> bool {
-        let entities = self
-            .active_boss_definition()
-            .map(|d| d.entities.as_slice())
-            .unwrap_or(&[]);
-
-        for npc in self.npcs.values() {
-            use crate::dsl::EntitySelectorExt;
-            let name = crate::context::resolve(npc.name);
-            if selector.matches_with_roster(entities, npc.class_id, Some(name)) {
-                if npc.is_dead == want_dead {
-                    return true;
-                }
-            }
-        }
-        false
     }
 
     // ═══════════════════════════════════════════════════════════════════════

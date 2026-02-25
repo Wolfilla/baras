@@ -731,22 +731,6 @@ pub enum Condition {
         operator: ComparisonOp,
         value: u32,
     },
-    /// True when a boss's HP is below a threshold.
-    BossHpBelow {
-        hp_percent: f32,
-        #[serde(default)]
-        selector: Vec<EntitySelector>,
-    },
-    /// True when a boss's HP is above a threshold.
-    BossHpAbove {
-        hp_percent: f32,
-        #[serde(default)]
-        selector: Vec<EntitySelector>,
-    },
-    /// True when a specific entity is alive.
-    EntityAlive { selector: Vec<EntitySelector> },
-    /// True when a specific entity is dead.
-    EntityDead { selector: Vec<EntitySelector> },
     /// All sub-conditions must be true (AND logic).
     AllOf { conditions: Vec<Condition> },
     /// Any sub-condition must be true (OR logic).
@@ -761,10 +745,6 @@ impl Condition {
         match self {
             Self::PhaseActive { .. } => "Phase Active",
             Self::CounterCompare { .. } => "Counter Compare",
-            Self::BossHpBelow { .. } => "Boss HP Below",
-            Self::BossHpAbove { .. } => "Boss HP Above",
-            Self::EntityAlive { .. } => "Entity Alive",
-            Self::EntityDead { .. } => "Entity Dead",
             Self::AllOf { .. } => "All Of (AND)",
             Self::AnyOf { .. } => "Any Of (OR)",
             Self::Not { .. } => "Not",
@@ -776,10 +756,6 @@ impl Condition {
         match self {
             Self::PhaseActive { .. } => "phase_active",
             Self::CounterCompare { .. } => "counter_compare",
-            Self::BossHpBelow { .. } => "boss_hp_below",
-            Self::BossHpAbove { .. } => "boss_hp_above",
-            Self::EntityAlive { .. } => "entity_alive",
-            Self::EntityDead { .. } => "entity_dead",
             Self::AllOf { .. } => "all_of",
             Self::AnyOf { .. } => "any_of",
             Self::Not { .. } => "not",
