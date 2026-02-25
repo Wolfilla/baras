@@ -319,7 +319,12 @@ duration_secs = 30.0
 is_alert = true
 alert_on = "none"
 color = [255, 0, 0, 255]
-conditions = [{ type = "phase_active", phase_ids = ["ae_synergy_protocol", "ae_main_2nd"] }]
+conditions = [
+  { type = "phase_active", phase_ids = [
+    "ae_synergy_protocol",
+    "ae_main_2nd",
+  ] },
+]
 difficulties = ["veteran", "master"]
 enabled = true
 display_target = "timers_a"
@@ -847,7 +852,13 @@ is_alert = true
 alert_on = "on_expire"
 alert_text = "Reveal"
 color = [255, 128, 0, 255]
-conditions = [{ type = "phase_active", phase_ids = ["nahut_nahut", "nahut_turrets", "nahut_burn"] }]
+conditions = [
+  { type = "phase_active", phase_ids = [
+    "nahut_nahut",
+    "nahut_turrets",
+    "nahut_burn",
+  ] },
+]
 difficulties = ["veteran", "master"]
 enabled = true
 display_target = "timers_a"
@@ -1280,7 +1291,12 @@ duration_secs = 68.0
 alert_on = "none"
 alert_text = "SCYVA"
 color = [0, 255, 85, 255]
-conditions = [{ type = "phase_active", phase_ids = ["scyva_catalyst", "scyva_scyva"] }]
+conditions = [
+  { type = "phase_active", phase_ids = [
+    "scyva_catalyst",
+    "scyva_scyva",
+  ] },
+]
 difficulties = ["veteran", "master"]
 enabled = true
 display_target = "timers_a"
@@ -1299,7 +1315,12 @@ name = "Iginte Core"
 duration_secs = 50.0
 alert_on = "none"
 color = [255, 128, 0, 255]
-conditions = [{ type = "phase_active", phase_ids = ["scyva_scyva", "scyva_ignite_core"] }]
+conditions = [
+  { type = "phase_active", phase_ids = [
+    "scyva_scyva",
+    "scyva_ignite_core",
+  ] },
+]
 difficulties = ["story", "veteran", "master"]
 enabled = true
 display_target = "timers_a"
@@ -1374,6 +1395,15 @@ phase_ids = ["scyva_ignite_core"]
 id = "izax"
 name = "IZAX"
 difficulties = ["story", "veteran", "master"]
+has_victory_trigger = true
+victory_trigger = { type = "entity_death", selector = [
+  "IZAX",
+  4163133274849280,
+  4163128979881984,
+  4163124684914688,
+  4163128979881984,
+  4163137569816576,
+] }
 
 [[boss.entities]]
 name = "Repurposed GEMINI Droid"
@@ -1557,7 +1587,14 @@ duration_secs = 34.0
 alert_on = "none"
 alert_text = "Cascade"
 color = [38, 210, 213, 255]
-conditions = [{ type = "phase_active", phase_ids = ["izax_p1", "izax_p2", "izax_p3", "izax_p4"] }]
+conditions = [
+  { type = "phase_active", phase_ids = [
+    "izax_p1",
+    "izax_p2",
+    "izax_p3",
+    "izax_p4",
+  ] },
+]
 difficulties = ["veteran", "master"]
 enabled = true
 show_at_secs = 4.0
@@ -1610,7 +1647,14 @@ is_alert = true
 alert_on = "none"
 alert_text = "Move OUT"
 color = [38, 210, 213, 255]
-conditions = [{ type = "phase_active", phase_ids = ["izax_p1", "izax_p2", "izax_p3", "izax_p4"] }]
+conditions = [
+  { type = "phase_active", phase_ids = [
+    "izax_p1",
+    "izax_p2",
+    "izax_p3",
+    "izax_p4",
+  ] },
+]
 difficulties = ["veteran", "master"]
 enabled = true
 display_target = "timers_a"
