@@ -1192,40 +1192,40 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                                     }
                                 }
                                 div { class: "log-cell log-source", style: "width: {col_source}px; min-width: {col_source}px;",
-                                    "{row.source_name}"
                                     if show_ids_val && row.source_class_id != 0 {
-                                        span { class: "log-id-suffix", " [{row.source_class_id}]" }
+                                        span { class: "log-id-prefix", "[{row.source_class_id}] " }
                                     }
+                                    "{row.source_name}"
                                 }
                                 div { class: "log-cell log-type {event_type_class(&row)}", style: "width: {col_type}px; min-width: {col_type}px;",
                                     "{readable_event_type(&row)}"
                                 }
                                 div { class: "log-cell log-target", style: "width: {col_target}px; min-width: {col_target}px;",
-                                    "{row.target_name}"
                                     if show_ids_val && row.target_class_id != 0 {
-                                        span { class: "log-id-suffix", " [{row.target_class_id}]" }
+                                        span { class: "log-id-prefix", "[{row.target_class_id}] " }
                                     }
+                                    "{row.target_name}"
                                 }
                                 div { class: "log-cell log-ability", style: "width: {col_ability}px; min-width: {col_ability}px;",
                                     if row.ability_id != 0 {
                                         AbilityIcon { key: "{row.ability_id}", ability_id: row.ability_id, size: 16 }
                                     }
+                                    if show_ids_val && row.ability_id != 0 {
+                                        span { class: "log-id-prefix", "[{row.ability_id}] " }
+                                    }
                                     if !row.ability_name.is_empty() {
                                         "{row.ability_name}"
-                                        if show_ids_val && row.ability_id != 0 {
-                                            span { class: "log-id-suffix", " [{row.ability_id}]" }
-                                        }
                                     }
                                 }
                                 div { class: "log-cell log-effect", style: "width: {col_effect}px; min-width: {col_effect}px;",
                                     if row.effect_id != 0 {
                                         AbilityIcon { key: "{row.effect_id}", ability_id: row.effect_id, size: 16 }
                                     }
+                                    if show_ids_val && row.effect_id != 0 {
+                                        span { class: "log-id-prefix", "[{row.effect_id}] " }
+                                    }
                                     if !row.effect_name.is_empty() {
                                         "{row.effect_name}"
-                                        if show_ids_val && row.effect_id != 0 {
-                                            span { class: "log-id-suffix", " [{row.effect_id}]" }
-                                        }
                                     }
                                 }
                                 div { class: "log-cell log-value", style: "width: {col_value}px; min-width: {col_value}px;",

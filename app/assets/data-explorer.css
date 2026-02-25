@@ -1456,11 +1456,12 @@
   cursor: pointer;
 }
 
-/* ID suffix in names */
-.log-id-suffix {
+/* ID prefix in names */
+.log-id-prefix {
   color: var(--text-muted);
   font-size: 9px;
   opacity: 0.7;
+  flex-shrink: 0;
 }
 
 /* Overheal header with tooltip */
