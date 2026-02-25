@@ -1701,7 +1701,6 @@
   background: var(--bg-secondary);
   padding: 8px 10px;
   text-align: left;
-  font-size: 0.85em;
   font-weight: 600;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-subtle);
@@ -1723,7 +1722,6 @@
 
 .usage-table tbody td {
   padding: 6px 10px;
-  font-size: 0.85em;
   border-bottom: 1px solid var(--border-subtle);
   white-space: nowrap;
 }
@@ -1754,7 +1752,6 @@
 
 .ability-id-muted {
   opacity: 0.4;
-  font-size: 0.85em;
 }
 
 .usage-table .empty-message {
@@ -1781,7 +1778,6 @@
   gap: 8px;
   padding: 16px;
   color: var(--text-muted, #666);
-  font-size: 0.85em;
   font-style: italic;
 }
 
