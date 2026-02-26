@@ -226,16 +226,6 @@ pub static LAIR_BOSS_DATA: &[(i64, BossInfo)] = &[
         },
     ),
     (
-        4845470434197504,
-        BossInfo {
-            content_type: ContentType::LairBoss,
-            operation: "Propagator Core",
-            boss: "Propagator Core XR-53",
-            difficulty: Some(Difficulty::Master8),
-            is_kill_target: true,
-        },
-    ),
-    (
         4847325860069376,
         BossInfo {
             content_type: ContentType::LairBoss,
