@@ -21,9 +21,13 @@ use baras_core::combat_log::{CombatEvent, EntityType, LogParser};
 use baras_core::context::{parse_log_filename, resolve};
 use baras_core::dsl::{build_area_index, load_bosses_with_custom};
 use baras_core::game_data::defense_type;
-use baras_core::signal_processor::{EventProcessor, GameSignal};
+use baras_core::signal_processor::{
+    check_counter_timer_triggers, check_timer_phase_transitions, EventProcessor, GameSignal,
+    SignalHandler,
+};
 use baras_core::state::{ParseWorkerOutput, SessionCache};
 use baras_core::storage::encounter_filename;
+use baras_core::timers::TimerManager;
 use encoding_rs::WINDOWS_1252;
 use memchr::memchr_iter;
 use memmap2::Mmap;
@@ -701,6 +705,7 @@ fn process_and_write_encounters(
 
     let mut cache = SessionCache::new();
     let mut processor = EventProcessor::new();
+    let mut timer_manager = TimerManager::new();
     let mut writer = FastEncounterWriter::with_capacity(50_000);
     let mut current_encounter_idx: u32 = 0;
     let mut pending_write = false;
@@ -708,6 +713,8 @@ fn process_and_write_encounters(
 
     // Track the first line number of the current incomplete encounter
     let mut incomplete_encounter_first_line: Option<u64> = None;
+    let mut local_player_set = false;
+    let mut needs_timer_snapshot = false;
 
     for event in events {
         // Load boss definitions lazily when we see AreaEntered for an area we have definitions for
@@ -726,6 +733,36 @@ fn process_and_write_encounters(
                                 count = bosses.len(),
                                 "Loaded boss definitions for area"
                             );
+                            needs_timer_snapshot = bosses.iter().any(|b| b.needs_timer_snapshot());
+
+                            // Load only phase/counter-relevant timers into the TimerManager
+                            // to minimize per-event overhead (full timer set is only needed
+                            // for overlay/audio which the parse worker doesn't use)
+                            let filtered_bosses: Vec<_> = bosses
+                                .iter()
+                                .map(|boss| {
+                                    let relevant_ids = boss.phase_relevant_timer_ids();
+                                    if relevant_ids.is_empty() {
+                                        // No phase-relevant timers — strip all timers
+                                        let mut filtered = boss.clone();
+                                        filtered.timers.clear();
+                                        filtered
+                                    } else {
+                                        let total = boss.timers.len();
+                                        let mut filtered = boss.clone();
+                                        filtered.timers.retain(|t| relevant_ids.contains(&t.id));
+                                        tracing::debug!(
+                                            boss_id = %boss.id,
+                                            total_timers = total,
+                                            relevant_timers = filtered.timers.len(),
+                                            "Filtered timers for parse worker"
+                                        );
+                                        filtered
+                                    }
+                                })
+                                .collect();
+                            timer_manager.load_boss_definitions(filtered_bosses);
+
                             cache.load_boss_definitions(bosses, false);
                         }
                         Err(e) => {
@@ -742,12 +779,87 @@ fn process_and_write_encounters(
 
         let (signals, event, was_accumulated) = processor.process_event(event, &mut cache);
 
+        // ─── Timer manager integration (for timer-based phase/counter triggers) ───
+
+        // Detect local player for timer context (first player entity seen)
+        if !local_player_set {
+            if event.source_entity.entity_type == EntityType::Player {
+                timer_manager.set_local_player_id(event.source_entity.log_id);
+                local_player_set = true;
+            } else if event.target_entity.entity_type == EntityType::Player {
+                timer_manager.set_local_player_id(event.target_entity.log_id);
+                local_player_set = true;
+            }
+        }
+
+        // Update timer snapshot on encounter so timer_time_remaining conditions work
+        // Only computed when definitions actually use TimerTimeRemaining conditions
+        if needs_timer_snapshot {
+            let snapshot = timer_manager.timer_remaining_snapshot_at(event.timestamp);
+            if let Some(enc) = cache.current_encounter_mut() {
+                enc.update_timer_snapshot(snapshot);
+            }
+        }
+
+        // Step 1: Dispatch signals to timer manager, collecting timer event IDs
+        let mut expired_timer_ids: Vec<String> = Vec::new();
+        let mut started_timer_ids: Vec<String> = Vec::new();
+        let mut canceled_timer_ids: Vec<String> = Vec::new();
+
+        {
+            let encounter = cache.current_encounter();
+            for signal in &signals {
+                timer_manager.handle_signal(signal, encounter);
+                expired_timer_ids.extend(timer_manager.expired_timer_ids().iter().cloned());
+                started_timer_ids.extend(timer_manager.started_timer_ids().iter().cloned());
+                canceled_timer_ids.extend(timer_manager.canceled_timer_ids().iter().cloned());
+            }
+        }
+
+        // Step 2: Timer-driven counter feedback (timer expires → counter increment)
+        let timer_counter_signals = check_counter_timer_triggers(
+            &expired_timer_ids,
+            &started_timer_ids,
+            &canceled_timer_ids,
+            &mut cache,
+            event.timestamp,
+        );
+
+        if !timer_counter_signals.is_empty() {
+            let encounter = cache.current_encounter();
+            for signal in &timer_counter_signals {
+                timer_manager.handle_signal(signal, encounter);
+                expired_timer_ids.extend(timer_manager.expired_timer_ids().iter().cloned());
+                started_timer_ids.extend(timer_manager.started_timer_ids().iter().cloned());
+                canceled_timer_ids.extend(timer_manager.canceled_timer_ids().iter().cloned());
+            }
+        }
+
+        // Step 3: Timer-driven phase transitions (timer expires → phase change)
+        let timer_phase_signals = check_timer_phase_transitions(
+            &expired_timer_ids,
+            &started_timer_ids,
+            &canceled_timer_ids,
+            &mut cache,
+            event.timestamp,
+        );
+
+        if !timer_phase_signals.is_empty() {
+            let encounter = cache.current_encounter();
+            for signal in &timer_phase_signals {
+                timer_manager.handle_signal(signal, encounter);
+            }
+        }
+
+        // ─── End timer manager integration ───
+
         // Track first line of current encounter (reset on combat end)
         if incomplete_encounter_first_line.is_none() {
             incomplete_encounter_first_line = Some(event.line_number);
         }
 
         // Only write events that were accumulated (same filtering as live parquet)
+        // NOTE: This runs AFTER timer processing so phase state reflects timer-driven transitions
         if was_accumulated {
             writer.append_event(&event, &cache, current_encounter_idx);
         }

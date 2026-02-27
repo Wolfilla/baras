@@ -290,6 +290,18 @@ pub fn check_event_trigger(
     event: &CombatEvent,
     filter_ctx: Option<&FilterContext>,
 ) -> bool {
+    // Handle AnyOf composition first — recurse into each sub-condition so that
+    // source/target filters on inner triggers are checked correctly.
+    // This must be checked before the type-specific branches below, because
+    // the matches_* methods recurse into AnyOf for ID matching but the
+    // subsequent check_event_filters would use AnyOf's own filters (None),
+    // silently bypassing source/target constraints on inner conditions.
+    if let Trigger::AnyOf { conditions } = trigger {
+        return conditions
+            .iter()
+            .any(|c| check_event_trigger(c, event, filter_ctx));
+    }
+
     // Check AbilityCast triggers
     if event.effect.effect_id == effect_id::ABILITYACTIVATE {
         let ability_id = event.action.action_id as u64;

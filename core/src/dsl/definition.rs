@@ -537,4 +537,104 @@ impl BossEncounterDefinition {
     pub fn matches_npc_id(&self, npc_id: i64) -> bool {
         self.all_npc_ids.contains(&npc_id)
     }
+
+    /// Returns true if any condition on timers, phases, or victory uses `TimerTimeRemaining`.
+    pub fn needs_timer_snapshot(&self) -> bool {
+        let timer_conds = self.timers.iter().flat_map(|t| t.conditions.iter());
+        let phase_conds = self.phases.iter().flat_map(|p| p.conditions.iter());
+        let victory_conds = self.victory_conditions.iter();
+
+        timer_conds
+            .chain(phase_conds)
+            .chain(victory_conds)
+            .any(|c| c.uses_timer_time_remaining())
+    }
+
+    /// Returns the set of timer IDs needed for phase/counter trigger evaluation.
+    ///
+    /// This computes the transitive closure: starting from timer IDs directly referenced
+    /// by phase triggers, counter triggers, and victory triggers, it follows timer chains
+    /// (timer_expires/timer_started in timer triggers and cancel_triggers, plus chains_to)
+    /// until no new timer IDs are discovered.
+    ///
+    /// Also includes timer IDs from `TimerTimeRemaining` conditions on phases and counters.
+    pub fn phase_relevant_timer_ids(&self) -> std::collections::HashSet<String> {
+        use std::collections::HashSet;
+
+        let mut relevant: HashSet<String> = HashSet::new();
+
+        // Seed: collect timer IDs from phase start/end triggers
+        for phase in &self.phases {
+            phase.start_trigger.collect_timer_refs(&mut relevant);
+            if let Some(ref end) = phase.end_trigger {
+                end.collect_timer_refs(&mut relevant);
+            }
+        }
+
+        // Seed: collect timer IDs from counter triggers
+        for counter in &self.counters {
+            counter.increment_on.collect_timer_refs(&mut relevant);
+            if let Some(ref dec) = counter.decrement_on {
+                dec.collect_timer_refs(&mut relevant);
+            }
+            counter.reset_on.collect_timer_refs(&mut relevant);
+        }
+
+        // Seed: collect timer IDs from victory trigger
+        if let Some(ref vt) = self.victory_trigger {
+            vt.collect_timer_refs(&mut relevant);
+        }
+
+        // Seed: collect timer IDs from TimerTimeRemaining conditions
+        for phase in &self.phases {
+            for cond in &phase.conditions {
+                Self::collect_condition_timer_refs(cond, &mut relevant);
+            }
+        }
+        for counter_cond in self.victory_conditions.iter() {
+            Self::collect_condition_timer_refs(counter_cond, &mut relevant);
+        }
+
+        // Transitive closure: follow timer trigger/cancel/chain references
+        let mut prev_size = 0;
+        while relevant.len() != prev_size {
+            prev_size = relevant.len();
+            let mut new_refs: HashSet<String> = HashSet::new();
+
+            for timer in &self.timers {
+                if relevant.contains(&timer.id) {
+                    // This timer is relevant — check if it references other timers
+                    timer.trigger.collect_timer_refs(&mut new_refs);
+                    if let Some(ref cancel) = timer.cancel_trigger {
+                        cancel.collect_timer_refs(&mut new_refs);
+                    }
+                    if let Some(ref chain) = timer.chains_to {
+                        new_refs.insert(chain.clone());
+                    }
+                }
+            }
+
+            relevant.extend(new_refs);
+        }
+
+        relevant
+    }
+
+    /// Extract timer IDs from TimerTimeRemaining conditions (recursive).
+    fn collect_condition_timer_refs(cond: &Condition, out: &mut std::collections::HashSet<String>) {
+        match cond {
+            Condition::TimerTimeRemaining { timer_id, .. } => {
+                out.insert(timer_id.clone());
+            }
+            Condition::AllOf { conditions } | Condition::AnyOf { conditions } => {
+                for c in conditions {
+                    Self::collect_condition_timer_refs(c, out);
+                }
+            }
+            Condition::Not { condition } => {
+                Self::collect_condition_timer_refs(condition, out);
+            }
+            _ => {}
+        }
+    }
 }

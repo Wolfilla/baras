@@ -99,6 +99,18 @@ impl Condition {
             Self::Not { .. } => "not",
         }
     }
+
+    /// Returns true if this condition (or any nested child) uses `TimerTimeRemaining`.
+    pub fn uses_timer_time_remaining(&self) -> bool {
+        match self {
+            Self::TimerTimeRemaining { .. } => true,
+            Self::AllOf { conditions } | Self::AnyOf { conditions } => {
+                conditions.iter().any(|c| c.uses_timer_time_remaining())
+            }
+            Self::Not { condition } => condition.uses_timer_time_remaining(),
+            _ => false,
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

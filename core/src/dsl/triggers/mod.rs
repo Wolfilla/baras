@@ -11,6 +11,8 @@ pub use matchers::{AbilitySelector, EffectSelector, EntitySelector, EntitySelect
 // Re-export EntityFilter for use in triggers
 pub use baras_types::EntityFilter;
 
+use std::collections::HashSet;
+
 use crate::dsl::EntityDefinition;
 use serde::{Deserialize, Serialize};
 
@@ -622,6 +624,24 @@ impl Trigger {
                 .iter()
                 .any(|c| c.matches_target_set(entities, source_npc_id, source_name)),
             _ => false,
+        }
+    }
+
+    /// Collect all timer IDs referenced by this trigger (recursively for AnyOf).
+    /// Returns TimerExpires, TimerStarted, and TimerCanceled timer_id values.
+    pub fn collect_timer_refs(&self, out: &mut HashSet<String>) {
+        match self {
+            Self::TimerExpires { timer_id }
+            | Self::TimerStarted { timer_id }
+            | Self::TimerCanceled { timer_id } => {
+                out.insert(timer_id.clone());
+            }
+            Self::AnyOf { conditions } => {
+                for c in conditions {
+                    c.collect_timer_refs(out);
+                }
+            }
+            _ => {}
         }
     }
 }
