@@ -3529,7 +3529,9 @@ fn UsageTab(
     };
 
     // Build sorted rows
-    let rows: Vec<AbilityUsageRow> = match &*usage_data.read() {
+    let usage_read = usage_data.read();
+    let usage_loading = usage_read.is_none(); // None = resource still loading
+    let rows: Vec<AbilityUsageRow> = match &*usage_read {
         Some(Some(data)) => {
             let mut sorted = data.clone();
             sort_usage_rows(&mut sorted, sort_col, sort_dir);
@@ -3643,7 +3645,7 @@ fn UsageTab(
                     }
                 }
                 tbody {
-                    if rows.is_empty() {
+                    if rows.is_empty() && !usage_loading {
                         tr {
                             td { colspan: "8", class: "empty-message",
                                 "No ability usage data available. Select a player from the sidebar."
@@ -3704,22 +3706,24 @@ fn UsageTab(
             }
         }
 
-        // Timeline Chart — height scales with number of selected abilities
-        div { class: "usage-timeline-container",
-            if num_selected == 0 {
-                div { class: "usage-timeline-hint",
-                    i { class: "fa-solid fa-chart-line" }
-                    " Click on abilities above to visualize their cast timeline"
+        // Timeline Chart — only render once table has data to avoid layout shift
+        if !rows.is_empty() {
+            div { class: "usage-timeline-container",
+                if num_selected == 0 {
+                    div { class: "usage-timeline-hint",
+                        i { class: "fa-solid fa-chart-line" }
+                        " Click on abilities above to visualize their cast timeline"
+                    }
                 }
-            }
-            {
-                // 40px per ability row + 60px padding for axes, minimum 120px
-                let chart_height = if num_selected == 0 { 0 } else { (num_selected * 40 + 60).max(120) };
-                rsx! {
-                    div {
-                        id: "usage-timeline-chart",
-                        class: "usage-timeline-chart",
-                        style: if num_selected == 0 { "height: 0px; overflow: hidden;".to_string() } else { format!("height: {chart_height}px;") },
+                {
+                    // 40px per ability row + 60px padding for axes, minimum 120px
+                    let chart_height = if num_selected == 0 { 0 } else { (num_selected * 40 + 60).max(120) };
+                    rsx! {
+                        div {
+                            id: "usage-timeline-chart",
+                            class: "usage-timeline-chart",
+                            style: if num_selected == 0 { "height: 0px; overflow: hidden;".to_string() } else { format!("height: {chart_height}px;") },
+                        }
                     }
                 }
             }
