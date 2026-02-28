@@ -3425,19 +3425,66 @@ details[open] .collapsible-summary::before {
   color: var(--text-muted);
 }
 
-/* Live query sidebar indicator */
+/* Live button pinned container — sits above scrollable encounter list */
+.sidebar-live-button {
+  flex-shrink: 0;
+  padding: 0.5em 0.5em 0.4em;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Live query sidebar button — distinct button look */
 .live-query-item {
   display: flex;
   align-items: center;
   gap: 0.5em;
   font-size: 0.85em;
   font-weight: 500;
-  background: var(--blue-alpha-10);
-  border-left-color: var(--color-success);
+  /* Default: muted grey (not selected) */
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--text-disabled);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
 }
 
-.live-query-item .status-dot {
+.live-query-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-accent);
+  border-left-color: var(--text-muted);
+  color: var(--text-secondary);
+}
+
+/* Selected state: green and prominent (extra specificity to override .sidebar-encounter-item.selected) */
+.sidebar-encounter-item.live-query-item.selected {
+  background: rgba(95, 217, 142, 0.10);
+  border: 1px solid rgba(95, 217, 142, 0.30);
+  border-left: 3px solid var(--color-success);
+  color: var(--color-success);
+}
+
+.sidebar-encounter-item.live-query-item.selected:hover {
+  background: rgba(95, 217, 142, 0.16);
+}
+
+/* Play icon */
+.live-query-item .live-play-icon {
+  font-size: 0.65em;
+  color: var(--text-disabled);
+}
+
+.live-query-item.selected .live-play-icon {
+  color: var(--color-success);
   animation: live-pulse 1.5s ease-in-out infinite;
+}
+
+/* Text label */
+.live-query-item .encounter-name {
+  color: inherit;
+}
+
+.live-query-item.selected .encounter-name {
+  font-weight: 700;
+  font-size: 0.9em;
 }
 
 .live-query-indicator {
@@ -6942,7 +6989,7 @@ details[open] .collapsible-summary::before {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-accent);
   padding: 1em;
-  overflow: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }

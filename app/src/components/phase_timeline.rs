@@ -348,8 +348,10 @@ pub fn PhaseTimelineFilter(props: PhaseTimelineProps) -> Element {
                 }
             }
 
-            // Range display below timeline, left-aligned
-            div { class: "phase-timeline-range",
+            // Controls row: range inputs + phase chips inline
+            div { class: "phase-timeline-controls",
+                // Range inputs
+                div { class: "phase-timeline-range",
                     input {
                         class: "phase-timeline-range-value",
                         r#type: "text",
@@ -408,7 +410,7 @@ pub fn PhaseTimelineFilter(props: PhaseTimelineProps) -> Element {
                             }
                         },
                     }
-                    span { class: "phase-timeline-range-separator", "—" }
+                    span { class: "phase-timeline-range-separator", "\u{2014}" }
                     input {
                         class: "phase-timeline-range-value",
                         r#type: "text",
@@ -468,34 +470,35 @@ pub fn PhaseTimelineFilter(props: PhaseTimelineProps) -> Element {
                         },
                     }
 
-                if !range.is_full(duration) {
-                    button {
-                        class: "phase-timeline-reset",
-                        onclick: reset_range,
-                        "✕"
+                    if !range.is_full(duration) {
+                        button {
+                            class: "phase-timeline-reset",
+                            onclick: reset_range,
+                            "\u{2715}"
+                        }
                     }
                 }
-            }
 
-            // Phase legend chips (compact)
-            if !phases.is_empty() {
-                div { class: "phase-chips",
-                    for phase in phases.iter() {
-                        {
-                            let is_active = (range.start - phase.start_secs).abs() < 0.1
-                                && (range.end - phase.end_secs).abs() < 0.1;
-                            let phase_clone = phase.clone();
-                            let bg_color = phase_color(&phase.phase_id);
+                // Phase legend chips (inline with range)
+                if !phases.is_empty() {
+                    div { class: "phase-chips",
+                        for phase in phases.iter() {
+                            {
+                                let is_active = (range.start - phase.start_secs).abs() < 0.1
+                                    && (range.end - phase.end_secs).abs() < 0.1;
+                                let phase_clone = phase.clone();
+                                let bg_color = phase_color(&phase.phase_id);
 
-                            rsx! {
-                                button {
-                                    class: if is_active { "phase-chip active" } else { "phase-chip" },
-                                    style: "--chip-color: {bg_color};",
-                                    onclick: move |_| select_phase(&phase_clone),
+                                rsx! {
+                                    button {
+                                        class: if is_active { "phase-chip active" } else { "phase-chip" },
+                                        style: "--chip-color: {bg_color};",
+                                        onclick: move |_| select_phase(&phase_clone),
 
-                                    "{phase.phase_name}"
-                                    if phase.instance > 1 {
-                                        span { class: "chip-instance", " ({phase.instance})" }
+                                        "{phase.phase_name}"
+                                        if phase.instance > 1 {
+                                            span { class: "chip-instance", " ({phase.instance})" }
+                                        }
                                     }
                                 }
                             }

@@ -800,18 +800,16 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
             // Dispose charts immediately when encounter changes
             dispose_all_overview_charts();
 
-            // Clear ALL previous data when encounter changes
-            // Use .set() instead of try_write() for critical signals to guarantee
-            // writes are never silently dropped — a dropped write here means the
-            // timeline and downstream data never load.
+            // Clear previous tab data when encounter changes.
+            // NOTE: timeline and time_range are NOT cleared here — the old values
+            // keep the PhaseTimelineFilter rendered at its current height, preventing
+            // layout shift in the tab bar during the ~300ms until the new timeline loads.
             abilities.set(Vec::new());
             entities.set(Vec::new());
             overview_data.set(Vec::new());
             player_deaths.set(Vec::new());
             npc_health.set(Vec::new());
             last_overview_fetch.set(None);
-            timeline.set(None);
-            time_range.set(TimeRange::default());
             content_state.set(LoadState::Idle);
         }
 
@@ -1747,8 +1745,8 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                 }
 
                 if !*sidebar_collapsed.read() {
-                    div { class: "sidebar-encounter-list",
-                        // Live button — always visible, click to follow live combat
+                    // Live button — pinned above scrollable list, always visible
+                    div { class: "sidebar-live-button",
                         div {
                             class: if *auto_follow.read() { "sidebar-encounter-item selected live-query-item" } else { "sidebar-encounter-item live-query-item" },
                             onclick: move |_| {
@@ -1774,11 +1772,13 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                     }
                                 });
                             },
-                            span { class: if *live_query_active.read() { "status-dot watching" } else { "status-dot" } }
+                            i { class: "fa-solid fa-play live-play-icon" }
                             span { class: "encounter-name",
                                 if *live_query_active.read() { " Live Encounter" } else { " Live" }
                             }
                         }
+                    }
+                    div { class: "sidebar-encounter-list",
                         if encounters().is_empty() {
                             div { class: "sidebar-empty",
                                 i { class: "fa-solid fa-inbox" }
@@ -2051,7 +2051,10 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                         }
                     }
 
-                    // Content area - debounced gate: hidden for 200ms on encounter change
+                    // Content area — fixed-height flex region below tab bar
+                    // Prevents combat log filters from shifting the tab bar position
+                    div { class: "tab-content-area",
+                    // Debounced gate: hidden for 200ms on encounter change
                     // to let data arrive before painting, then gated on timeline loaded.
                     // Live mode skips both gates since data streams in continuously.
                     if *content_visible.read() && (matches!(timeline_state(), LoadState::Loaded) || *live_query_active.read()) {
@@ -3189,6 +3192,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                             " {msg}"
                         }
                     }
+                    } // end tab-content-area
                 }
             }
         }
