@@ -341,9 +341,12 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
     // Extract persisted state fields into local signals for easier access
     // Initialize from parent state to support navigation from other components
     let mut selected_encounter = use_signal(|| props.state.read().data_explorer.selected_encounter);
+    // Auto-live preference: loaded from config, controls whether auto_follow starts enabled.
+    let mut auto_live = use_signal(|| props.state.read().data_explorer.auto_live);
     // Auto-follow: when true, CombatStarted auto-switches to live mode.
     // Clicking a historical encounter sets this false. Clicking the Live button sets it back to true.
-    let mut auto_follow = use_signal(|| props.state.read().data_explorer.selected_encounter.is_none());
+    // Only starts enabled when auto_live preference is on AND no encounter is pre-selected.
+    let mut auto_follow = use_signal(|| props.state.read().data_explorer.auto_live && props.state.read().data_explorer.selected_encounter.is_none());
     // Live query: true only when in combat and actively polling the buffer
     let mut live_query_active = use_signal(|| false);
     // Tracks transition from live → historical (combat ended, selecting completed encounter)
@@ -433,6 +436,23 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         let parent_bosses = props.state.read().data_explorer.show_only_bosses;
         if *show_only_bosses.read() != parent_bosses {
             show_only_bosses.set(parent_bosses);
+        }
+    });
+
+    // Sync auto_live preference from parent state when config loads asynchronously.
+    // Also updates auto_follow to match: if user has auto_live off, auto_follow stays off.
+    use_effect(move || {
+        let parent_auto_live = props.state.read().data_explorer.auto_live;
+        if *auto_live.read() != parent_auto_live {
+            auto_live.set(parent_auto_live);
+            // If auto_live just got enabled and no encounter is selected, enable auto_follow
+            if parent_auto_live && selected_encounter.read().is_none() {
+                auto_follow.set(true);
+            }
+            // If auto_live just got disabled, disable auto_follow too
+            if !parent_auto_live {
+                auto_follow.set(false);
+            }
         }
     });
     
@@ -670,7 +690,9 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                     if event_type.contains("FileLoaded") {
                         let _ = selected_encounter.try_write().map(|mut w| *w = None);
                         let _ = selected_source.try_write().map(|mut w| *w = None);
-                        let _ = auto_follow.try_write().map(|mut w| *w = true);
+                        // Only re-enable auto-follow if auto-live preference is on
+                        let should_auto_follow = *auto_live.peek();
+                        let _ = auto_follow.try_write().map(|mut w| *w = should_auto_follow);
                     }
                     spawn(async move {
                         // Refresh encounter list and auto-select latest if auto-follow
@@ -731,7 +753,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
     // Live query polling loop — bumps live_poll_tick every 2s while active
     use_future(move || async move {
         loop {
-            gloo_timers::future::TimeoutFuture::new(2_000).await;
+            gloo_timers::future::TimeoutFuture::new(2_500).await;
             if *live_query_active.peek() {
                 let tick = *live_poll_tick.peek();
                 live_poll_tick.set(tick.wrapping_add(1));
@@ -1775,6 +1797,41 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                             i { class: "fa-solid fa-play live-play-icon" }
                             span { class: "encounter-name",
                                 if *live_query_active.read() { " Live Encounter" } else { " Live" }
+                            }
+                            // Auto-live toggle — nested in the live button row
+                            label {
+                                class: "toggle-switch-label live-query-toggle",
+                                // Stop click from bubbling to the live button's onclick
+                                onclick: move |e| { e.stop_propagation(); },
+                                span { class: "toggle-switch",
+                                    input {
+                                        r#type: "checkbox",
+                                        checked: *auto_live.read(),
+                                        onchange: move |e| {
+                                            let checked = e.checked();
+                                            auto_live.set(checked);
+                                            if checked {
+                                                auto_follow.set(true);
+                                            } else {
+                                                auto_follow.set(false);
+                                                live_query_active.set(false);
+                                            }
+                                            if let Ok(mut state) = props.state.try_write() {
+                                                state.data_explorer.auto_live = checked;
+                                            }
+                                            spawn(async move {
+                                                if let Some(mut cfg) = api::get_config().await {
+                                                    cfg.data_explorer_auto_live = checked;
+                                                    if let Err(err) = api::update_config(&cfg).await {
+                                                        toast.show(format!("Failed to save settings: {}", err), ToastSeverity::Normal);
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    }
+                                    span { class: "toggle-slider" }
+                                }
+                                span { class: "toggle-text", "auto" }
                             }
                         }
                     }

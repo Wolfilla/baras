@@ -2297,6 +2297,11 @@ pub struct AppConfig {
     /// e.g., `1.50K` becomes `1,50K` and `1,500` becomes `1.500`.
     #[serde(default)]
     pub european_number_format: bool,
+
+    /// Automatically enter live mode when combat starts in the Data Explorer.
+    /// When false, live mode must be activated manually via the Live button.
+    #[serde(default)]
+    pub data_explorer_auto_live: bool,
 }
 
 fn default_retention_days() -> u32 {
@@ -2335,6 +2340,7 @@ impl AppConfig {
             latency_ms: 0,
             last_viewed_changelog_version: None,
             european_number_format: false,
+            data_explorer_auto_live: false,
         }
     }
 }
@@ -2748,6 +2754,8 @@ pub struct DataExplorerState {
     pub usage_sort_column: UsageSortColumn,
     /// Sort direction for usage table
     pub usage_sort_direction: SortDirection,
+    /// Whether live mode auto-activates on combat start (loaded from config)
+    pub auto_live: bool,
 }
 
 impl Default for DataExplorerState {
@@ -2766,6 +2774,7 @@ impl Default for DataExplorerState {
             selected_rotation_anchor: None,
             usage_sort_column: UsageSortColumn::default(),
             usage_sort_direction: SortDirection::default(),
+            auto_live: false,
         }
     }
 }

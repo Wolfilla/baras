@@ -3460,6 +3460,7 @@ details[open] .collapsible-summary::before {
 
 .live-query-toggle {
   font-size: 0.75em;
+  margin-left: auto;
 }
 
 .live-query-toggle .toggle-text {
