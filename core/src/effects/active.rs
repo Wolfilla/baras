@@ -523,34 +523,10 @@ impl ActiveEffect {
         false
     }
 
-    /// Check if alert should fire on expiration
-    ///
-    /// Returns Some(text) when alert should fire, None otherwise.
-    /// Uses same window as audio expiration [0, 0.3)
-    pub fn check_expiration_alert(&mut self) -> Option<&str> {
-        if !self.alert_on_expire {
-            return None;
-        }
-
-        if self.on_end_alert_fired {
-            return None;
-        }
-
-        // Fire if effect was removed early (charges depleted, cleansed, etc.)
-        if self.removed_at.is_some() {
-            self.on_end_alert_fired = true;
-            return self.alert_text.as_deref();
-        }
-
-        let remaining = self.remaining_base_secs_realtime();
-
-        if (0.0..0.3).contains(&remaining) {
-            self.on_end_alert_fired = true;
-            return self.alert_text.as_deref();
-        }
-
-        None
-    }
+    // Note: On-end expiration alerts are fired exclusively by EffectTracker::tick(),
+    // which checks on_end_alert_fired + has_base_duration_ended()/removed_at after
+    // signals have been dispatched. This avoids false "effect ended" alerts when an
+    // effect is refreshed just before its realtime timer expires.
 }
 
 /// Key for identifying unique effect instances

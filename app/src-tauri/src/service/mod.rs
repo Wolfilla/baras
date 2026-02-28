@@ -2162,6 +2162,8 @@ impl CombatService {
                 }
 
                 // Effect audio: process in live mode
+                // Note: On-end text alerts are handled via tick() -> fired_alerts,
+                // consumed in build_timer_data_with_audio() below.
                 if shared.is_live_tailing.load(Ordering::SeqCst) {
                     let effect_audio = process_effect_audio(&shared).await;
                     for (name, seconds, voice_pack) in effect_audio.countdowns {
@@ -2176,13 +2178,6 @@ impl CombatService {
                             text: alert.name,
                             custom_sound: alert.file,
                         });
-                    }
-                    // Send text alerts to overlay
-                    if !effect_audio.text_alerts.is_empty() {
-                        if overlay_tx
-                            .try_send(OverlayUpdate::AlertsFired(effect_audio.text_alerts)).is_err() {
-                            warn!("Overlay channel full, dropped effect alerts");
-                        }
                     }
                 }
 
@@ -2813,8 +2808,6 @@ struct EffectAudioResult {
     countdowns: Vec<(String, u8, String)>,
     /// Alert sounds to play
     alerts: Vec<EffectAlert>,
-    /// Text alerts fired on effect expiration
-    text_alerts: Vec<FiredAlert>,
 }
 
 struct EffectAlert {
@@ -2826,7 +2819,6 @@ struct EffectAlert {
 async fn process_effect_audio(shared: &std::sync::Arc<SharedState>) -> EffectAudioResult {
     let mut countdowns = Vec::new();
     let mut alerts = Vec::new();
-    let mut text_alerts = Vec::new();
 
     // Get session (same pattern as build_effects_overlay_data)
     let session_guard = shared.session.read().await;
@@ -2834,7 +2826,6 @@ async fn process_effect_audio(shared: &std::sync::Arc<SharedState>) -> EffectAud
         return EffectAudioResult {
             countdowns,
             alerts,
-            text_alerts,
         };
     };
     let session = session_arc.read().await;
@@ -2844,26 +2835,16 @@ async fn process_effect_audio(shared: &std::sync::Arc<SharedState>) -> EffectAud
         return EffectAudioResult {
             countdowns,
             alerts,
-            text_alerts,
         };
     };
     let mut tracker = effect_tracker.lock().unwrap_or_else(|p| p.into_inner());
 
-    for effect in tracker.active_effects_mut() {
-        // Check for text alert on expiration (independent of audio settings)
-        if let Some(text) = effect.check_expiration_alert().map(|s| s.to_string()) {
-            text_alerts.push(FiredAlert {
-                id: effect.definition_id.clone(),
-                name: effect.name.clone(),
-                text,
-                color: Some(effect.color),
-                timestamp: chrono::Local::now().naive_local(),
-                alert_text_enabled: true,
-                audio_enabled: false,
-                audio_file: None,
-            });
-        }
+    // Note: On-end text alerts are handled by tick() -> fired_alerts -> take_fired_alerts(),
+    // consumed in build_timer_data_with_audio(). We don't poll check_expiration_alert() here
+    // because the realtime-based window check races with signal-based refreshes, causing
+    // false "effect ended" alerts when an effect is refreshed just before its timer expires.
 
+    for effect in tracker.active_effects_mut() {
         // Skip audio checks for effects without audio enabled
         if !effect.audio_enabled {
             continue;
@@ -2901,7 +2882,6 @@ async fn process_effect_audio(shared: &std::sync::Arc<SharedState>) -> EffectAud
     EffectAudioResult {
         countdowns,
         alerts,
-        text_alerts,
     }
 }
 

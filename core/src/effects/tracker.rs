@@ -1691,7 +1691,10 @@ impl EffectTracker {
                         .signed_duration_since(effect.last_refreshed_at)
                         .num_milliseconds();
                     if since_refresh_ms > 1000 {
-                        if effect.mark_removed() {
+                        // Only decrement ticking_count if the effect hasn't already been
+                        // counted as expired by tick(). Timer-expired effects already had
+                        // their count decremented when timer_expired was set.
+                        if effect.mark_removed() && !effect.timer_expired {
                             self.ticking_count = self.ticking_count.saturating_sub(1);
                         }
                     }
@@ -1819,7 +1822,7 @@ impl EffectTracker {
                 .get(&key.definition_id)
                 .map(|def| def.persist_past_death)
                 .unwrap_or(false);
-            if !persist && effect.mark_removed() {
+            if !persist && effect.mark_removed() && !effect.timer_expired {
                 self.ticking_count = self.ticking_count.saturating_sub(1);
             }
         }
@@ -1841,7 +1844,7 @@ impl EffectTracker {
 
         for (key, effect) in self.active_effects.iter_mut() {
             if !outside_combat_ids.contains(key.definition_id.as_str()) {
-                if effect.mark_removed() {
+                if effect.mark_removed() && !effect.timer_expired {
                     self.ticking_count = self.ticking_count.saturating_sub(1);
                 }
             }
@@ -1855,7 +1858,7 @@ impl EffectTracker {
         self.aoe_collecting = None;
 
         for (_key, effect) in self.active_effects.iter_mut() {
-            if effect.mark_removed() {
+            if effect.mark_removed() && !effect.timer_expired {
                 self.ticking_count = self.ticking_count.saturating_sub(1);
             }
         }
