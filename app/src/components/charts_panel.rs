@@ -733,6 +733,10 @@ pub struct ChartsPanelProps {
     /// Callback when the user brush-selects a time range on a chart
     #[props(default)]
     pub on_time_range_change: EventHandler<TimeRange>,
+    /// Layout signals — used to trigger chart resize when sidebars/fullscreen toggle
+    pub sidebar_collapsed: Signal<bool>,
+    pub entity_collapsed: Signal<bool>,
+    pub overview_fullscreen: Signal<bool>,
 }
 
 #[component]
@@ -875,7 +879,9 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
 
         let Some(entity) = entity else { return };
 
-        // Clear selected effects when source filter changes to avoid stale highlights
+        // Clear stale effect data immediately so icons don't show wrong player's effects
+        active_effects.set(Vec::new());
+        passive_effects.set(Vec::new());
         selected_effects.set(Vec::new());
         effect_windows.set(Vec::new());
 
@@ -1073,6 +1079,19 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
 
         // Keep closure alive and remove listener on cleanup
         closure.forget();
+    });
+
+    // Resize charts when layout changes (sidebar collapse, entity panel collapse, fullscreen)
+    // CSS transitions take ~250ms, so delay resize to let the layout settle
+    use_effect(move || {
+        let _sidebar = *props.sidebar_collapsed.read();
+        let _entity = *props.entity_collapsed.read();
+        let _fullscreen = *props.overview_fullscreen.read();
+
+        spawn(async move {
+            gloo_timers::future::TimeoutFuture::new(300).await;
+            resize_all_charts();
+        });
     });
 
     // Cleanup charts on unmount
