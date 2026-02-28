@@ -125,6 +125,7 @@ fn build_time_series_option(
     fill_color: &str,
     effect_windows: &[(i64, EffectWindow, &str)], // (effect_id, window, color)
     y_axis_name: &str,
+    animate: bool,
 ) -> JsValue {
     let obj = js_sys::Object::new();
 
@@ -411,8 +412,12 @@ fn build_time_series_option(
 
     js_set(&obj, "series", &series_arr);
 
-    // Animation
-    js_set(&obj, "animation", &JsValue::FALSE);
+    // Animation — enabled during live query for smooth chart growth
+    js_set(&obj, "animation", &JsValue::from_bool(animate));
+    if animate {
+        js_set(&obj, "animationDuration", &JsValue::from_f64(500.0));
+        js_set(&obj, "animationEasing", &JsValue::from_str("linear"));
+    }
 
     // Brush selection for drag-to-select time range
     apply_brush_config(&obj);
@@ -425,6 +430,7 @@ fn build_time_series_option(
 fn build_hp_chart_option(
     data: &[HpPoint],
     effect_windows: &[(i64, EffectWindow, &str)],
+    animate: bool,
 ) -> JsValue {
     let obj = js_sys::Object::new();
 
@@ -592,7 +598,11 @@ fn build_hp_chart_option(
 
     series_arr.push(&series);
     js_set(&obj, "series", &series_arr);
-    js_set(&obj, "animation", &JsValue::FALSE);
+    js_set(&obj, "animation", &JsValue::from_bool(animate));
+    if animate {
+        js_set(&obj, "animationDuration", &JsValue::from_f64(500.0));
+        js_set(&obj, "animationEasing", &JsValue::from_str("linear"));
+    }
 
     // Brush selection for drag-to-select time range
     apply_brush_config(&obj);
@@ -819,7 +829,10 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
         load_epoch.set(current_gen);
 
         spawn(async move {
-            loading.set(true);
+            // Only show loading spinner for historical encounters (not live query)
+            if idx.is_some() {
+                loading.set(true);
+            }
 
             let tr_opt = if tr.start == 0.0 && tr.end == 0.0 {
                 None
@@ -827,40 +840,28 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
                 Some(&tr)
             };
 
-            if let Some(data) =
-                api::query_dps_over_time(idx, bucket_ms, Some(&entity), tr_opt).await
-            {
-                if *load_epoch.read() != current_gen { return; }
-                dps_data.set(data);
-            }
-            if let Some(data) =
-                api::query_hps_over_time(idx, bucket_ms, Some(&entity), tr_opt).await
-            {
-                if *load_epoch.read() != current_gen { return; }
-                hps_data.set(data);
-            }
-            if let Some(data) =
-                api::query_ehps_over_time(idx, bucket_ms, Some(&entity), tr_opt).await
-            {
-                if *load_epoch.read() != current_gen { return; }
-                ehps_data.set(data);
-            }
-            if let Some(data) =
-                api::query_dtps_over_time(idx, bucket_ms, Some(&entity), tr_opt).await
-            {
-                if *load_epoch.read() != current_gen { return; }
-                dtps_data.set(data);
-            }
-            if let Some(data) =
-                api::query_hp_over_time(idx, bucket_ms, Some(&entity), tr_opt).await
-            {
-                if *load_epoch.read() != current_gen { return; }
-                hp_data.set(data);
-            }
+            // Fetch all data series first, then batch-write signals to trigger
+            // only one chart redraw instead of up to 5 intermediate redraws.
+            // Without batching, each .set() between .await points allows the
+            // runtime to process re-renders, causing visible chart flicker.
+            let new_dps = api::query_dps_over_time(idx, bucket_ms, Some(&entity), tr_opt).await;
+            let new_hps = api::query_hps_over_time(idx, bucket_ms, Some(&entity), tr_opt).await;
+            let new_ehps = api::query_ehps_over_time(idx, bucket_ms, Some(&entity), tr_opt).await;
+            let new_dtps = api::query_dtps_over_time(idx, bucket_ms, Some(&entity), tr_opt).await;
+            let new_hp = api::query_hp_over_time(idx, bucket_ms, Some(&entity), tr_opt).await;
 
-            if *load_epoch.read() == current_gen {
-                loading.set(false);
-            }
+            // Check epoch once after all fetches — discard if stale
+            if *load_epoch.read() != current_gen { return; }
+
+            // Batch-write all signals without any .await between them so
+            // Dioxus coalesces them into a single re-render
+            if let Some(data) = new_dps { dps_data.set(data); }
+            if let Some(data) = new_hps { hps_data.set(data); }
+            if let Some(data) = new_ehps { ehps_data.set(data); }
+            if let Some(data) = new_dtps { dtps_data.set(data); }
+            if let Some(data) = new_hp { hp_data.set(data); }
+
+            loading.set(false);
         });
     });
 
@@ -960,82 +961,101 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
             dispose_chart("chart-hp");
         }
 
-        spawn(async move {
-            // Delay to ensure DOM elements exist after render
-            gloo_timers::future::TimeoutFuture::new(150).await;
+        let is_live_update = encounter_idx_signal().is_none();
 
-            if show_dps_val
-                && !dps.is_empty()
-                && let Some(chart) = init_chart("chart-dps")
-            {
-                let option = build_time_series_option(
-                    &dps,
-                    None,
-                    "DPS",
-                    "#e74c3c",
-                    None,
-                    "rgba(231, 76, 60, 0.15)",
-                    &windows,
-                    "DPS",
-                );
-                set_chart_option(&chart, &option);
-                register_brush_handler(&chart, brush_selection);
-                activate_brush(&chart);
+        // During live updates, update charts synchronously to avoid flash.
+        // During historical loads, use spawn with a DOM-ready delay.
+        if is_live_update {
+            // Live: update in-place, no animation, no brush re-registration, no resize.
+            // Brush handlers are already registered from the initial render;
+            // re-registering would leak closures and cause a visual cursor reset flash.
+            if show_dps_val && !dps.is_empty() {
+                if let Some(chart) = init_chart("chart-dps") {
+                    let option = build_time_series_option(
+                        &dps, None, "DPS", "#e74c3c", None,
+                        "rgba(231, 76, 60, 0.15)", &windows, "DPS", false,
+                    );
+                    set_chart_option(&chart, &option);
+                }
             }
-
-            if show_hps_val
-                && !hps.is_empty()
-                && let Some(chart) = init_chart("chart-hps")
-            {
-                let ehps_ref = if !ehps.is_empty() { Some(ehps.as_slice()) } else { None };
-                let option = build_time_series_option(
-                    &hps,
-                    ehps_ref,
-                    "HPS",
-                    "#2ecc71",
-                    Some("#3498db"),
-                    "rgba(46, 204, 113, 0.15)",
-                    &windows,
-                    "HPS",
-                );
-                set_chart_option(&chart, &option);
-                register_brush_handler(&chart, brush_selection);
-                activate_brush(&chart);
+            if show_hps_val && !hps.is_empty() {
+                if let Some(chart) = init_chart("chart-hps") {
+                    let ehps_ref = if !ehps.is_empty() { Some(ehps.as_slice()) } else { None };
+                    let option = build_time_series_option(
+                        &hps, ehps_ref, "HPS", "#2ecc71", Some("#3498db"),
+                        "rgba(46, 204, 113, 0.15)", &windows, "HPS", false,
+                    );
+                    set_chart_option(&chart, &option);
+                }
             }
-
-            if show_dtps_val
-                && !dtps.is_empty()
-                && let Some(chart) = init_chart("chart-dtps")
-            {
-                let option = build_time_series_option(
-                    &dtps,
-                    None,
-                    "DTPS",
-                    "#e67e22",
-                    None,
-                    "rgba(230, 126, 34, 0.15)",
-                    &windows,
-                    "DTPS",
-                );
-                set_chart_option(&chart, &option);
-                register_brush_handler(&chart, brush_selection);
-                activate_brush(&chart);
+            if show_dtps_val && !dtps.is_empty() {
+                if let Some(chart) = init_chart("chart-dtps") {
+                    let option = build_time_series_option(
+                        &dtps, None, "DTPS", "#e67e22", None,
+                        "rgba(230, 126, 34, 0.15)", &windows, "DTPS", false,
+                    );
+                    set_chart_option(&chart, &option);
+                }
             }
-
-            if show_hp_val
-                && !hp.is_empty()
-                && let Some(chart) = init_chart("chart-hp")
-            {
-                let option = build_hp_chart_option(&hp, &windows);
-                set_chart_option(&chart, &option);
-                register_brush_handler(&chart, brush_selection);
-                activate_brush(&chart);
+            if show_hp_val && !hp.is_empty() {
+                if let Some(chart) = init_chart("chart-hp") {
+                    let option = build_hp_chart_option(&hp, &windows, false);
+                    set_chart_option(&chart, &option);
+                }
             }
+        } else {
+            // Historical: delay to ensure DOM is ready, then init + brush + resize
+            spawn(async move {
+                gloo_timers::future::TimeoutFuture::new(150).await;
 
-            // Resize all visible charts after DOM has settled
-            gloo_timers::future::TimeoutFuture::new(50).await;
-            resize_all_charts();
-        });
+                if show_dps_val && !dps.is_empty() {
+                    if let Some(chart) = init_chart("chart-dps") {
+                        let option = build_time_series_option(
+                            &dps, None, "DPS", "#e74c3c", None,
+                            "rgba(231, 76, 60, 0.15)", &windows, "DPS", false,
+                        );
+                        set_chart_option(&chart, &option);
+                        register_brush_handler(&chart, brush_selection);
+                        activate_brush(&chart);
+                    }
+                }
+                if show_hps_val && !hps.is_empty() {
+                    if let Some(chart) = init_chart("chart-hps") {
+                        let ehps_ref = if !ehps.is_empty() { Some(ehps.as_slice()) } else { None };
+                        let option = build_time_series_option(
+                            &hps, ehps_ref, "HPS", "#2ecc71", Some("#3498db"),
+                            "rgba(46, 204, 113, 0.15)", &windows, "HPS", false,
+                        );
+                        set_chart_option(&chart, &option);
+                        register_brush_handler(&chart, brush_selection);
+                        activate_brush(&chart);
+                    }
+                }
+                if show_dtps_val && !dtps.is_empty() {
+                    if let Some(chart) = init_chart("chart-dtps") {
+                        let option = build_time_series_option(
+                            &dtps, None, "DTPS", "#e67e22", None,
+                            "rgba(230, 126, 34, 0.15)", &windows, "DTPS", false,
+                        );
+                        set_chart_option(&chart, &option);
+                        register_brush_handler(&chart, brush_selection);
+                        activate_brush(&chart);
+                    }
+                }
+                if show_hp_val && !hp.is_empty() {
+                    if let Some(chart) = init_chart("chart-hp") {
+                        let option = build_hp_chart_option(&hp, &windows, false);
+                        set_chart_option(&chart, &option);
+                        register_brush_handler(&chart, brush_selection);
+                        activate_brush(&chart);
+                    }
+                }
+
+                // Resize all visible charts after DOM has settled
+                gloo_timers::future::TimeoutFuture::new(50).await;
+                resize_all_charts();
+            });
+        }
     });
 
     // Window resize listener - resize all ECharts instances
@@ -1067,6 +1087,7 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
     let passive = passive_effects.read().clone();
     let current_effects = selected_effects.read().clone();
 
+    let is_live = props.encounter_idx.is_none();
     let dps_empty = dps_data.read().is_empty();
     let hps_empty = hps_data.read().is_empty();
     let dtps_empty = dtps_data.read().is_empty();
@@ -1122,28 +1143,28 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
                         }
                     }
                     if *show_dps.read() {
-                        if dps_empty && !*loading.read() {
+                        if dps_empty && !*loading.read() && !is_live {
                             div { class: "chart-empty", "No damage dealt in fight" }
                         } else {
                             div { id: "chart-dps", class: "chart-container" }
                         }
                     }
                     if *show_hps.read() {
-                        if hps_empty && !*loading.read() {
+                        if hps_empty && !*loading.read() && !is_live {
                             div { class: "chart-empty", "No healing in fight" }
                         } else {
                             div { id: "chart-hps", class: "chart-container" }
                         }
                     }
                     if *show_dtps.read() {
-                        if dtps_empty && !*loading.read() {
+                        if dtps_empty && !*loading.read() && !is_live {
                             div { class: "chart-empty", "No damage taken in fight" }
                         } else {
                             div { id: "chart-dtps", class: "chart-container" }
                         }
                     }
                     if *show_hp.read() {
-                        if hp_empty && !*loading.read() {
+                        if hp_empty && !*loading.read() && !is_live {
                             div { class: "chart-empty", "No HP data in fight" }
                         } else {
                             div { id: "chart-hp", class: "chart-container" }

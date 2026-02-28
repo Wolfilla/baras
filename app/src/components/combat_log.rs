@@ -48,7 +48,7 @@ const DEFENSE_REFLECTED: i64 = 836045448953649;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct CombatLogProps {
-    pub encounter_idx: u32,
+    pub encounter_idx: Option<u32>,
     pub time_range: TimeRange,
     /// Optional initial target filter (e.g., player name from death tracker)
     #[props(default)]
@@ -208,7 +208,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
     let mut state = props.state;
     let should_restore_filters = props.initial_target.is_none();
     let should_restore_position = props.initial_target.is_none()
-        && state.peek().encounter_idx == Some(props.encounter_idx);
+        && state.peek().encounter_idx == props.encounter_idx;
 
     // Filter state - restore from saved state (persists across encounters)
     let mut source_filter = use_signal(|| {
@@ -340,10 +340,10 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
     use_effect(move || {
         let idx = *encounter_idx_signal.read();
         spawn(async move {
-            if let Some(sources) = api::query_source_names(Some(idx)).await {
+            if let Some(sources) = api::query_source_names(idx).await {
                 source_names.set(sources);
             }
-            if let Some(targets) = api::query_target_names(Some(idx)).await {
+            if let Some(targets) = api::query_target_names(idx).await {
                 target_names.set(targets);
             }
         });
@@ -401,7 +401,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
 
             // Get total count
             if let Some(count) = api::query_combat_log_count(
-                Some(idx),
+                idx,
                 source.as_deref(),
                 target.as_deref(),
                 search_opt.as_deref(),
@@ -415,7 +415,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
 
             // Load page at computed offset
             if let Some(data) = api::query_combat_log(
-                Some(idx),
+                idx,
                 load_offset,
                 PAGE_SIZE,
                 source.as_deref(),
@@ -503,7 +503,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
             };
 
             if let Some(matches) = api::query_combat_log_find(
-                Some(idx),
+                idx,
                 &find,
                 source.as_deref(),
                 target.as_deref(),
@@ -554,7 +554,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
 
         if let Ok(mut s) = state.try_write() {
             *s = CombatLogSessionState {
-                encounter_idx: Some(*encounter_idx_signal.peek()),
+                encounter_idx: *encounter_idx_signal.peek(),
                 source_filter: source,
                 target_filter: target,
                 search_text: search,
@@ -619,7 +619,7 @@ pub fn CombatLog(props: CombatLogProps) -> Element {
                 };
 
                 if let Some(data) = api::query_combat_log(
-                    Some(idx),
+                    idx,
                     new_offset,
                     PAGE_SIZE,
                     source.as_deref(),

@@ -341,6 +341,15 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
     // Extract persisted state fields into local signals for easier access
     // Initialize from parent state to support navigation from other components
     let mut selected_encounter = use_signal(|| props.state.read().data_explorer.selected_encounter);
+    // Auto-follow: when true, CombatStarted auto-switches to live mode.
+    // Clicking a historical encounter sets this false. Clicking the Live button sets it back to true.
+    let mut auto_follow = use_signal(|| props.state.read().data_explorer.selected_encounter.is_none());
+    // Live query: true only when in combat and actively polling the buffer
+    let mut live_query_active = use_signal(|| false);
+    // Tracks transition from live → historical (combat ended, selecting completed encounter)
+    // When true, the timeline effect skips destructive clearing to avoid flash
+    let mut transitioning_from_live = use_signal(|| false);
+    let mut live_poll_tick = use_signal(|| 0u32);
     let mut view_mode = use_signal(|| props.state.read().data_explorer.view_mode);
     let mut selected_source = use_signal(|| props.state.read().data_explorer.selected_source.clone());
     let mut breakdown_mode = use_signal(|| props.state.read().data_explorer.breakdown_mode);
@@ -461,6 +470,9 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
     // Loading states (not persisted)
     let mut timeline_state = use_signal(LoadState::default);
     let mut content_state = use_signal(LoadState::default);
+    // Debounced content visibility — delays rendering by 200ms on encounter change
+    // to let data arrive before painting, preventing pop-in
+    let mut content_visible = use_signal(|| false);
     // Generation counter to discard stale async results on rapid encounter switching
     let mut load_generation = use_signal(|| 0u32);
 
@@ -556,52 +568,44 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
             return;
         }
 
-        // Only initialize charts when overview is visible and we have an encounter
-        if selected_encounter.read().is_none() {
+        // Only initialize charts when overview is visible and we have an encounter (or live query)
+        if selected_encounter.read().is_none() && !*live_query_active.read() {
             return;
         }
 
-        spawn(async move {
-            // Small delay to ensure DOM is ready
-            gloo_timers::future::TimeoutFuture::new(100).await;
+        let is_live = *live_query_active.read();
 
-            // Damage chart
-            if !damage_data.is_empty()
-                && let Some(chart) = init_overview_chart("donut-damage")
-            {
-                let opt = build_donut_option("Damage", &damage_data, "hsl(0, 70%, 60%)");
-                set_chart_option(&chart, &opt);
-                resize_overview_chart(&chart);
+        // Helper: update a single donut chart in-place (init if needed, then setOption)
+        let update_donut = |id: &str, title: &str, data: &[(String, f64)], color: &str, needs_resize: bool| {
+            if data.is_empty() {
+                return;
             }
+            if let Some(chart) = init_overview_chart(id) {
+                let opt = build_donut_option(title, data, color);
+                set_chart_option(&chart, &opt);
+                if needs_resize {
+                    resize_overview_chart(&chart);
+                }
+            }
+        };
 
-            // Threat chart
-            if !threat_data.is_empty()
-                && let Some(chart) = init_overview_chart("donut-threat")
-            {
-                let opt = build_donut_option("Threat", &threat_data, "hsl(210, 70%, 55%)");
-                set_chart_option(&chart, &opt);
-                resize_overview_chart(&chart);
-            }
-
-            // Healing chart (effective healing)
-            if !healing_data.is_empty()
-                && let Some(chart) = init_overview_chart("donut-healing")
-            {
-                let opt =
-                    build_donut_option("Effective Healing", &healing_data, "hsl(120, 50%, 50%)");
-                set_chart_option(&chart, &opt);
-                resize_overview_chart(&chart);
-            }
-
-            // Damage Taken chart
-            if !taken_data.is_empty()
-                && let Some(chart) = init_overview_chart("donut-taken")
-            {
-                let opt = build_donut_option("Damage Taken", &taken_data, "hsl(30, 70%, 55%)");
-                set_chart_option(&chart, &opt);
-                resize_overview_chart(&chart);
-            }
-        });
+        if is_live {
+            // During live query, containers are already mounted — update charts synchronously
+            // without spawn/delay to avoid any visual flash between frames
+            update_donut("donut-damage", "Damage", &damage_data, "hsl(0, 70%, 60%)", false);
+            update_donut("donut-threat", "Threat", &threat_data, "hsl(210, 70%, 55%)", false);
+            update_donut("donut-healing", "Effective Healing", &healing_data, "hsl(120, 50%, 50%)", false);
+            update_donut("donut-taken", "Damage Taken", &taken_data, "hsl(30, 70%, 55%)", false);
+        } else {
+            // Historical: small delay to ensure DOM is ready, then init + resize
+            spawn(async move {
+                gloo_timers::future::TimeoutFuture::new(100).await;
+                update_donut("donut-damage", "Damage", &damage_data, "hsl(0, 70%, 60%)", true);
+                update_donut("donut-threat", "Threat", &threat_data, "hsl(210, 70%, 55%)", true);
+                update_donut("donut-healing", "Effective Healing", &healing_data, "hsl(120, 50%, 50%)", true);
+                update_donut("donut-taken", "Damage Taken", &taken_data, "hsl(30, 70%, 55%)", true);
+            });
+        }
     });
 
     // Window resize listener for overview donut charts
@@ -618,39 +622,74 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         closure.forget();
     });
 
-    // Load encounter list on mount
+    // Load encounter list on mount (auto-select latest encounter unless user had one selected)
 
     use_effect(move || {
         spawn(async move {
             if let Some(list) = api::get_encounter_history().await {
-                let _ = encounters.try_write().map(|mut w| *w = list); // ← safe
+                let latest_id = list.last().map(|e| e.encounter_id as u32);
+                let _ = encounters.try_write().map(|mut w| *w = list);
+                if *auto_follow.peek() && selected_encounter.peek().is_none() {
+                    if let Some(id) = latest_id {
+                        let _ = selected_encounter.try_write().map(|mut w| *w = Some(id));
+                    }
+                }
             }
         });
     });
     // Store unlisten handle for cleanup (Tauri returns an unlisten function)
     let mut unlisten_handle = use_signal(|| None::<js_sys::Function>);
 
-    // Listen for session updates (refresh on combat end, file load)
+    // Listen for session updates (refresh on combat end, file load, combat start for live query)
     use_future(move || async move {
         let closure = Closure::new(move |event: JsValue| {
             // Extract payload from event object (Tauri events have { payload: "..." } structure)
             if let Ok(payload) = js_sys::Reflect::get(&event, &JsValue::from_str("payload"))
                 && let Some(event_type) = payload.as_string()
-                && (event_type.contains("CombatEnded") || event_type.contains("FileLoaded"))
             {
-                // Reset selection only on file load (new file invalidates old encounter indices)
-                // Use try_write to handle signal being dropped when component unmounts
-                if event_type.contains("FileLoaded") {
-                    let _ = selected_encounter.try_write().map(|mut w| *w = None);
-                    // Reset selected player on new file (different players)
-                    let _ = selected_source.try_write().map(|mut w| *w = None);
-                }
-                spawn(async move {
-                    // Refresh encounter list
-                    if let Some(list) = api::get_encounter_history().await {
-                        let _ = encounters.try_write().map(|mut w| *w = list);
+                // Live query: activate when combat starts (if auto-follow is on)
+                if event_type.contains("CombatStarted") {
+                    if *auto_follow.peek() {
+                        let _ = live_query_active.try_write().map(|mut w| *w = true);
+                        let _ = selected_encounter.try_write().map(|mut w| *w = None);
+                        let _ = live_poll_tick.try_write().map(|mut w| *w = 0);
                     }
-                });
+                    return;
+                }
+
+                if event_type.contains("CombatEnded") || event_type.contains("FileLoaded") {
+                    // Mark transition so timeline effect preserves existing data
+                    if event_type.contains("CombatEnded") && *live_query_active.peek() {
+                        let _ = transitioning_from_live.try_write().map(|mut w| *w = true);
+                    }
+
+                    // Deactivate live polling
+                    let _ = live_query_active.try_write().map(|mut w| *w = false);
+
+                    // Reset selection on file load (new file invalidates old encounter indices)
+                    if event_type.contains("FileLoaded") {
+                        let _ = selected_encounter.try_write().map(|mut w| *w = None);
+                        let _ = selected_source.try_write().map(|mut w| *w = None);
+                        let _ = auto_follow.try_write().map(|mut w| *w = true);
+                    }
+                    spawn(async move {
+                        // Refresh encounter list and auto-select latest if auto-follow
+                        if let Some(list) = api::get_encounter_history().await {
+                            let latest_id = list.last().map(|e| e.encounter_id as u32);
+                            let _ = encounters.try_write().map(|mut w| *w = list);
+                            if *auto_follow.peek() {
+                                if let Some(id) = latest_id {
+                                    let _ = selected_encounter.try_write().map(|mut w| *w = Some(id));
+                                }
+                            }
+                        }
+                        // Safety: clear transition flag after encounter is set, in case
+                        // the timeline effect didn't fire (e.g., encounter didn't change)
+                        if *transitioning_from_live.peek() {
+                            transitioning_from_live.set(false);
+                        }
+                    });
+                }
             }
         });
         let handle = api::tauri_listen("session-updated", &closure).await;
@@ -689,6 +728,46 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         }
     });
 
+    // Live query polling loop — bumps live_poll_tick every 2s while active
+    use_future(move || async move {
+        loop {
+            gloo_timers::future::TimeoutFuture::new(2_000).await;
+            if *live_query_active.peek() {
+                let tick = *live_poll_tick.peek();
+                live_poll_tick.set(tick.wrapping_add(1));
+            }
+        }
+    });
+
+    // Debounce content visibility on encounter or tab change — hides content briefly
+    // to let async data arrive before painting, preventing pop-in.
+    // Live mode is always visible (data streams in continuously).
+    // Track previous values to distinguish encounter vs. tab changes for different delays.
+    let mut prev_debounce_encounter = use_signal(|| None::<u32>);
+    use_effect(move || {
+        let idx = *selected_encounter.read();
+        let _mode = *view_mode.read(); // subscribe to tab changes
+        let is_live = *live_query_active.read();
+
+        if is_live {
+            content_visible.set(true);
+            return;
+        }
+
+        // Encounter change = 300ms, tab change within same encounter = 150ms
+        let prev = *prev_debounce_encounter.peek();
+        let delay = if prev != idx { 300 } else { 150 };
+        prev_debounce_encounter.set(idx);
+
+        // Hide content immediately on change
+        content_visible.set(false);
+
+        spawn(async move {
+            gloo_timers::future::TimeoutFuture::new(delay).await;
+            content_visible.set(true);
+        });
+    });
+
     // Load timeline when encounter changes - prerequisite for all data loading
     // Uses generation counter to discard stale async results on rapid switching
     use_effect(move || {
@@ -701,34 +780,46 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
             prev_encounter.set(idx);
         }
 
-        // Dispose charts immediately when encounter changes
-        dispose_all_overview_charts();
+        let is_live = *live_query_active.read();
+
+        // During live query, the live poll effect handles all data loading — skip here
+        if is_live {
+            return;
+        }
+
+        // Check if we're transitioning from live → historical (combat just ended)
+        let is_transition = *transitioning_from_live.peek();
+        if is_transition {
+            transitioning_from_live.set(false);
+        }
+
+        // Skip destructive clearing during live→historical transition — data is the same
+        // encounter that was just promoted from the buffer to a persisted file.
+        // Also skip on initial mount when encounter hasn't changed.
+        if !is_transition && is_encounter_change {
+            // Dispose charts immediately when encounter changes
+            dispose_all_overview_charts();
+
+            // Clear ALL previous data when encounter changes
+            // Use .set() instead of try_write() for critical signals to guarantee
+            // writes are never silently dropped — a dropped write here means the
+            // timeline and downstream data never load.
+            abilities.set(Vec::new());
+            entities.set(Vec::new());
+            overview_data.set(Vec::new());
+            player_deaths.set(Vec::new());
+            npc_health.set(Vec::new());
+            last_overview_fetch.set(None);
+            timeline.set(None);
+            time_range.set(TimeRange::default());
+            content_state.set(LoadState::Idle);
+        }
 
         // Increment generation to invalidate any in-flight requests
         let generation = *load_generation.peek() + 1;
         load_generation.set(generation);
 
-        // Clear ALL previous data when encounter changes (but preserve some state on initial mount)
-        // Use .set() instead of try_write() for critical signals to guarantee
-        // writes are never silently dropped — a dropped write here means the
-        // timeline and downstream data never load.
-        abilities.set(Vec::new());
-        entities.set(Vec::new());
-        overview_data.set(Vec::new());
-        player_deaths.set(Vec::new());
-        npc_health.set(Vec::new());
-        last_overview_fetch.set(None);
-        timeline.set(None);
-        // Only reset time_range if encounter actually changed (not on initial mount restore)
-        // Note: selected_source is intentionally preserved across encounter changes
-        // so users can track the same player across pulls. If the player isn't in the
-        // new encounter, auto-selection logic will fall back to the local player.
-        if is_encounter_change {
-            time_range.set(TimeRange::default());
-        }
-        content_state.set(LoadState::Idle);
-
-        // Load timeline for selected encounter (None = live encounter)
+        // Load timeline for selected encounter
         timeline_state.set(LoadState::Loading);
 
         // Capture whether we should restore time_range after timeline loads
@@ -800,8 +891,15 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         let tr = time_range();
         let tl_state = timeline_state();
 
+        // During live query, the live poll effect handles all data loading — skip here
+        // to avoid racing with live poll writes and causing data "waffle" between values.
+        // Also skip during live→historical transition (combat just ended, encounter not yet set)
+        if *live_query_active.read() || *transitioning_from_live.read() {
+            return;
+        }
+
         // Only proceed when timeline is loaded
-        if !matches!(tl_state, LoadState::Loaded) || idx.is_none() {
+        if !matches!(tl_state, LoadState::Loaded) {
             return;
         }
 
@@ -818,8 +916,8 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
             }
         }
 
-        // Set content loading state for Overview tab
-        if is_overview {
+        // Set content loading state for Overview tab (skip during live query to avoid flash)
+        if is_overview && !*live_query_active.read() {
             let _ = content_state
                 .try_write()
                 .map(|mut w| *w = LoadState::Loading);
@@ -874,12 +972,150 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         });
     });
 
+    // Live query polling: re-query timeline + overview data on each poll tick
+    // This is separate from the normal effects to avoid interference with historical queries
+    use_effect(move || {
+        let _tick = *live_poll_tick.read(); // subscribe to poll tick changes
+        let is_active = *live_query_active.read();
+
+        if !is_active {
+            return;
+        }
+
+        // Query with None = live encounter buffer
+        spawn(async move {
+            // Bail if live query was deactivated while spawning
+            if !*live_query_active.peek() {
+                return;
+            }
+
+            // 1. Query timeline for live duration
+            if let Some(tl) = api::query_encounter_timeline(None).await {
+                let dur = tl.duration_secs;
+                // Only update time_range if duration changed meaningfully (>0.5s)
+                // to avoid cascading downstream effects on every poll tick
+                let current_tr = *time_range.peek();
+                let new_tr = TimeRange::full(dur);
+                if (current_tr.end - new_tr.end).abs() > 0.5 || (current_tr.start - new_tr.start).abs() > 0.01 {
+                    time_range.set(new_tr);
+                }
+                timeline.set(Some(tl));
+                // Only notify subscribers if timeline_state actually changed
+                if !matches!(*timeline_state.peek(), LoadState::Loaded) {
+                    timeline_state.set(LoadState::Loaded);
+                }
+            } else {
+                // Buffer may not be ready yet (very start of combat) — skip this tick
+                return;
+            }
+
+            // 2. Query overview data
+            let full_duration = timeline.read().as_ref().map(|t| t.duration_secs);
+            if let Some(data) = api::query_raid_overview(None, None, full_duration).await {
+                let _ = overview_data.try_write().map(|mut w| *w = data);
+            }
+
+            // 3. Query deaths + NPC health
+            if let Some(deaths) = api::query_player_deaths(None).await {
+                let _ = player_deaths.try_write().map(|mut w| *w = deaths);
+            }
+            if let Some(npcs) = api::query_npc_health(None, None).await {
+                let _ = npc_health.try_write().map(|mut w| *w = npcs);
+            }
+
+            // 4. Query entity + ability breakdown for detailed/rotation/usage/charts tabs
+            // Use peek() to avoid subscribing — the live_poll_tick drives re-execution
+            let mode = *view_mode.peek();
+            let tab = match mode {
+                ViewMode::Detailed(tab) => Some(tab),
+                ViewMode::Rotation | ViewMode::Usage | ViewMode::Charts => Some(DataTab::Damage),
+                _ => None,
+            };
+            if let Some(tab) = tab {
+                // Bail if live query was deactivated during earlier fetches
+                if !*live_query_active.peek() {
+                    return;
+                }
+
+                // Load entity breakdown
+                let entity_data = if matches!(mode, ViewMode::Rotation | ViewMode::Usage | ViewMode::Charts) {
+                    let dmg = api::query_entity_breakdown(DataTab::Damage, None, None).await.unwrap_or_default();
+                    let heal = api::query_entity_breakdown(DataTab::Healing, None, None).await.unwrap_or_default();
+                    let dmg_map: HashMap<String, f64> = dmg.iter()
+                        .map(|e| (e.source_name.clone(), e.total_value))
+                        .collect();
+                    entity_dmg_totals.set(dmg_map);
+                    let mut merged: HashMap<String, EntityBreakdown> = HashMap::new();
+                    for e in dmg.into_iter().chain(heal) {
+                        merged.entry(e.source_name.clone())
+                            .and_modify(|existing| {
+                                existing.total_value += e.total_value;
+                                existing.abilities_used = existing.abilities_used.max(e.abilities_used);
+                            })
+                            .or_insert(e);
+                    }
+                    let mut result: Vec<_> = merged.into_values().collect();
+                    result.sort_by(|a, b| b.total_value.partial_cmp(&a.total_value).unwrap_or(std::cmp::Ordering::Equal));
+                    result
+                } else {
+                    api::query_entity_breakdown(tab, None, None).await.unwrap_or_default()
+                };
+
+                // Auto-select source if none selected
+                if selected_source.peek().is_none() {
+                    let players = entity_data.iter().filter(|e| e.entity_type == "Player" || e.entity_type == "Companion");
+                    let local_name = local_player_name.peek().clone();
+                    let auto = if let Some(name) = local_name.as_deref() {
+                        players.clone().find(|e| e.source_name == name)
+                            .or_else(|| players.clone().next())
+                            .map(|e| e.source_name.clone())
+                    } else {
+                        players.clone().next().map(|e| e.source_name.clone())
+                    };
+                    if auto.is_some() {
+                        let _ = selected_source.try_write().map(|mut w| *w = auto.clone());
+                    }
+                }
+
+                let _ = entities.try_write().map(|mut w| *w = entity_data);
+
+                // Load ability breakdown for selected source
+                let src = selected_source.peek().clone();
+                let breakdown = *breakdown_mode.peek();
+                let duration = timeline.read().as_ref().map(|t| t.duration_secs);
+                if let Some(data) = api::query_breakdown(
+                    tab,
+                    None,
+                    src.as_deref(),
+                    None,
+                    None,
+                    Some(&breakdown),
+                    duration,
+                ).await {
+                    let _ = abilities.try_write().map(|mut w| *w = data);
+                }
+            }
+
+            // Only notify if content_state actually changed
+            if !matches!(*content_state.peek(), LoadState::Loaded) {
+                let _ = content_state.try_write().map(|mut w| *w = LoadState::Loaded);
+            }
+        });
+    });
+
     // Lazy load: Detailed tab data (entities + abilities) for Damage/Healing/etc tabs
     use_effect(move || {
         let idx = *selected_encounter.read();
         let mode = *view_mode.read();
         let tr = time_range();
         let tl_state = timeline_state();
+
+        // During live query, the live poll effect handles data loading — skip here
+        // to avoid racing with live poll writes and causing data "waffle" between values.
+        // Also skip during live→historical transition (combat just ended, encounter not yet set)
+        if *live_query_active.read() || *transitioning_from_live.read() {
+            return;
+        }
 
         // Extract tab if in detailed mode, or use Damage tab for Rotation/Usage/Charts mode
         let tab = match mode {
@@ -894,14 +1130,17 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
             }
         };
 
-        // Only load when timeline is loaded and we have an encounter
-        if !matches!(tl_state, LoadState::Loaded) || idx.is_none() {
+        // Only load when timeline is loaded
+        if !matches!(tl_state, LoadState::Loaded) {
             return;
         }
 
-        let _ = content_state
-            .try_write()
-            .map(|mut w| *w = LoadState::Loading);
+        // Skip loading spinner during live query to avoid flash
+        if !*live_query_active.read() {
+            let _ = content_state
+                .try_write()
+                .map(|mut w| *w = LoadState::Loading);
+        }
 
         spawn(async move {
             let tr_opt = if tr.start == 0.0 && tr.end == 0.0 {
@@ -1021,13 +1260,19 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         let tr = time_range();
         let tl_state = timeline_state();
 
+        // During live query, the live poll effect handles data loading — skip here.
+        // Also skip during live→historical transition (combat just ended, encounter not yet set)
+        if *live_query_active.read() || *transitioning_from_live.read() {
+            return;
+        }
+
         // Extract tab if in detailed mode
         let Some(tab) = view.tab() else {
             return;
         };
 
-        // Skip if no encounter or timeline not loaded
-        if idx.is_none() || !matches!(tl_state, LoadState::Loaded) {
+        // Skip if timeline not loaded
+        if !matches!(tl_state, LoadState::Loaded) {
             return;
         }
 
@@ -1073,8 +1318,13 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         let tr = time_range();
         let tl_state = timeline_state();
 
+        // Skip during live query to avoid cascade race conditions
+        if *live_query_active.read() || *transitioning_from_live.read() {
+            return;
+        }
+
         // Only fetch for DamageTaken tab with a selected source
-        if !matches!(view, ViewMode::Detailed(DataTab::DamageTaken)) || src.is_none() || idx.is_none() || !matches!(tl_state, LoadState::Loaded) {
+        if !matches!(view, ViewMode::Detailed(DataTab::DamageTaken)) || src.is_none() || !matches!(tl_state, LoadState::Loaded) {
             dt_summary.set(None);
             return;
         }
@@ -1498,6 +1748,37 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
 
                 if !*sidebar_collapsed.read() {
                     div { class: "sidebar-encounter-list",
+                        // Live button — always visible, click to follow live combat
+                        div {
+                            class: if *auto_follow.read() { "sidebar-encounter-item selected live-query-item" } else { "sidebar-encounter-item live-query-item" },
+                            onclick: move |_| {
+                                auto_follow.set(true);
+                                spawn(async move {
+                                    if let Some(info) = api::get_session_info().await {
+                                        if info.in_combat {
+                                            // In combat: go to live buffer
+                                            live_query_active.set(true);
+                                            selected_encounter.set(None);
+                                            live_poll_tick.set(0);
+                                        } else {
+                                            // Not in combat: select latest encounter
+                                            live_query_active.set(false);
+                                            if let Some(list) = api::get_encounter_history().await {
+                                                let latest_id = list.last().map(|e| e.encounter_id as u32);
+                                                encounters.set(list);
+                                                if let Some(id) = latest_id {
+                                                    selected_encounter.set(Some(id));
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                            },
+                            span { class: if *live_query_active.read() { "status-dot watching" } else { "status-dot" } }
+                            span { class: "encounter-name",
+                                if *live_query_active.read() { " Live Encounter" } else { " Live" }
+                            }
+                        }
                         if encounters().is_empty() {
                             div { class: "sidebar-empty",
                                 i { class: "fa-solid fa-inbox" }
@@ -1555,7 +1836,11 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                     rsx! {
                                                         div {
                                                             class: if is_selected { "sidebar-encounter-item selected" } else { "sidebar-encounter-item" },
-                                                            onclick: move |_| selected_encounter.set(Some(enc_idx)),
+                                                            onclick: move |_| {
+                                                                auto_follow.set(false);
+                                                                live_query_active.set(false);
+                                                                selected_encounter.set(Some(enc_idx));
+                                                            },
                                                             div { class: "encounter-main",
                                                                 span { class: "encounter-name", "{enc.display_name}" }
                                                                 div { class: "encounter-main-right",
@@ -1657,7 +1942,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                                     i { class: "fa-solid fa-skull-crossbones" }
                                                                     " {npc_list}"
                                                                 }
-                                                            }
+                                                             }
                                                         }
                                                     }
                                                 }
@@ -1673,27 +1958,34 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
 
             // Data Panel (main content area)
             div { class: if *overview_fullscreen.read() { "data-panel fullscreen" } else { "data-panel" },
-                if selected_encounter.read().is_none() {
+                if selected_encounter.read().is_none() && !*live_query_active.read() {
                     div { class: "panel-placeholder",
                         i { class: "fa-solid fa-chart-bar" }
                         p { "Select an encounter" }
                         p { class: "hint", "Choose an encounter from the sidebar to view detailed breakdown" }
                     }
                 } else {
-                    // Phase timeline filter (when timeline is loaded)
-                    if let Some(tl) = timeline.read().as_ref() {
-                        PhaseTimelineFilter {
-                            timeline: tl.clone(),
-                            range: time_range(),
-                            on_range_change: move |new_range: TimeRange| {
-                                time_range.set(new_range);
+                    // Phase timeline filter — always reserve space to prevent layout shift
+                    div { class: "phase-timeline-slot",
+                        if let Some(tl) = timeline.read().as_ref() {
+                            PhaseTimelineFilter {
+                                timeline: tl.clone(),
+                                range: time_range(),
+                                on_range_change: move |new_range: TimeRange| {
+                                    time_range.set(new_range);
+                                }
                             }
                         }
                     }
 
                     // Selected encounter indicator (shown when sidebar collapsed or fullscreen)
                     if *sidebar_collapsed.read() || *overview_fullscreen.read() {
-                        if let Some(enc_idx) = *selected_encounter.read() {
+                        if *live_query_active.read() {
+                            div { class: "selected-entity-indicator live-query-indicator",
+                                span { class: "status-dot watching" }
+                                span { " Live Encounter" }
+                            }
+                        } else if let Some(enc_idx) = *selected_encounter.read() {
                             if let Some(enc) = encounters().iter().find(|e| e.encounter_id as u32 == enc_idx) {
                                 div { class: "selected-entity-indicator",
                                     i { class: "fa-solid fa-crosshairs" }
@@ -1759,39 +2051,24 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                         }
                     }
 
-                    // Loading/Error state display
-                    match content_state() {
-                        LoadState::Loading => rsx! {
-                            div { class: "loading-banner",
-                                i { class: "fa-solid fa-spinner fa-spin" }
-                                " Loading..."
-                            }
-                        },
-                        LoadState::Error(msg) => rsx! {
-                            div { class: "error-banner",
-                                i { class: "fa-solid fa-exclamation-triangle" }
-                                " {msg}"
-                            }
-                        },
-                        _ => rsx! {}
-                    }
+                    // Content area - debounced gate: hidden for 200ms on encounter change
+                    // to let data arrive before painting, then gated on timeline loaded.
+                    // Live mode skips both gates since data streams in continuously.
+                    if *content_visible.read() && (matches!(timeline_state(), LoadState::Loaded) || *live_query_active.read()) {
 
-                    // Content area - Overview, Charts, Combat Log, or Detailed view
                     // Use view_mode() instead of *view_mode.read() to avoid holding borrow across onclick handlers
                     if matches!(view_mode(), ViewMode::CombatLog) {
                         // Combat Log Panel
-                        if let Some(enc_idx) = *selected_encounter.read() {
-                            CombatLog {
-                                key: "{enc_idx}",
-                                encounter_idx: enc_idx,
-                                time_range: time_range(),
-                                initial_target: death_target_filter(),
-                                state: combat_log_state,
-                                on_range_change: move |new_range: TimeRange| {
-                                    time_range.set(new_range);
-                                },
-                                european: eu,
-                            }
+                        CombatLog {
+                            key: "{selected_encounter():?}",
+                            encounter_idx: *selected_encounter.read(),
+                            time_range: time_range(),
+                            initial_target: death_target_filter(),
+                            state: combat_log_state,
+                            on_range_change: move |new_range: TimeRange| {
+                                time_range.set(new_range);
+                            },
+                            european: eu,
                         }
                     } else if matches!(view_mode(), ViewMode::Overview) {
                         // Raid Overview - Donut Charts + Table
@@ -2900,6 +3177,16 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                             }
                         }
                         }
+                        }
+                    }
+
+                    } // end timeline-loaded gate
+
+                    // Error display — rendered below content so it never causes layout shift
+                    if let LoadState::Error(msg) = content_state() {
+                        div { class: "content-error-placeholder",
+                            i { class: "fa-solid fa-triangle-exclamation" }
+                            " {msg}"
                         }
                     }
                 }

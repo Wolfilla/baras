@@ -612,6 +612,33 @@ pub fn App() -> Element {
                         }
                     }
                 }
+                // Main navigation tabs (inline in header)
+                div { class: "header-tabs",
+                    button {
+                        class: if ui_state.read().active_tab == MainTab::DataExplorer { "tab-btn active" } else { "tab-btn" },
+                        onclick: move |_| ui_state.write().active_tab = MainTab::DataExplorer,
+                        i { class: "fa-solid fa-magnifying-glass-chart" }
+                        span { class: "tab-label", " Data Explorer" }
+                    }
+                    button {
+                        class: if ui_state.read().active_tab == MainTab::Overlays { "tab-btn active" } else { "tab-btn" },
+                        onclick: move |_| ui_state.write().active_tab = MainTab::Overlays,
+                        i { class: "fa-solid fa-layer-group" }
+                        span { class: "tab-label", " Overlays" }
+                    }
+                    button {
+                        class: if ui_state.read().active_tab == MainTab::EncounterBuilder { "tab-btn active" } else { "tab-btn" },
+                        onclick: move |_| ui_state.write().active_tab = MainTab::EncounterBuilder,
+                        i { class: "fa-solid fa-hammer" }
+                        span { class: "tab-label", " Encounter Builder" }
+                    }
+                    button {
+                        class: if ui_state.read().active_tab == MainTab::Effects { "tab-btn active" } else { "tab-btn" },
+                        onclick: move |_| ui_state.write().active_tab = MainTab::Effects,
+                        i { class: "fa-solid fa-heart-pulse" }
+                        span { class: "tab-label", " Effects Editor" }
+                    }
+                }
                 // Session status + overlay controls (merged into one pill)
                 div { class: "header-overlay-controls",
                     // Watcher status dot — green = live, gold = historical/paused, gray = not watching
@@ -1165,34 +1192,6 @@ pub fn App() -> Element {
                     }
                 }
             } // end app-header
-
-            // Tabs
-            nav { class: "main-tabs",
-               button {
-                    class: if ui_state.read().active_tab == MainTab::DataExplorer { "tab-btn active" } else { "tab-btn" },
-                    onclick: move |_| ui_state.write().active_tab = MainTab::DataExplorer,
-                    i { class: "fa-solid fa-magnifying-glass-chart" }
-                    " Data Explorer"
-                }
-                button {
-                    class: if ui_state.read().active_tab == MainTab::Overlays { "tab-btn active" } else { "tab-btn" },
-                    onclick: move |_| ui_state.write().active_tab = MainTab::Overlays,
-                    i { class: "fa-solid fa-layer-group" }
-                    " Overlays"
-                }
-                button {
-                    class: if ui_state.read().active_tab == MainTab::EncounterBuilder { "tab-btn active" } else { "tab-btn" },
-                    onclick: move |_| ui_state.write().active_tab = MainTab::EncounterBuilder,
-                    i { class: "fa-solid fa-hammer" }
-                    " Encounter Builder"
-                }
-                button {
-                    class: if ui_state.read().active_tab == MainTab::Effects { "tab-btn active" } else { "tab-btn" },
-                    onclick: move |_| ui_state.write().active_tab = MainTab::Effects,
-                    i { class: "fa-solid fa-heart-pulse" }
-                    " Effects Editor"
-                }
-            }
 
             // Tab Content
             div { class: "tab-content",

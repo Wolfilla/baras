@@ -7,6 +7,11 @@
    Phase Timeline Filter
    ───────────────────────────────────────────────────────────────────────────── */
 
+/* Reserve vertical space for the timeline so content doesn't shift when it loads */
+.phase-timeline-slot {
+  min-height: 62px;
+}
+
 .phase-timeline {
   padding: var(--space-xs) 0;
 }
@@ -436,10 +441,18 @@
 
 .data-tab-selector {
   display: flex;
+  align-items: center;
   gap: 2px;
   padding: var(--space-xs) 0;
   margin-bottom: var(--space-sm);
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.content-error-placeholder {
+  color: #e74c3c;
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 0;
 }
 
 .data-tab {
