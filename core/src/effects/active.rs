@@ -531,18 +531,23 @@ impl ActiveEffect {
 
 /// Key for identifying unique effect instances
 ///
-/// An effect is unique per (definition, target) pair.
-/// If the same effect is reapplied to the same target, it refreshes.
+/// An effect is unique per (definition, source, target) triple.
+/// Source is included so that two healers of the same class tracking
+/// the same game effect (e.g., Kolto Shell from local vs other player)
+/// don't collide — each source entity gets its own slot.
+/// If the same source reapplies the same effect to the same target, it refreshes.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EffectKey {
     pub definition_id: String,
+    pub source_entity_id: i64,
     pub target_entity_id: i64,
 }
 
 impl EffectKey {
-    pub fn new(definition_id: &str, target_entity_id: i64) -> Self {
+    pub fn new(definition_id: &str, source_entity_id: i64, target_entity_id: i64) -> Self {
         Self {
             definition_id: definition_id.to_string(),
+            source_entity_id,
             target_entity_id,
         }
     }

@@ -358,6 +358,8 @@ pub struct NewTargetInfo {
 struct PendingAoeRefresh {
     /// The ability that was activated
     ability_id: i64,
+    /// Who cast the ability
+    source_id: i64,
     /// When the ability was activated
     timestamp: NaiveDateTime,
     /// The primary target (resolved at cast time)
@@ -369,6 +371,8 @@ struct PendingAoeRefresh {
 struct AoeRefreshCollecting {
     /// The ability being tracked
     ability_id: i64,
+    /// Who cast the ability
+    source_id: i64,
     /// Anchor timestamp (when primary target was hit)
     anchor_timestamp: NaiveDateTime,
     /// Targets collected so far (within ±10ms window)
@@ -669,6 +673,8 @@ impl EffectTracker {
             .filter(move |e| e.target_entity_id == target_id)
     }
 
+
+
     // ─────────────────────────────────────────────────────────────────────────────
     // Categorized Output Methods (by DisplayTarget)
     // ─────────────────────────────────────────────────────────────────────────────
@@ -875,7 +881,7 @@ impl EffectTracker {
                 continue;
             }
 
-            let key = EffectKey::new(&def.id, target_id);
+            let key = EffectKey::new(&def.id, source_id, target_id);
 
             let duration = self.effective_duration(def);
 
@@ -890,8 +896,13 @@ impl EffectTracker {
                 _ => None,
             };
             if let Some(dominant_id) = dominant_def_id {
-                let dominant_key = EffectKey::new(dominant_id, target_id);
-                if let Some(dominant) = self.active_effects.get_mut(&dominant_key) {
+                // Find the existing effect regardless of who originally cast it.
+                // The game merges a second healer's cast into the existing buff,
+                // so we need a source-agnostic lookup here.
+                let dominant_entry = self.active_effects.values_mut().find(|e| {
+                    e.definition_id == dominant_id && e.target_entity_id == target_id
+                });
+                if let Some(dominant) = dominant_entry {
                     if dominant.removed_at.is_none() {
                         // The local player's effect exists — the other player just refreshed it.
                         // Update our effect's duration instead of creating a phantom.
@@ -1124,15 +1135,15 @@ impl EffectTracker {
             .collect();
 
         for def in refreshable_defs {
-            let key = EffectKey::new(&def.id, target_id);
-            // Fallback: if the resolved target is an NPC, also try source_id.
+            let key = EffectKey::new(&def.id, source_id, target_id);
+            // Fallback: if the resolved target is an NPC, also try source_id as target.
             // Handles self-cast abilities (e.g. Dark Ward) where target resolution
             // resolves to the combat target but the effect is keyed to the caster.
             // Only for NPC targets — player targets are intentional (e.g. heals).
             let fallback_key = if target_id != source_id
                 && target_entity_type != EntityType::Player
             {
-                Some(EffectKey::new(&def.id, source_id))
+                Some(EffectKey::new(&def.id, source_id, source_id))
             } else {
                 None
             };
@@ -1226,12 +1237,14 @@ impl EffectTracker {
     fn setup_pending_aoe_refresh(
         &mut self,
         ability_id: i64,
+        source_id: i64,
         timestamp: NaiveDateTime,
         primary_target: i64,
     ) {
         if self.definitions.is_aoe_refresh(ability_id as u64) {
             self.pending_aoe_refresh = Some(PendingAoeRefresh {
                 ability_id,
+                source_id,
                 timestamp,
                 primary_target,
             });
@@ -1291,6 +1304,7 @@ impl EffectTracker {
             // This is our anchor! Start collecting targets
             self.aoe_collecting = Some(AoeRefreshCollecting {
                 ability_id,
+                source_id: pending.source_id,
                 anchor_timestamp: timestamp,
                 targets: vec![target_id],
             });
@@ -1314,7 +1328,7 @@ impl EffectTracker {
         // Refresh effects on all collected targets
         for target_id in collecting.targets {
             for (def_id, duration) in &refreshable_def_ids {
-                let key = EffectKey::new(def_id, target_id);
+                let key = EffectKey::new(def_id, collecting.source_id, target_id);
                 if let Some(effect) = self.active_effects.get_mut(&key) {
                     effect.refresh(collecting.anchor_timestamp, *duration);
                 }
@@ -1417,7 +1431,7 @@ impl EffectTracker {
                     (target_id, target_name, target_entity_type)
                 };
 
-            let key = EffectKey::new(&def.id, effect_target_id);
+            let key = EffectKey::new(&def.id, source_id, effect_target_id);
 
             let duration = self.effective_duration(def);
 
@@ -1559,7 +1573,7 @@ impl EffectTracker {
                 continue;
             }
 
-            let key = EffectKey::new(&def.id, target_id);
+            let key = EffectKey::new(&def.id, source_id, target_id);
             let duration = self.effective_duration(def);
 
             if let Some(existing) = self.active_effects.get_mut(&key) {
@@ -1673,7 +1687,7 @@ impl EffectTracker {
         let is_from_local = local_player_id == Some(source_id);
 
         for def in matching_defs {
-            let key = EffectKey::new(&def.id, target_id);
+            let key = EffectKey::new(&def.id, source_id, target_id);
 
             if def.is_effect_applied_trigger() {
                 // Mark existing effect as removed (normal behavior)
@@ -1780,7 +1794,7 @@ impl EffectTracker {
             .collect();
 
         for def in matching_defs {
-            let key = EffectKey::new(&def.id, target_id);
+            let key = EffectKey::new(&def.id, source_id, target_id);
 
             // Calculate duration before borrowing active_effects mutably
             let duration = if def.is_refreshed_on_modify {
@@ -1790,13 +1804,6 @@ impl EffectTracker {
             };
 
             if let Some(effect) = self.active_effects.get_mut(&key) {
-                // Only update charges if the source matches the effect's source.
-                // This prevents another player's ability charges (e.g., Kolto Probes
-                // from a second operative healer) from corrupting our tracked stacks.
-                if effect.source_entity_id != source_id {
-                    continue;
-                }
-
                 effect.set_stacks(charges);
 
                 // Refresh duration on ModifyCharges if is_refreshed_on_modify is set.
@@ -2125,7 +2132,7 @@ impl SignalHandler for EffectTracker {
                     // For AoE abilities, set up pending state for damage correlation
                     // This allows us to detect and refresh effects on secondary targets too
                     // Check directly if this is an AoE refresh ability (don't rely on target_id)
-                    self.setup_pending_aoe_refresh(*ability_id, *timestamp, resolved_target);
+                    self.setup_pending_aoe_refresh(*ability_id, *source_id, *timestamp, resolved_target);
                 }
             }
             GameSignal::DamageTaken {
