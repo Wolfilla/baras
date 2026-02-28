@@ -2770,6 +2770,11 @@ async fn build_timer_data_with_audio(
             continue;
         }
 
+        // Skip timers hidden by show_at_secs threshold
+        if !timer.is_visible() {
+            continue;
+        }
+
         // Load icon from cache if ability ID is set
         let icon = timer.icon_ability_id.and_then(|ability_id| {
             icon_cache.and_then(|cache| {
