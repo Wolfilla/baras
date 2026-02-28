@@ -945,11 +945,7 @@ pub fn App() -> Element {
                                     span {
                                         class: if info.in_combat { "combat-indicator in-combat" } else { "combat-indicator" },
                                         title: if info.in_combat { "In Combat" } else { "Out of Combat" },
-                                        if info.in_combat {
-                                            i { class: "fa-solid fa-burst" }
-                                        } else {
-                                            i { class: "fa-solid fa-shield-halved" }
-                                        }
+                                        i { class: "fa-solid fa-khanda" }
                                     }
                                 }
 

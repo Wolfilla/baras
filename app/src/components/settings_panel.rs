@@ -2563,6 +2563,28 @@ pub fn SettingsPanel(
                 if !save_status().is_empty() {
                     span { class: "save-status", "{save_status()}" }
                 }
+                div { class: "footer-spacer" }
+                button {
+                    class: "btn btn-reset-positions",
+                    title: "Reset all overlay positions to defaults (useful if overlays are off-screen)",
+                    onclick: move |_| {
+                        async move {
+                            if let Some(mut config) = api::get_config().await {
+                                config.overlay_settings.positions.clear();
+                                if let Err(err) = api::update_config(&config).await {
+                                    toast.show(format!("Failed to reset positions: {}", err), ToastSeverity::Normal);
+                                } else {
+                                    api::refresh_overlay_settings().await;
+                                    settings.set(config.overlay_settings.clone());
+                                    draft_settings.set(config.overlay_settings);
+                                    toast.show("All overlay positions reset to defaults".to_string(), ToastSeverity::Normal);
+                                }
+                            }
+                        }
+                    },
+                    i { class: "fa-solid fa-arrows-to-dot" }
+                    span { " Reset Positions" }
+                }
             }
         }
     }
