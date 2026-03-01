@@ -2577,6 +2577,7 @@ pub fn SettingsPanel(
                                     api::refresh_overlay_settings().await;
                                     settings.set(config.overlay_settings.clone());
                                     draft_settings.set(config.overlay_settings);
+                                    profile_dirty.set(true);
                                     toast.show("All overlay positions reset to defaults".to_string(), ToastSeverity::Normal);
                                 }
                             }
