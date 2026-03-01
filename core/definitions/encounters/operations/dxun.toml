@@ -541,6 +541,9 @@ victory_trigger = { type = "any_of", conditions = [
     "Shelleigh",
   ] },
 ] }
+victory_conditions = [
+  { type = "counter_compare", counter_id = "huntmaster_below_35", operator = "gte", value = 1 },
+]
 
 [[boss.counter]]
 id = "huntmaster_below_35"
