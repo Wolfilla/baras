@@ -40,6 +40,9 @@ pub fn check_hp_phase_transitions(
         let def = &enc.boss_definitions()[def_idx];
         let mut found = None;
         for phase in &def.phases {
+            if !phase.enabled {
+                continue;
+            }
             if enc.current_phase.as_ref() == Some(&phase.id) {
                 continue;
             }
@@ -135,6 +138,9 @@ pub fn check_ability_phase_transitions(
 
         let mut found = None;
         for phase in &def.phases {
+            if !phase.enabled {
+                continue;
+            }
             if enc.current_phase.as_ref() == Some(&phase.id) {
                 continue;
             }
@@ -232,6 +238,9 @@ pub fn check_entity_phase_transitions(
 
         let mut found = None;
         for phase in &def.phases {
+            if !phase.enabled {
+                continue;
+            }
             if enc.current_phase.as_ref() == Some(&phase.id) {
                 continue;
             }
@@ -334,6 +343,9 @@ pub fn check_time_phase_transitions(
 
         let mut found = None;
         for phase in &def.phases {
+            if !phase.enabled {
+                continue;
+            }
             if enc.current_phase.as_ref() == Some(&phase.id) {
                 continue;
             }
@@ -423,6 +435,9 @@ pub fn check_timer_phase_transitions(
 
         let mut found = None;
         for phase in &def.phases {
+            if !phase.enabled {
+                continue;
+            }
             if enc.current_phase.as_ref() == Some(&phase.id) {
                 continue;
             }

@@ -47,6 +47,9 @@ pub fn check_counter_increments(
     let mut signals = Vec::new();
 
     for counter in &def.counters {
+        if !counter.enabled {
+            continue;
+        }
         // Check increment_on trigger (event + signals)
         if check_counter_trigger(&counter.increment_on, event, current_signals, &filter_ctx) {
             let Some(enc) = cache.current_encounter_mut() else {
@@ -156,6 +159,9 @@ pub fn check_counter_signal_triggers(
     let mut signals = Vec::new();
 
     for counter in &def.counters {
+        if !counter.enabled {
+            continue;
+        }
         // Check increment_on trigger (signals only)
         if trigger_eval::check_signal_trigger(&counter.increment_on, new_signals, &filter_ctx) {
             let Some(enc) = cache.current_encounter_mut() else {
@@ -255,6 +261,9 @@ pub fn check_counter_timer_triggers(
     let mut signals = Vec::new();
 
     for counter in &def.counters {
+        if !counter.enabled {
+            continue;
+        }
         // Check increment_on for timer triggers
         if trigger_eval::check_timer_trigger(
             &counter.increment_on,

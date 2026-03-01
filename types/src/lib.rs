@@ -2878,6 +2878,10 @@ pub struct EncounterBuilderState {
     pub expanded_entity: Option<String>,
     /// Whether to hide disabled timers in the Timers tab
     pub hide_disabled_timers: bool,
+    /// Whether to hide disabled phases in the Phases tab
+    pub hide_disabled_phases: bool,
+    /// Whether to hide disabled counters in the Counters tab
+    pub hide_disabled_counters: bool,
 }
 
 /// Effects Editor session state

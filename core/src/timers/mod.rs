@@ -33,7 +33,8 @@ pub use error::TimerError;
 pub use manager::{FiredAlert, TimerManager};
 pub use matching::matches_source_target_filters;
 pub use preferences::{
-    PreferencesError, TimerPreference, TimerPreferences, boss_timer_key, standalone_timer_key,
+    CounterPreference, PhasePreference, PreferencesError, TimerPreference, TimerPreferences,
+    boss_counter_key, boss_phase_key, boss_timer_key, standalone_timer_key,
 };
 
 use std::path::Path;

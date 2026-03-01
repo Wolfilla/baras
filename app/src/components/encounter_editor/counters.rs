@@ -21,6 +21,7 @@ fn default_counter(name: String) -> CounterDefinition {
     CounterDefinition {
         id: String::new(), // Backend will generate
         name,
+        enabled: true,
         display_text: None,
         increment_on: Trigger::AbilityCast {
             abilities: vec![],
@@ -40,17 +41,42 @@ pub fn CountersTab(
     boss_with_path: BossWithPath,
     encounter_data: EncounterData,
     expanded_counter: Signal<Option<String>>,
+    hide_disabled_counters: Signal<bool>,
     on_change: EventHandler<Vec<CounterDefinition>>,
+    on_refetch: EventHandler<()>,
     on_status: EventHandler<(String, bool)>,
 ) -> Element {
-    // Extract counters from BossWithPath
+    // Extract counters and badge IDs from BossWithPath
     let counters = boss_with_path.boss.counters.clone();
+    let builtin_counter_ids = boss_with_path.builtin_counter_ids.clone();
+    let modified_counter_ids = boss_with_path.modified_counter_ids.clone();
+
+    let disabled_count = counters.iter().filter(|c| !c.enabled).count();
+
+    // Filter counters based on toggle
+    let visible_counters: Vec<CounterDefinition> = if hide_disabled_counters() {
+        counters.iter().filter(|c| c.enabled).cloned().collect()
+    } else {
+        counters.clone()
+    };
 
     rsx! {
         div { class: "counters-tab",
             // Header
             div { class: "flex items-center justify-between mb-sm",
-                span { class: "text-sm text-secondary", "{counters.len()} counters" }
+                div { class: "flex items-center gap-sm",
+                    span { class: "text-sm text-secondary", "{counters.len()} counters" }
+                    if disabled_count > 0 {
+                        label { class: "flex items-center gap-xs text-xs text-muted cursor-pointer",
+                            input {
+                                r#type: "checkbox",
+                                checked: hide_disabled_counters(),
+                                onchange: move |e| hide_disabled_counters.set(e.checked()),
+                            }
+                            "Hide disabled ({disabled_count})"
+                        }
+                    }
+                }
                 {
                     let bwp = boss_with_path.clone();
                     let counters_for_create = counters.clone();
@@ -85,19 +111,27 @@ pub fn CountersTab(
             }
 
             // Counter list
-            if counters.is_empty() {
-                div { class: "empty-state text-sm", "No counters defined" }
+            if visible_counters.is_empty() {
+                if counters.is_empty() {
+                    div { class: "empty-state text-sm", "No counters defined" }
+                } else {
+                    div { class: "empty-state text-sm", "All counters are disabled (toggle above to show)" }
+                }
             } else {
-                for counter in counters.clone() {
+                for counter in visible_counters {
                     {
                         let counter_key = counter.id.clone();
                         let is_expanded = expanded_counter() == Some(counter_key.clone());
                         let counters_for_row = counters.clone();
+                        let counter_is_builtin = builtin_counter_ids.contains(&counter.id);
+                        let counter_is_modified = modified_counter_ids.contains(&counter.id);
 
                         rsx! {
                             CounterRow {
                                 key: "{counter_key}",
                                 counter: counter.clone(),
+                                is_builtin: counter_is_builtin,
+                                is_modified: counter_is_modified,
                                 boss_with_path: boss_with_path.clone(),
                                 expanded: is_expanded,
                                 encounter_data: encounter_data.clone(),
@@ -105,6 +139,7 @@ pub fn CountersTab(
                                     expanded_counter.set(if is_expanded { None } else { Some(counter_key.clone()) });
                                 },
                                 on_change: on_change,
+                                on_refetch: on_refetch,
                                 on_status: on_status,
                                 on_collapse: move |_| expanded_counter.set(None),
                                 all_counters: counters_for_row,
@@ -124,17 +159,23 @@ pub fn CountersTab(
 #[component]
 fn CounterRow(
     counter: CounterDefinition,
+    is_builtin: bool,
+    is_modified: bool,
     boss_with_path: BossWithPath,
     expanded: bool,
     all_counters: Vec<CounterDefinition>,
     encounter_data: EncounterData,
     on_toggle: EventHandler<()>,
     on_change: EventHandler<Vec<CounterDefinition>>,
+    on_refetch: EventHandler<()>,
     on_status: EventHandler<(String, bool)>,
     on_collapse: EventHandler<()>,
 ) -> Element {
     let mut is_dirty = use_signal(|| false);
     let trigger_label = counter.increment_on.label();
+    let counter_for_enable = counter.clone();
+    let counters_for_enable = all_counters.clone();
+    let bwp_for_enable = boss_with_path.clone();
 
     rsx! {
         div { class: "list-item",
@@ -142,7 +183,31 @@ fn CounterRow(
             div {
                 class: "list-item-header",
                 onclick: move |_| on_toggle.call(()),
+
+                // Expand arrow
                 span { class: "list-item-expand", if expanded { "▼" } else { "▶" } }
+
+                // Origin indicator (B)uilt-in / (M)odified / (C)ustom
+                if is_builtin {
+                    span {
+                        class: "timer-origin timer-origin-builtin",
+                        title: "Built-in: ships with the app",
+                        "B"
+                    }
+                } else if is_modified {
+                    span {
+                        class: "timer-origin timer-origin-modified",
+                        title: "Modified: built-in counter you have edited",
+                        "M"
+                    }
+                } else {
+                    span {
+                        class: "timer-origin timer-origin-custom",
+                        title: "Custom: created by you",
+                        "C"
+                    }
+                }
+
                 span { class: "font-medium", "{counter.name}" }
                 if expanded && is_dirty() {
                     span { class: "unsaved-indicator", title: "Unsaved changes" }
@@ -153,6 +218,35 @@ fn CounterRow(
                 } else if counter.decrement {
                     span { class: "tag tag-warning", "Decrement" }
                 }
+
+                // Right side - enabled toggle
+                div { class: "flex items-center gap-xs", style: "flex-shrink: 0; margin-left: auto;",
+                    span {
+                        class: "row-toggle",
+                        title: if counter.enabled { "Disable counter" } else { "Enable counter" },
+                        onclick: move |e| {
+                            e.stop_propagation();
+                            let mut updated = counter_for_enable.clone();
+                            updated.enabled = !updated.enabled;
+                            let mut current = counters_for_enable.clone();
+                            if let Some(idx) = current.iter().position(|c| c.id == updated.id) {
+                                current[idx] = updated.clone();
+                                on_change.call(current);
+                            }
+                            let boss_id = bwp_for_enable.boss.id.clone();
+                            let file_path = bwp_for_enable.file_path.clone();
+                            let item = EncounterItem::Counter(updated);
+                            spawn(async move {
+                                let _ = api::update_encounter_item(&boss_id, &file_path, &item, None).await;
+                                on_refetch.call(());
+                            });
+                        },
+                        span {
+                            class: if counter.enabled { "text-success" } else { "text-muted" },
+                            if counter.enabled { "✓" } else { "○" }
+                        }
+                    }
+                }
             }
 
             // Expanded content
@@ -161,10 +255,13 @@ fn CounterRow(
                     let all_counters_for_save = all_counters.clone();
                     let bwp_for_save = boss_with_path.clone();
                     let bwp_for_delete = boss_with_path.clone();
+                    let is_reset = is_builtin || is_modified;
                     rsx! {
                         div { class: "list-item-body",
                             CounterEditForm {
                                 counter: counter.clone(),
+                                is_builtin: is_builtin,
+                                is_modified: is_modified,
                                 encounter_data: encounter_data,
                                 on_dirty: move |dirty: bool| is_dirty.set(dirty),
                                 on_save: move |updated: CounterDefinition| {
@@ -180,7 +277,10 @@ fn CounterRow(
                                     let item = EncounterItem::Counter(updated);
                                     spawn(async move {
                                         match api::update_encounter_item(&boss_id, &file_path, &item, None).await {
-                                            Ok(_) => on_status.call(("Saved".to_string(), false)),
+                                            Ok(_) => {
+                                                on_status.call(("Saved".to_string(), false));
+                                                on_refetch.call(());
+                                            }
                                             Err(_) => on_status.call(("Failed to save".to_string(), true)),
                                         }
                                     });
@@ -194,13 +294,19 @@ fn CounterRow(
                                         spawn(async move {
                                             match api::delete_encounter_item("counter", &counter_to_delete.id, &boss_id, &file_path).await {
                                                 Ok(_) => {
-                                                    let updated: Vec<_> = all_counters.iter()
-                                                        .filter(|c| c.id != counter_to_delete.id)
-                                                        .cloned()
-                                                        .collect();
-                                                    on_change.call(updated);
-                                                    on_collapse.call(());
-                                                    on_status.call(("Deleted".to_string(), false));
+                                                    if is_reset {
+                                                        on_status.call(("Reset to built-in".to_string(), false));
+                                                        on_collapse.call(());
+                                                        on_refetch.call(());
+                                                    } else {
+                                                        let updated: Vec<_> = all_counters.iter()
+                                                            .filter(|c| c.id != counter_to_delete.id)
+                                                            .cloned()
+                                                            .collect();
+                                                        on_change.call(updated);
+                                                        on_collapse.call(());
+                                                        on_status.call(("Deleted".to_string(), false));
+                                                    }
                                                 }
                                                 Err(err) => {
                                                     on_status.call((err, true));
@@ -225,6 +331,8 @@ fn CounterRow(
 #[component]
 fn CounterEditForm(
     counter: CounterDefinition,
+    #[props(default)] is_builtin: bool,
+    #[props(default)] is_modified: bool,
     encounter_data: EncounterData,
     on_save: EventHandler<CounterDefinition>,
     on_delete: EventHandler<CounterDefinition>,
@@ -238,6 +346,7 @@ fn CounterEditForm(
 
     let mut draft = use_signal(|| counter_for_draft);
     let mut just_saved = use_signal(|| false);
+    let mut confirm_delete = use_signal(|| false);
 
     // Reset just_saved when user makes new changes after saving
     let original_for_effect = original.clone();
@@ -502,10 +611,57 @@ fn CounterEditForm(
                     onclick: handle_save,
                     "Save"
                 }
-                button {
-                    class: "btn btn-danger btn-sm",
-                    onclick: handle_delete,
-                    "Delete"
+
+                // Reset/Delete logic:
+                // - Built-in unmodified: no delete button
+                // - Modified built-in: "Reset to Built-in"
+                // - Custom: "Delete" with confirmation
+                if is_builtin {
+                    // Pure built-in, unmodified — no action needed
+                } else if is_modified {
+                    if confirm_delete() {
+                        span { class: "flex items-center gap-xs ml-auto",
+                            "Reset to built-in?"
+                            button {
+                                class: "btn btn-warning btn-sm",
+                                onclick: handle_delete,
+                                "Yes"
+                            }
+                            button {
+                                class: "btn btn-sm",
+                                onclick: move |_| confirm_delete.set(false),
+                                "No"
+                            }
+                        }
+                    } else {
+                        button {
+                            class: "btn btn-warning btn-sm ml-auto",
+                            onclick: move |_| confirm_delete.set(true),
+                            "Reset to Built-in"
+                        }
+                    }
+                } else {
+                    if confirm_delete() {
+                        span { class: "flex items-center gap-xs ml-auto",
+                            "Delete?"
+                            button {
+                                class: "btn btn-danger btn-sm",
+                                onclick: handle_delete,
+                                "Yes"
+                            }
+                            button {
+                                class: "btn btn-sm",
+                                onclick: move |_| confirm_delete.set(false),
+                                "No"
+                            }
+                        }
+                    } else {
+                        button {
+                            class: "btn btn-danger btn-sm ml-auto",
+                            onclick: move |_| confirm_delete.set(true),
+                            "Delete"
+                        }
+                    }
                 }
             }
         }

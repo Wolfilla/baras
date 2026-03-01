@@ -18,7 +18,7 @@ use baras_core::boss::{
     load_bosses_from_file, load_bosses_with_custom, load_bosses_with_paths, merge_boss_definition,
     save_bosses_to_file,
 };
-use baras_core::timers::{TimerPreferences, boss_timer_key};
+use baras_core::timers::{TimerPreferences, boss_counter_key, boss_phase_key, boss_timer_key};
 
 use crate::service::ServiceHandle;
 use tracing::debug;
@@ -40,6 +40,18 @@ pub struct BossWithPathResponse {
     /// Timer IDs that exist in the bundled definition but have been modified by the user.
     #[serde(default)]
     pub modified_timer_ids: Vec<String>,
+    /// Phase IDs that exist in the bundled definition, unmodified.
+    #[serde(default)]
+    pub builtin_phase_ids: Vec<String>,
+    /// Phase IDs that exist in the bundled definition but have been modified by the user.
+    #[serde(default)]
+    pub modified_phase_ids: Vec<String>,
+    /// Counter IDs that exist in the bundled definition, unmodified.
+    #[serde(default)]
+    pub builtin_counter_ids: Vec<String>,
+    /// Counter IDs that exist in the bundled definition but have been modified by the user.
+    #[serde(default)]
+    pub modified_counter_ids: Vec<String>,
 }
 
 impl From<BossWithPath> for BossWithPathResponse {
@@ -50,6 +62,10 @@ impl From<BossWithPath> for BossWithPathResponse {
             category: bwp.category,
             builtin_timer_ids: Vec::new(),
             modified_timer_ids: Vec::new(),
+            builtin_phase_ids: Vec::new(),
+            modified_phase_ids: Vec::new(),
+            builtin_counter_ids: Vec::new(),
+            modified_counter_ids: Vec::new(),
         }
     }
 }
@@ -382,26 +398,29 @@ pub async fn fetch_area_bosses(
         return Err(format!("File not found: {}", file_path));
     }
 
-    // Load the original bundled timers (before custom merge) so the UI can
+    // Load the original bundled definitions (before custom merge) so the UI can
     // distinguish: built-in (unmodified), modified (built-in but changed), custom (new).
-    // We store the full timer definitions to compare against the merged result.
-    let bundled_bosses: std::collections::HashMap<String, Vec<BossTimerDefinition>> =
-        if get_custom_path_if_bundled(&path, &app_handle).is_some() {
-            load_bosses_from_file(&path)
-                .unwrap_or_default()
-                .into_iter()
-                .map(|b| (b.id, b.timers))
-                .collect()
-        } else {
-            std::collections::HashMap::new()
-        };
+    // We store full definitions to compare against the merged result.
+    let (bundled_timers, bundled_phases, bundled_counters): (
+        std::collections::HashMap<String, Vec<BossTimerDefinition>>,
+        std::collections::HashMap<String, Vec<PhaseDefinition>>,
+        std::collections::HashMap<String, Vec<CounterDefinition>>,
+    ) = if get_custom_path_if_bundled(&path, &app_handle).is_some() {
+        let originals = load_bosses_from_file(&path).unwrap_or_default();
+        let timers = originals.iter().map(|b| (b.id.clone(), b.timers.clone())).collect();
+        let phases = originals.iter().map(|b| (b.id.clone(), b.phases.clone())).collect();
+        let counters = originals.iter().map(|b| (b.id.clone(), b.counters.clone())).collect();
+        (timers, phases, counters)
+    } else {
+        (std::collections::HashMap::new(), std::collections::HashMap::new(), std::collections::HashMap::new())
+    };
 
     let mut bosses = load_file_with_custom(&path)?;
     debug!(count = bosses.len(), "Loaded bosses for area");
 
     let prefs = load_timer_preferences();
 
-    // Merge user preferences into timers
+    // Merge user preferences into timers, phases, and counters
     for bwp in &mut bosses {
         for timer in &mut bwp.boss.timers {
             let key = boss_timer_key(&bwp.boss.area_name, &bwp.boss.name, &timer.id);
@@ -420,31 +439,78 @@ pub async fn fetch_area_bosses(
                 }
             }
         }
+        for phase in &mut bwp.boss.phases {
+            let key = boss_phase_key(&bwp.boss.area_name, &bwp.boss.name, &phase.id);
+            if let Some(p) = prefs.get_phase(&key) {
+                if let Some(v) = p.enabled {
+                    phase.enabled = v;
+                }
+            }
+        }
+        for counter in &mut bwp.boss.counters {
+            let key = boss_counter_key(&bwp.boss.area_name, &bwp.boss.name, &counter.id);
+            if let Some(p) = prefs.get_counter(&key) {
+                if let Some(v) = p.enabled {
+                    counter.enabled = v;
+                }
+            }
+        }
     }
 
-    // Classify each timer: built-in (unchanged), modified (built-in but edited), or custom (new)
+    // Classify each item: built-in (unchanged), modified (built-in but edited), or custom (new)
     Ok(bosses
         .into_iter()
         .map(|bwp| {
-            let mut builtin_ids = Vec::new();
-            let mut modified_ids = Vec::new();
+            let mut builtin_timer_ids = Vec::new();
+            let mut modified_timer_ids = Vec::new();
+            let mut builtin_phase_ids = Vec::new();
+            let mut modified_phase_ids = Vec::new();
+            let mut builtin_counter_ids = Vec::new();
+            let mut modified_counter_ids = Vec::new();
 
-            if let Some(original_timers) = bundled_bosses.get(&bwp.boss.id) {
+            if let Some(original_timers) = bundled_timers.get(&bwp.boss.id) {
                 for timer in &bwp.boss.timers {
                     if let Some(original) = original_timers.iter().find(|t| t.id == timer.id) {
                         if *original == *timer {
-                            builtin_ids.push(timer.id.clone());
+                            builtin_timer_ids.push(timer.id.clone());
                         } else {
-                            modified_ids.push(timer.id.clone());
+                            modified_timer_ids.push(timer.id.clone());
                         }
                     }
-                    // else: not in bundled = custom, no tag
+                }
+            }
+
+            if let Some(original_phases) = bundled_phases.get(&bwp.boss.id) {
+                for phase in &bwp.boss.phases {
+                    if let Some(original) = original_phases.iter().find(|p| p.id == phase.id) {
+                        if *original == *phase {
+                            builtin_phase_ids.push(phase.id.clone());
+                        } else {
+                            modified_phase_ids.push(phase.id.clone());
+                        }
+                    }
+                }
+            }
+
+            if let Some(original_counters) = bundled_counters.get(&bwp.boss.id) {
+                for counter in &bwp.boss.counters {
+                    if let Some(original) = original_counters.iter().find(|c| c.id == counter.id) {
+                        if *original == *counter {
+                            builtin_counter_ids.push(counter.id.clone());
+                        } else {
+                            modified_counter_ids.push(counter.id.clone());
+                        }
+                    }
                 }
             }
 
             let mut resp = BossWithPathResponse::from(bwp);
-            resp.builtin_timer_ids = builtin_ids;
-            resp.modified_timer_ids = modified_ids;
+            resp.builtin_timer_ids = builtin_timer_ids;
+            resp.modified_timer_ids = modified_timer_ids;
+            resp.builtin_phase_ids = builtin_phase_ids;
+            resp.modified_phase_ids = modified_phase_ids;
+            resp.builtin_counter_ids = builtin_counter_ids;
+            resp.modified_counter_ids = modified_counter_ids;
             resp
         })
         .collect())
@@ -556,29 +622,52 @@ pub async fn update_encounter_item(
 
     let item_id = original_id.as_deref().unwrap_or_else(|| item.id());
 
-    // Timer: save preference fields
-    if let EncounterItem::Timer(ref t) = item {
-        let mut prefs = load_timer_preferences();
-        let key = boss_timer_key(
-            &boss_with_path.boss.area_name,
-            &boss_with_path.boss.name,
-            &t.id,
-        );
-        prefs.update_enabled(&key, t.enabled);
-        prefs.update_color(&key, t.color);
-        prefs.update_audio_enabled(&key, t.audio.enabled);
-        prefs.update_audio_file(&key, t.audio.file.clone());
-        save_timer_preferences(&prefs)?;
+    // Save preference fields for timers, phases, and counters
+    match &item {
+        EncounterItem::Timer(t) => {
+            let mut prefs = load_timer_preferences();
+            let key = boss_timer_key(
+                &boss_with_path.boss.area_name,
+                &boss_with_path.boss.name,
+                &t.id,
+            );
+            prefs.update_enabled(&key, t.enabled);
+            prefs.update_color(&key, t.color);
+            prefs.update_audio_enabled(&key, t.audio.enabled);
+            prefs.update_audio_file(&key, t.audio.file.clone());
+            save_timer_preferences(&prefs)?;
 
-        // Update live session
-        if let Some(session) = service.shared.session.read().await.as_ref() {
-            let session = session.read().await;
-            if let Some(timer_mgr) = session.timer_manager()
-                && let Ok(mut mgr) = timer_mgr.lock()
-            {
-                mgr.set_preferences(prefs);
+            // Update live session
+            if let Some(session) = service.shared.session.read().await.as_ref() {
+                let session = session.read().await;
+                if let Some(timer_mgr) = session.timer_manager()
+                    && let Ok(mut mgr) = timer_mgr.lock()
+                {
+                    mgr.set_preferences(prefs);
+                }
             }
         }
+        EncounterItem::Phase(p) => {
+            let mut prefs = load_timer_preferences();
+            let key = boss_phase_key(
+                &boss_with_path.boss.area_name,
+                &boss_with_path.boss.name,
+                &p.id,
+            );
+            prefs.update_phase_enabled(&key, p.enabled);
+            save_timer_preferences(&prefs)?;
+        }
+        EncounterItem::Counter(c) => {
+            let mut prefs = load_timer_preferences();
+            let key = boss_counter_key(
+                &boss_with_path.boss.area_name,
+                &boss_with_path.boss.name,
+                &c.id,
+            );
+            prefs.update_counter_enabled(&key, c.enabled);
+            save_timer_preferences(&prefs)?;
+        }
+        _ => {}
     }
 
     // Save definition changes

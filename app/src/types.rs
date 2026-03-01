@@ -314,6 +314,18 @@ pub struct BossWithPath {
     /// Timer IDs from the bundled definition that the user has modified.
     #[serde(default)]
     pub modified_timer_ids: Vec<String>,
+    /// Phase IDs from the bundled definition that are unmodified.
+    #[serde(default)]
+    pub builtin_phase_ids: Vec<String>,
+    /// Phase IDs from the bundled definition that the user has modified.
+    #[serde(default)]
+    pub modified_phase_ids: Vec<String>,
+    /// Counter IDs from the bundled definition that are unmodified.
+    #[serde(default)]
+    pub builtin_counter_ids: Vec<String>,
+    /// Counter IDs from the bundled definition that the user has modified.
+    #[serde(default)]
+    pub modified_counter_ids: Vec<String>,
 }
 
 /// Full boss encounter definition (mirrors baras_core::dsl::BossEncounterDefinition)
@@ -434,6 +446,8 @@ fn default_timer_color() -> [u8; 4] {
 pub struct PhaseDefinition {
     pub id: String,
     pub name: String,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
     #[serde(default)]
     pub display_text: Option<String>,
     #[serde(alias = "trigger")]
@@ -455,6 +469,8 @@ pub struct PhaseDefinition {
 pub struct CounterDefinition {
     pub id: String,
     pub name: String,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
     #[serde(default)]
     pub display_text: Option<String>,
     pub increment_on: Trigger,

@@ -62,6 +62,7 @@ pub fn TimersTab(
     expanded_timer: Signal<Option<String>>,
     hide_disabled_timers: Signal<bool>,
     on_change: EventHandler<Vec<BossTimerDefinition>>,
+    on_refetch: EventHandler<()>,
     on_status: EventHandler<(String, bool)>,
 ) -> Element {
 
@@ -159,6 +160,7 @@ pub fn TimersTab(
                                     expanded_timer.set(if is_expanded { None } else { Some(timer_key.clone()) });
                                 },
                                 on_change: on_change,
+                                on_refetch: on_refetch,
                                 on_status: on_status,
                                 on_collapse: move |_| expanded_timer.set(None),
                             }
@@ -185,6 +187,7 @@ fn TimerRow(
     expanded: bool,
     on_toggle: EventHandler<()>,
     on_change: EventHandler<Vec<BossTimerDefinition>>,
+    on_refetch: EventHandler<()>,
     on_status: EventHandler<(String, bool)>,
     on_collapse: EventHandler<()>,
 ) -> Element {
@@ -280,6 +283,7 @@ fn TimerRow(
                             let item = EncounterItem::Timer(updated);
                             spawn(async move {
                                 let _ = api::update_encounter_item(&boss_id, &file_path, &item, None).await;
+                                on_refetch.call(());
                             });
                         },
                         span {
@@ -306,6 +310,7 @@ fn TimerRow(
                             let item = EncounterItem::Timer(updated);
                             spawn(async move {
                                 let _ = api::update_encounter_item(&boss_id, &file_path, &item, None).await;
+                                on_refetch.call(());
                             });
                         },
                         span {
@@ -321,9 +326,12 @@ fn TimerRow(
                 TimerEditForm {
                     timer: timer.clone(),
                     all_timers: all_timers,
+                    is_builtin: is_builtin,
+                    is_modified: is_modified,
                     boss_with_path: boss_with_path,
                     encounter_data: encounter_data,
                     on_change: on_change,
+                    on_refetch: on_refetch,
                     on_status: on_status,
                     on_collapse: on_collapse,
                     on_dirty: move |dirty: bool| is_dirty.set(dirty),
@@ -341,9 +349,12 @@ fn TimerRow(
 fn TimerEditForm(
     timer: BossTimerDefinition,
     all_timers: Vec<BossTimerDefinition>,
+    #[props(default)] is_builtin: bool,
+    #[props(default)] is_modified: bool,
     boss_with_path: BossWithPath,
     encounter_data: EncounterData,
     on_change: EventHandler<Vec<BossTimerDefinition>>,
+    on_refetch: EventHandler<()>,
     on_status: EventHandler<(String, bool)>,
     on_collapse: EventHandler<()>,
     #[props(default)] on_dirty: EventHandler<bool>,
@@ -418,18 +429,22 @@ fn TimerEditForm(
             let item = EncounterItem::Timer(updated);
             spawn(async move {
                 match api::update_encounter_item(&boss_id, &file_path, &item, None).await {
-                    Ok(_) => on_status.call(("Saved".to_string(), false)),
+                    Ok(_) => {
+                        on_status.call(("Saved".to_string(), false));
+                        on_refetch.call(());
+                    }
                     Err(_) => on_status.call(("Failed to save".to_string(), true)),
                 }
             });
         }
     };
 
-    // Delete handler
+    // Delete/Reset handler
     let handle_delete = {
         let timer_del = timer_for_delete.clone();
         let timers = all_timers.clone();
         let bwp = boss_with_path.clone();
+        let is_reset = is_builtin || is_modified; // Built-in items get "reset", not "delete"
         move |_| {
             let t = timer_del.clone();
             let timers_clone = timers.clone();
@@ -438,13 +453,20 @@ fn TimerEditForm(
             spawn(async move {
                 match api::delete_encounter_item("timer", &t.id, &boss_id, &file_path).await {
                     Ok(_) => {
-                        let filtered: Vec<_> = timers_clone
-                            .into_iter()
-                            .filter(|timer| timer.id != t.id)
-                            .collect();
-                        on_change.call(filtered);
-                        on_collapse.call(());
-                        on_status.call(("Deleted".to_string(), false));
+                        if is_reset {
+                            // For built-in items, refetch to get the original definition back
+                            on_status.call(("Reset to built-in".to_string(), false));
+                            on_collapse.call(());
+                            on_refetch.call(());
+                        } else {
+                            let filtered: Vec<_> = timers_clone
+                                .into_iter()
+                                .filter(|timer| timer.id != t.id)
+                                .collect();
+                            on_change.call(filtered);
+                            on_collapse.call(());
+                            on_status.call(("Deleted".to_string(), false));
+                        }
                     }
                     Err(err) => {
                         on_status.call((err, true));
@@ -1289,25 +1311,57 @@ fn TimerEditForm(
                     "Duplicate"
                 }
 
-                if confirm_delete() {
-                    span { class: "flex items-center gap-xs ml-auto",
-                        "Delete?"
-                        button {
-                            class: "btn btn-danger btn-sm",
-                            onclick: handle_delete,
-                            "Yes"
+                // Reset/Delete logic:
+                // - Built-in unmodified: no delete button (nothing to reset)
+                // - Modified built-in: "Reset to Built-in" (calls delete + refetch)
+                // - Custom: "Delete" with confirmation
+                if is_builtin {
+                    // Pure built-in, unmodified — no action needed
+                } else if is_modified {
+                    // Modified built-in — offer reset
+                    if confirm_delete() {
+                        span { class: "flex items-center gap-xs ml-auto",
+                            "Reset to built-in?"
+                            button {
+                                class: "btn btn-warning btn-sm",
+                                onclick: handle_delete,
+                                "Yes"
+                            }
+                            button {
+                                class: "btn btn-sm",
+                                onclick: move |_| confirm_delete.set(false),
+                                "No"
+                            }
                         }
+                    } else {
                         button {
-                            class: "btn btn-sm",
-                            onclick: move |_| confirm_delete.set(false),
-                            "No"
+                            class: "btn btn-warning btn-sm ml-auto",
+                            onclick: move |_| confirm_delete.set(true),
+                            "Reset to Built-in"
                         }
                     }
                 } else {
-                    button {
-                        class: "btn btn-danger btn-sm ml-auto",
-                        onclick: move |_| confirm_delete.set(true),
-                        "Delete"
+                    // Custom item — offer delete
+                    if confirm_delete() {
+                        span { class: "flex items-center gap-xs ml-auto",
+                            "Delete?"
+                            button {
+                                class: "btn btn-danger btn-sm",
+                                onclick: handle_delete,
+                                "Yes"
+                            }
+                            button {
+                                class: "btn btn-sm",
+                                onclick: move |_| confirm_delete.set(false),
+                                "No"
+                            }
+                        }
+                    } else {
+                        button {
+                            class: "btn btn-danger btn-sm ml-auto",
+                            onclick: move |_| confirm_delete.set(true),
+                            "Delete"
+                        }
                     }
                 }
             }

@@ -930,6 +930,7 @@ fn test_counter_phase_entered_trigger() {
             PhaseDefinition {
                 id: "p1".to_string(),
                 name: "Phase 1".to_string(),
+                enabled: true,
                 display_text: None,
                 start_trigger: Trigger::CombatStart,
                 end_trigger: None,
@@ -941,6 +942,7 @@ fn test_counter_phase_entered_trigger() {
             PhaseDefinition {
                 id: "p2".to_string(),
                 name: "Phase 2".to_string(),
+                enabled: true,
                 display_text: None,
                 start_trigger: Trigger::EntityDeath {
                     selector: vec![crate::dsl::triggers::EntitySelector::Name(
@@ -958,6 +960,7 @@ fn test_counter_phase_entered_trigger() {
             CounterDefinition {
                 id: "phase_enter_ct".to_string(),
                 name: "Phase Enter Counter".to_string(),
+                enabled: true,
                 display_text: None,
                 increment_on: Trigger::PhaseEntered {
                     phase_id: "p2".to_string(),
@@ -971,6 +974,7 @@ fn test_counter_phase_entered_trigger() {
             CounterDefinition {
                 id: "phase_end_ct".to_string(),
                 name: "Phase End Counter".to_string(),
+                enabled: true,
                 display_text: None,
                 increment_on: Trigger::PhaseEnded {
                     phase_id: "p1".to_string(),
@@ -1181,6 +1185,7 @@ fn test_phase_cascade_in_single_event() {
             PhaseDefinition {
                 id: "p1".to_string(),
                 name: "Phase 1".to_string(),
+                enabled: true,
                 display_text: None,
                 start_trigger: Trigger::CombatStart,
                 end_trigger: Some(Trigger::EntityDeath {
@@ -1194,6 +1199,7 @@ fn test_phase_cascade_in_single_event() {
             PhaseDefinition {
                 id: "p2".to_string(),
                 name: "Phase 2 (transient)".to_string(),
+                enabled: true,
                 display_text: None,
                 start_trigger: Trigger::PhaseEnded {
                     phase_id: "p1".to_string(),
@@ -1210,6 +1216,7 @@ fn test_phase_cascade_in_single_event() {
             PhaseDefinition {
                 id: "p3".to_string(),
                 name: "Phase 3 (final)".to_string(),
+                enabled: true,
                 display_text: None,
                 start_trigger: Trigger::PhaseEnded {
                     phase_id: "p2".to_string(),
@@ -1224,6 +1231,7 @@ fn test_phase_cascade_in_single_event() {
         counters: vec![CounterDefinition {
             id: "cascade_ct".to_string(),
             name: "Cascade Counter".to_string(),
+            enabled: true,
             display_text: None,
             increment_on: Trigger::AnyPhaseChange,
             decrement_on: None,
@@ -1396,6 +1404,7 @@ fn test_counter_reaches_enables_phase() {
             PhaseDefinition {
                 id: "p1".to_string(),
                 name: "Phase 1".to_string(),
+                enabled: true,
                 display_text: None,
                 start_trigger: Trigger::CombatStart,
                 end_trigger: None,
@@ -1407,6 +1416,7 @@ fn test_counter_reaches_enables_phase() {
             PhaseDefinition {
                 id: "p2".to_string(),
                 name: "Phase 2 (after 3 kills)".to_string(),
+                enabled: true,
                 display_text: None,
                 start_trigger: Trigger::EntityDeath {
                     selector: vec![crate::dsl::triggers::EntitySelector::Name("Add".to_string())],
@@ -1425,6 +1435,7 @@ fn test_counter_reaches_enables_phase() {
         counters: vec![CounterDefinition {
             id: "kill_count".to_string(),
             name: "Kill Count".to_string(),
+            enabled: true,
             display_text: None,
             increment_on: Trigger::EntityDeath {
                 selector: vec![crate::dsl::triggers::EntitySelector::Name("Add".to_string())],

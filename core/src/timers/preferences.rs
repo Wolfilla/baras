@@ -15,6 +15,38 @@ use thiserror::Error;
 // Preference Types
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Individual phase preference overrides.
+/// All fields are optional - only set fields override the definition.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PhasePreference {
+    /// Override enabled state
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+}
+
+impl PhasePreference {
+    /// Check if this preference has any overrides set
+    pub fn is_empty(&self) -> bool {
+        self.enabled.is_none()
+    }
+}
+
+/// Individual counter preference overrides.
+/// All fields are optional - only set fields override the definition.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CounterPreference {
+    /// Override enabled state
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+}
+
+impl CounterPreference {
+    /// Check if this preference has any overrides set
+    pub fn is_empty(&self) -> bool {
+        self.enabled.is_none()
+    }
+}
+
 /// Individual timer preference overrides.
 /// All fields are optional - only set fields override the definition.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -56,6 +88,14 @@ pub struct TimerPreferences {
     /// Timer preferences by key
     #[serde(default)]
     pub timers: HashMap<String, TimerPreference>,
+
+    /// Phase preferences by key (same key format as timers: `area.boss.phase_id`)
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub phases: HashMap<String, PhasePreference>,
+
+    /// Counter preferences by key (same key format as timers: `area.boss.counter_id`)
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub counters: HashMap<String, CounterPreference>,
 }
 
 impl TimerPreferences {
@@ -136,11 +176,49 @@ impl TimerPreferences {
         self.timers.remove(key);
     }
 
+    // ─── Phase preference helpers ─────────────────────────────────────
+
+    /// Get preference for a phase by key
+    pub fn get_phase(&self, key: &str) -> Option<&PhasePreference> {
+        self.phases.get(key)
+    }
+
+    /// Update enabled state for a phase
+    pub fn update_phase_enabled(&mut self, key: &str, enabled: bool) {
+        let pref = self.phases.entry(key.to_string()).or_default();
+        pref.enabled = Some(enabled);
+    }
+
+    // ─── Counter preference helpers ───────────────────────────────────
+
+    /// Get preference for a counter by key
+    pub fn get_counter(&self, key: &str) -> Option<&CounterPreference> {
+        self.counters.get(key)
+    }
+
+    /// Update enabled state for a counter
+    pub fn update_counter_enabled(&mut self, key: &str, enabled: bool) {
+        let pref = self.counters.entry(key.to_string()).or_default();
+        pref.enabled = Some(enabled);
+    }
+
     /// Return a copy with empty preferences removed
     fn without_empty(&self) -> Self {
         Self {
             timers: self
                 .timers
+                .iter()
+                .filter(|(_, v)| !v.is_empty())
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            phases: self
+                .phases
+                .iter()
+                .filter(|(_, v)| !v.is_empty())
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            counters: self
+                .counters
                 .iter()
                 .filter(|(_, v)| !v.is_empty())
                 .map(|(k, v)| (k.clone(), v.clone()))
@@ -166,6 +244,26 @@ pub fn boss_timer_key(area_name: &str, boss_name: &str, timer_id: &str) -> Strin
 /// Generate a preference key for a standalone timer
 pub fn standalone_timer_key(timer_id: &str) -> String {
     normalize_key_part(timer_id)
+}
+
+/// Generate a preference key for a boss phase
+pub fn boss_phase_key(area_name: &str, boss_name: &str, phase_id: &str) -> String {
+    format!(
+        "{}.{}.{}",
+        normalize_key_part(area_name),
+        normalize_key_part(boss_name),
+        normalize_key_part(phase_id)
+    )
+}
+
+/// Generate a preference key for a boss counter
+pub fn boss_counter_key(area_name: &str, boss_name: &str, counter_id: &str) -> String {
+    format!(
+        "{}.{}.{}",
+        normalize_key_part(area_name),
+        normalize_key_part(boss_name),
+        normalize_key_part(counter_id)
+    )
 }
 
 /// Normalize a key part: lowercase, replace spaces with underscores

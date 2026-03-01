@@ -10,13 +10,17 @@ use super::triggers::Trigger;
 pub use super::triggers::Trigger as CounterTrigger;
 
 /// A counter that tracks occurrences during a boss fight
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CounterDefinition {
     /// Counter identifier (auto-generated from name if empty)
     pub id: String,
 
     /// Display name (used for ID generation, must be unique within encounter)
     pub name: String,
+
+    /// Whether this counter is active (disabled counters are skipped at runtime)
+    #[serde(default = "crate::serde_defaults::default_true")]
+    pub enabled: bool,
 
     /// Optional in-game display text (defaults to name, then id)
     #[serde(default, skip_serializing_if = "Option::is_none")]

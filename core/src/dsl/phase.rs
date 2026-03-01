@@ -12,13 +12,17 @@ use super::CounterCondition;
 pub use super::triggers::Trigger as PhaseTrigger;
 
 /// A phase within a boss encounter
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PhaseDefinition {
     /// Phase identifier (auto-generated from name if empty)
     pub id: String,
 
     /// Display name (used for ID generation, must be unique within encounter)
     pub name: String,
+
+    /// Whether this phase is active (disabled phases are skipped at runtime)
+    #[serde(default = "crate::serde_defaults::default_true")]
+    pub enabled: bool,
 
     /// Optional in-game display text (defaults to name if not set)
     #[serde(default, skip_serializing_if = "Option::is_none")]

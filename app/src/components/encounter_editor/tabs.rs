@@ -137,7 +137,10 @@ pub fn BossTabs(
     expanded_challenge: Signal<Option<String>>,
     expanded_entity: Signal<Option<String>>,
     hide_disabled_timers: Signal<bool>,
+    hide_disabled_phases: Signal<bool>,
+    hide_disabled_counters: Signal<bool>,
     on_boss_change: EventHandler<BossWithPath>,
+    on_refetch: EventHandler<()>,
     on_status: EventHandler<(String, bool)>,
 ) -> Element {
     // Convert persisted string to BossTab enum, or default to Timers
@@ -206,6 +209,7 @@ pub fn BossTabs(
                                 bwp.boss.timers = updated_timers;
                                 on_boss_change.call(bwp);
                             },
+                            on_refetch: on_refetch,
                             on_status: on_status,
                         }
                     },
@@ -214,11 +218,13 @@ pub fn BossTabs(
                             boss_with_path: boss_with_path.clone(),
                             encounter_data: encounter_data.clone(),
                             expanded_phase: expanded_phase,
+                            hide_disabled_phases: hide_disabled_phases,
                             on_change: move |updated_phases: Vec<PhaseDefinition>| {
                                 let mut bwp = boss_with_path.clone();
                                 bwp.boss.phases = updated_phases;
                                 on_boss_change.call(bwp);
                             },
+                            on_refetch: on_refetch,
                             on_status: on_status,
                         }
                     },
@@ -227,11 +233,13 @@ pub fn BossTabs(
                             boss_with_path: boss_with_path.clone(),
                             encounter_data: encounter_data.clone(),
                             expanded_counter: expanded_counter,
+                            hide_disabled_counters: hide_disabled_counters,
                             on_change: move |updated_counters: Vec<CounterDefinition>| {
                                 let mut bwp = boss_with_path.clone();
                                 bwp.boss.counters = updated_counters;
                                 on_boss_change.call(bwp);
                             },
+                            on_refetch: on_refetch,
                             on_status: on_status,
                         }
                     },

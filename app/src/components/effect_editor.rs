@@ -368,6 +368,10 @@ pub fn EffectEditorPanel(mut props: EffectEditorProps) -> Element {
                 Ok(()) => {
                     save_status.set("Saved".to_string());
                     status_is_error.set(false);
+                    // Refetch to get updated is_bundled/is_user_override flags
+                    if let Some(e) = api::get_effect_definitions().await {
+                        effects.set(e);
+                    }
                 }
                 Err(e) => {
                     save_status.set(e);
@@ -379,16 +383,28 @@ pub fn EffectEditorPanel(mut props: EffectEditorProps) -> Element {
 
     let mut on_delete = move |effect: EffectListItem| {
         let effect_id = effect.id.clone();
+        let is_reset = effect.is_bundled; // Built-in items get "reset", not "delete"
 
-        let current = effects();
-        let filtered: Vec<_> = current.into_iter().filter(|e| e.id != effect_id).collect();
-        effects.set(filtered);
+        if !is_reset {
+            // Custom item — remove from local list immediately
+            let current = effects();
+            let filtered: Vec<_> = current.into_iter().filter(|e| e.id != effect_id).collect();
+            effects.set(filtered);
+        }
         expanded_effect.set(None);
 
         spawn(async move {
             match api::delete_effect_definition(&effect.id).await {
                 Ok(()) => {
-                    save_status.set("Deleted".to_string());
+                    if is_reset {
+                        save_status.set("Reset to built-in".to_string());
+                        // Refetch to get the original bundled definition back
+                        if let Some(e) = api::get_effect_definitions().await {
+                            effects.set(e);
+                        }
+                    } else {
+                        save_status.set("Deleted".to_string());
+                    }
                     status_is_error.set(false);
                 }
                 Err(e) => {
@@ -942,6 +958,8 @@ fn EffectRow(
                 EffectEditForm {
                     effect: effect.clone(),
                     is_draft: is_draft,
+                    is_bundled: effect.is_bundled,
+                    is_user_override: effect.is_user_override,
                     on_save: on_save,
                     on_delete: on_delete,
                     on_duplicate: on_duplicate,
@@ -961,6 +979,8 @@ fn EffectRow(
 fn EffectEditForm(
     effect: EffectListItem,
     #[props(default = false)] is_draft: bool,
+    #[props(default = false)] is_bundled: bool,
+    #[props(default = false)] is_user_override: bool,
     on_save: EventHandler<EffectListItem>,
     on_delete: EventHandler<()>,
     on_duplicate: EventHandler<()>,
@@ -1960,25 +1980,55 @@ fn EffectEditForm(
                             onclick: move |_| on_delete.call(()),
                             "Cancel"
                         }
-                    } else if confirm_delete() {
-                        span { class: "delete-confirm",
-                            "Delete? "
-                            button {
-                                class: "btn-delete-yes",
-                                onclick: move |_| on_delete.call(()),
-                                "Yes"
+                    } else if is_bundled && !is_user_override {
+                        // Pure built-in, unmodified — no delete/reset action needed
+                    } else if is_bundled && is_user_override {
+                        // Modified built-in — offer "Reset to Built-in"
+                        if confirm_delete() {
+                            span { class: "delete-confirm",
+                                "Reset to built-in? "
+                                button {
+                                    class: "btn-delete-no",
+                                    style: "background: var(--color-warning, #f39c12); border-color: var(--color-warning, #f39c12); color: #000; font-weight: 600;",
+                                    onclick: move |_| on_delete.call(()),
+                                    "Yes"
+                                }
+                                button {
+                                    class: "btn-delete-no",
+                                    onclick: move |_| confirm_delete.set(false),
+                                    "No"
+                                }
                             }
+                        } else {
                             button {
-                                class: "btn-delete-no",
-                                onclick: move |_| confirm_delete.set(false),
-                                "No"
+                                class: "btn-delete",
+                                style: "background: var(--color-warning, #f39c12); border-color: var(--color-warning, #f39c12); color: #000;",
+                                onclick: move |_| confirm_delete.set(true),
+                                "Reset to Built-in"
                             }
                         }
                     } else {
-                        button {
-                            class: "btn-delete",
-                            onclick: move |_| confirm_delete.set(true),
-                            "Delete"
+                        // Custom item — offer Delete with confirmation
+                        if confirm_delete() {
+                            span { class: "delete-confirm",
+                                "Delete? "
+                                button {
+                                    class: "btn-delete-yes",
+                                    onclick: move |_| on_delete.call(()),
+                                    "Yes"
+                                }
+                                button {
+                                    class: "btn-delete-no",
+                                    onclick: move |_| confirm_delete.set(false),
+                                    "No"
+                                }
+                            }
+                        } else {
+                            button {
+                                class: "btn-delete",
+                                onclick: move |_| confirm_delete.set(true),
+                                "Delete"
+                            }
                         }
                     }
                 }
