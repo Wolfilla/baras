@@ -249,7 +249,7 @@ fn is_zero(v: &i64) -> bool {
 /// - `encounters` and `boss` are implicit from parent context
 ///
 /// Use `to_timer_definition()` to convert with full context.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BossTimerDefinition {
     /// Unique identifier (auto-generated from name if empty)
     pub id: String,

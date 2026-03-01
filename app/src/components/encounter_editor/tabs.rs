@@ -136,6 +136,7 @@ pub fn BossTabs(
     expanded_counter: Signal<Option<String>>,
     expanded_challenge: Signal<Option<String>>,
     expanded_entity: Signal<Option<String>>,
+    hide_disabled_timers: Signal<bool>,
     on_boss_change: EventHandler<BossWithPath>,
     on_status: EventHandler<(String, bool)>,
 ) -> Element {
@@ -199,6 +200,7 @@ pub fn BossTabs(
                             boss_with_path: boss_with_path.clone(),
                             encounter_data: encounter_data.clone(),
                             expanded_timer: expanded_timer,
+                            hide_disabled_timers: hide_disabled_timers,
                             on_change: move |updated_timers: Vec<BossTimerDefinition>| {
                                 let mut bwp = boss_with_path.clone();
                                 bwp.boss.timers = updated_timers;

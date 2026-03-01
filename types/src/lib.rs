@@ -2876,6 +2876,8 @@ pub struct EncounterBuilderState {
     pub expanded_challenge: Option<String>,
     /// Expanded entity ID within Entities tab
     pub expanded_entity: Option<String>,
+    /// Whether to hide disabled timers in the Timers tab
+    pub hide_disabled_timers: bool,
 }
 
 /// Effects Editor session state

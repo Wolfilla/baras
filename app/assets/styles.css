@@ -6517,6 +6517,74 @@ details[open] .collapsible-summary::before {
   color: var(--swtor-orange);
 }
 
+/* ─── Timer Row Grid Layout ──────────────────────────────────────────────────── */
+.timer-row-header {
+  display: flex !important;
+  align-items: center;
+  gap: var(--space-xs) !important;
+}
+
+.timer-col-name-id {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  min-width: 0;
+  flex: 1 1 0;
+  overflow: hidden;
+}
+
+.timer-col-name-id > .truncate {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.timer-col-name-id > .text-mono {
+  flex-shrink: 10;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timer-col-trigger {
+  flex-shrink: 0;
+}
+
+.timer-col-duration {
+  flex-shrink: 0;
+  min-width: 45px;
+  text-align: right;
+}
+
+/* ─── Timer Origin Badge ─────────────────────────────────────────────────────── */
+.timer-origin {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 3px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.timer-origin-builtin {
+  background: var(--swtor-blue-dim);
+  color: var(--swtor-blue-bright, #6ab0ff);
+}
+
+.timer-origin-modified {
+  background: rgba(155, 89, 182, 0.35);
+  color: #c39bd3;
+}
+
+.timer-origin-custom {
+  background: rgba(46, 204, 113, 0.2);
+  color: var(--color-success, #2ecc71);
+}
+
 .tag-muted {
   background: var(--bg-dark);
   color: var(--text-muted);

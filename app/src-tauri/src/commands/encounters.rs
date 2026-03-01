@@ -34,6 +34,12 @@ pub struct BossWithPathResponse {
     pub boss: BossEncounterDefinition,
     pub file_path: String,
     pub category: String,
+    /// Timer IDs that exist in the bundled (shipped) definition, unmodified.
+    #[serde(default)]
+    pub builtin_timer_ids: Vec<String>,
+    /// Timer IDs that exist in the bundled definition but have been modified by the user.
+    #[serde(default)]
+    pub modified_timer_ids: Vec<String>,
 }
 
 impl From<BossWithPath> for BossWithPathResponse {
@@ -42,6 +48,8 @@ impl From<BossWithPath> for BossWithPathResponse {
             boss: bwp.boss,
             file_path: bwp.file_path.to_string_lossy().to_string(),
             category: bwp.category,
+            builtin_timer_ids: Vec::new(),
+            modified_timer_ids: Vec::new(),
         }
     }
 }
@@ -362,7 +370,10 @@ fn save_timer_preferences(prefs: &TimerPreferences) -> Result<(), String> {
 
 /// Get bosses for an area file with timer preferences merged.
 #[tauri::command]
-pub async fn fetch_area_bosses(file_path: String) -> Result<Vec<BossWithPathResponse>, String> {
+pub async fn fetch_area_bosses(
+    app_handle: AppHandle,
+    file_path: String,
+) -> Result<Vec<BossWithPathResponse>, String> {
     let path = PathBuf::from(&file_path);
 
     debug!(file_path = %file_path, path_exists = path.exists(), "fetch_area_bosses called");
@@ -370,6 +381,20 @@ pub async fn fetch_area_bosses(file_path: String) -> Result<Vec<BossWithPathResp
     if !path.exists() {
         return Err(format!("File not found: {}", file_path));
     }
+
+    // Load the original bundled timers (before custom merge) so the UI can
+    // distinguish: built-in (unmodified), modified (built-in but changed), custom (new).
+    // We store the full timer definitions to compare against the merged result.
+    let bundled_bosses: std::collections::HashMap<String, Vec<BossTimerDefinition>> =
+        if get_custom_path_if_bundled(&path, &app_handle).is_some() {
+            load_bosses_from_file(&path)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|b| (b.id, b.timers))
+                .collect()
+        } else {
+            std::collections::HashMap::new()
+        };
 
     let mut bosses = load_file_with_custom(&path)?;
     debug!(count = bosses.len(), "Loaded bosses for area");
@@ -397,8 +422,32 @@ pub async fn fetch_area_bosses(file_path: String) -> Result<Vec<BossWithPathResp
         }
     }
 
-    // Convert to serializable response type
-    Ok(bosses.into_iter().map(BossWithPathResponse::from).collect())
+    // Classify each timer: built-in (unchanged), modified (built-in but edited), or custom (new)
+    Ok(bosses
+        .into_iter()
+        .map(|bwp| {
+            let mut builtin_ids = Vec::new();
+            let mut modified_ids = Vec::new();
+
+            if let Some(original_timers) = bundled_bosses.get(&bwp.boss.id) {
+                for timer in &bwp.boss.timers {
+                    if let Some(original) = original_timers.iter().find(|t| t.id == timer.id) {
+                        if *original == *timer {
+                            builtin_ids.push(timer.id.clone());
+                        } else {
+                            modified_ids.push(timer.id.clone());
+                        }
+                    }
+                    // else: not in bundled = custom, no tag
+                }
+            }
+
+            let mut resp = BossWithPathResponse::from(bwp);
+            resp.builtin_timer_ids = builtin_ids;
+            resp.modified_timer_ids = modified_ids;
+            resp
+        })
+        .collect())
 }
 
 /// Create a new encounter item.

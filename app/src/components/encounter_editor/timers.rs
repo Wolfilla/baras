@@ -60,18 +60,42 @@ pub fn TimersTab(
     boss_with_path: BossWithPath,
     encounter_data: EncounterData,
     expanded_timer: Signal<Option<String>>,
+    hide_disabled_timers: Signal<bool>,
     on_change: EventHandler<Vec<BossTimerDefinition>>,
     on_status: EventHandler<(String, bool)>,
 ) -> Element {
 
     // Extract timers from BossWithPath
     let timers = boss_with_path.boss.timers.clone();
+    let builtin_timer_ids = boss_with_path.builtin_timer_ids.clone();
+    let modified_timer_ids = boss_with_path.modified_timer_ids.clone();
+
+    let disabled_count = timers.iter().filter(|t| !t.enabled).count();
+
+    // Filter timers based on toggle
+    let visible_timers: Vec<BossTimerDefinition> = if hide_disabled_timers() {
+        timers.iter().filter(|t| t.enabled).cloned().collect()
+    } else {
+        timers.clone()
+    };
 
     rsx! {
         div { class: "timers-tab",
             // Header
             div { class: "flex items-center justify-between mb-sm",
-                span { class: "text-sm text-secondary", "{timers.len()} timers" }
+                div { class: "flex items-center gap-sm",
+                    span { class: "text-sm text-secondary", "{timers.len()} timers" }
+                    if disabled_count > 0 {
+                        label { class: "flex items-center gap-xs text-xs text-muted cursor-pointer",
+                            input {
+                                r#type: "checkbox",
+                                checked: hide_disabled_timers(),
+                                onchange: move |e| hide_disabled_timers.set(e.checked()),
+                            }
+                            "Hide disabled ({disabled_count})"
+                        }
+                    }
+                }
                 {
                     let bwp = boss_with_path.clone();
                     let timers_for_create = timers.clone();
@@ -106,20 +130,28 @@ pub fn TimersTab(
             }
 
             // Timer list
-            if timers.is_empty() {
-                div { class: "empty-state text-sm", "No timers defined" }
+            if visible_timers.is_empty() {
+                if timers.is_empty() {
+                    div { class: "empty-state text-sm", "No timers defined" }
+                } else {
+                    div { class: "empty-state text-sm", "All timers are disabled (toggle above to show)" }
+                }
             } else {
-                for timer in timers.clone() {
+                for timer in visible_timers {
                     {
                         let timer_key = timer.id.clone();
                         let is_expanded = expanded_timer() == Some(timer_key.clone());
                         let timers_for_row = timers.clone();
+                        let timer_is_builtin = builtin_timer_ids.contains(&timer.id);
+                        let timer_is_modified = modified_timer_ids.contains(&timer.id);
 
                         rsx! {
                             TimerRow {
                                 key: "{timer_key}",
                                 timer: timer.clone(),
                                 all_timers: timers_for_row,
+                                is_builtin: timer_is_builtin,
+                                is_modified: timer_is_modified,
                                 boss_with_path: boss_with_path.clone(),
                                 encounter_data: encounter_data.clone(),
                                 expanded: is_expanded,
@@ -146,6 +178,8 @@ pub fn TimersTab(
 fn TimerRow(
     timer: BossTimerDefinition,
     all_timers: Vec<BossTimerDefinition>,
+    is_builtin: bool,
+    is_modified: bool,
     boss_with_path: BossWithPath,
     encounter_data: EncounterData,
     expanded: bool,
@@ -170,22 +204,55 @@ fn TimerRow(
         div { class: "list-item",
             // Header row
             div {
-                class: "list-item-header",
+                class: "list-item-header timer-row-header",
                 onclick: move |_| on_toggle.call(()),
 
-                // Left side - expandable content
-                div { class: "flex items-center gap-xs flex-1 min-w-0",
-                    span { class: "list-item-expand", if expanded { "▼" } else { "▶" } }
+                // Expand arrow
+                span { class: "list-item-expand", if expanded { "▼" } else { "▶" } }
+
+                // Origin indicator (B)uilt-in / (M)odified / (C)ustom
+                if is_builtin {
                     span {
-                        class: "color-swatch",
-                        style: "background: {color_hex};"
+                        class: "timer-origin timer-origin-builtin",
+                        title: "Built-in: ships with the app",
+                        "B"
                     }
+                } else if is_modified {
+                    span {
+                        class: "timer-origin timer-origin-modified",
+                        title: "Modified: built-in timer you have edited",
+                        "M"
+                    }
+                } else {
+                    span {
+                        class: "timer-origin timer-origin-custom",
+                        title: "Custom: created by you",
+                        "C"
+                    }
+                }
+
+                // Color swatch
+                span {
+                    class: "color-swatch",
+                    style: "background: {color_hex};"
+                }
+
+                // Name | ID grouped left-aligned
+                div { class: "timer-col-name-id",
                     span { class: "font-medium text-primary truncate", "{timer.name}" }
                     if expanded && is_dirty() {
                         span { class: "unsaved-indicator", title: "Unsaved changes" }
                     }
-                    span { class: "text-xs text-mono text-muted truncate", "{timer.id}" }
+                    span { class: "text-xs text-mono text-muted", "  {timer.id}" }
+                }
+
+                // Trigger tag
+                span { class: "timer-col-trigger",
                     span { class: "tag", "{timer.trigger.label()}" }
+                }
+
+                // Duration / Alert
+                span { class: "timer-col-duration",
                     if timer.is_alert {
                         span { class: "tag tag-alert", "Alert" }
                     } else {

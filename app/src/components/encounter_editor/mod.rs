@@ -200,6 +200,7 @@ pub fn EncounterEditorPanel(mut props: EncounterEditorProps) -> Element {
     let expanded_counter = use_signal(|| props.state.read().encounter_builder.expanded_counter.clone());
     let expanded_challenge = use_signal(|| props.state.read().encounter_builder.expanded_challenge.clone());
     let expanded_entity = use_signal(|| props.state.read().encounter_builder.expanded_entity.clone());
+    let hide_disabled_timers = use_signal(|| props.state.read().encounter_builder.hide_disabled_timers);
     
     // Derived: selected_area AreaListItem (reconstructed from path/name when areas load)
     let mut selected_area = use_signal(|| None::<AreaListItem>);
@@ -217,6 +218,7 @@ pub fn EncounterEditorPanel(mut props: EncounterEditorProps) -> Element {
         state.encounter_builder.expanded_counter = expanded_counter.read().clone();
         state.encounter_builder.expanded_challenge = expanded_challenge.read().clone();
         state.encounter_builder.expanded_entity = expanded_entity.read().clone();
+        state.encounter_builder.hide_disabled_timers = *hide_disabled_timers.read();
     });
     
     // Non-persisted UI state
@@ -559,6 +561,7 @@ pub fn EncounterEditorPanel(mut props: EncounterEditorProps) -> Element {
                                                     expanded_counter: expanded_counter,
                                                     expanded_challenge: expanded_challenge,
                                                     expanded_entity: expanded_entity,
+                                                    hide_disabled_timers: hide_disabled_timers,
                                                     on_boss_change: move |updated: BossWithPath| {
                                                         let mut all = bosses();
                                                         if let Some(idx) = all.iter().position(|b| b.boss.id == updated.boss.id) {

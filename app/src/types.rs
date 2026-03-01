@@ -308,6 +308,12 @@ pub struct BossWithPath {
     pub boss: BossEncounterDefinition,
     pub file_path: String,
     pub category: String,
+    /// Timer IDs from the bundled definition that are unmodified.
+    #[serde(default)]
+    pub builtin_timer_ids: Vec<String>,
+    /// Timer IDs from the bundled definition that the user has modified.
+    #[serde(default)]
+    pub modified_timer_ids: Vec<String>,
 }
 
 /// Full boss encounter definition (mirrors baras_core::dsl::BossEncounterDefinition)
