@@ -296,12 +296,14 @@ pub fn EffectEditorPanel(mut props: EffectEditorProps) -> Element {
     // Extract persisted state fields
     let mut search_query = use_signal(|| props.state.read().effects_editor.search_query.clone());
     let mut expanded_effect = use_signal(|| props.state.read().effects_editor.expanded_effect.clone());
+    let mut hide_disabled_effects = use_signal(|| props.state.read().effects_editor.hide_disabled_effects);
     
     // Sync persisted state back to unified state
     use_effect(move || {
         let mut state = props.state.write();
         state.effects_editor.search_query = search_query.read().clone();
         state.effects_editor.expanded_effect = expanded_effect.read().clone();
+        state.effects_editor.hide_disabled_effects = *hide_disabled_effects.read();
     });
 
     // Load effects on mount
@@ -332,20 +334,23 @@ pub fn EffectEditorPanel(mut props: EffectEditorProps) -> Element {
         }
     });
 
-    // Filter effects based on search query
+    // Filter effects based on search query and hide-disabled toggle
     let filtered_effects = use_memo(move || {
         let query = search_query().to_lowercase();
-
-        if query.is_empty() {
-            return effects();
-        }
+        let hide_disabled = hide_disabled_effects();
 
         effects()
             .into_iter()
             .filter(|e| {
-                e.name.to_lowercase().contains(&query)
-                    || e.id.to_lowercase().contains(&query)
-                    || e.display_target.label().to_lowercase().contains(&query)
+                if hide_disabled && !e.enabled {
+                    return false;
+                }
+                if !query.is_empty() {
+                    return e.name.to_lowercase().contains(&query)
+                        || e.id.to_lowercase().contains(&query)
+                        || e.display_target.label().to_lowercase().contains(&query);
+                }
+                true
             })
             .collect::<Vec<_>>()
     });
@@ -508,6 +513,21 @@ pub fn EffectEditorPanel(mut props: EffectEditorProps) -> Element {
                         }
                     }
                     span { class: "effect-count", "{filtered_effects().len()} effects" }
+                    {
+                        let disabled_count = effects().iter().filter(|e| !e.enabled).count();
+                        rsx! {
+                            if disabled_count > 0 {
+                                label { class: "flex items-center gap-xs text-xs text-muted cursor-pointer",
+                                    input {
+                                        r#type: "checkbox",
+                                        checked: hide_disabled_effects(),
+                                        onchange: move |e| hide_disabled_effects.set(e.checked()),
+                                    }
+                                    "Hide disabled ({disabled_count})"
+                                }
+                            }
+                        }
+                    }
                     button {
                         class: "btn btn-sm",
                         onclick: move |_| {
@@ -827,26 +847,33 @@ fn EffectRow(
                 class: "effect-row-summary",
                 onclick: move |_| on_toggle.call(()),
 
-                // Left side - expandable content
-                div { class: "flex items-center gap-xs flex-1 min-w-0",
-                    span { class: "effect-expand-icon",
-                        if expanded { "▼" } else { "▶" }
-                    }
+                // Expand arrow
+                span { class: "effect-expand-icon",
+                    if expanded { "▼" } else { "▶" }
+                }
 
-                    span {
-                        class: "effect-color-dot",
-                        style: "background-color: {color_hex}"
-                    }
+                // Origin badge (B/M/C)
+                if is_draft {
+                    span { class: "timer-origin", style: "background: var(--success-alpha-30, rgba(46,204,113,0.2)); color: var(--color-success, #2ecc71);", title: "New: not yet saved", "N" }
+                } else if effect.is_bundled && effect.is_user_override {
+                    span { class: "timer-origin timer-origin-modified", title: "Modified: built-in effect you have edited", "M" }
+                } else if effect.is_bundled {
+                    span { class: "timer-origin timer-origin-builtin", title: "Built-in: ships with the app", "B" }
+                } else {
+                    span { class: "timer-origin timer-origin-custom", title: "Custom: created by you", "C" }
+                }
 
-                    span { class: "effect-name", "{effect.name}" }
+                // Color dot
+                span {
+                    class: "effect-color-dot",
+                    style: "background-color: {color_hex}"
+                }
+
+                // Name | ID grouped left-aligned
+                div { class: "timer-col-name-id",
+                    span { class: "effect-name truncate", "{effect.name}" }
                     if expanded && is_dirty() {
                         span { class: "unsaved-indicator", title: "Unsaved changes" }
-                    }
-                    if is_draft {
-                        span { class: "effect-new-badge", "New" }
-                    }
-                    if effect.is_bundled && effect.is_user_override && !is_draft {
-                        span { class: "effect-modified-badge", "Modified Default" }
                     }
                     if let Some(ref dt) = effect.display_text {
                         if dt != &effect.name {
@@ -854,13 +881,21 @@ fn EffectRow(
                         }
                     }
                     if !is_draft {
-                        span { class: "effect-id-inline", "{effect.id}" }
+                        span { class: "text-xs text-mono text-muted", "  {effect.id}" }
                     }
+                }
+
+                // Trigger / target / duration
+                span { class: "timer-col-trigger",
                     if effect.is_alert {
                         span { class: "tag tag-alert", "Alert" }
                     } else {
                         span { class: "effect-target-badge", "{effect.display_target.label()}" }
+                    }
+                }
 
+                span { class: "timer-col-duration",
+                    if !effect.is_alert {
                         if let Some(dur) = effect.duration_secs {
                             span { class: "effect-duration", "{dur:.0}s" }
                         }

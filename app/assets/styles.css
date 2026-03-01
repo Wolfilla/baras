@@ -5789,7 +5789,7 @@ details[open] .collapsible-summary::before {
 .effect-row-summary {
   display: flex;
   align-items: center;
-  gap: 0.5em;
+  gap: var(--space-xs);
   padding: 0.5em 0.75em;
   cursor: pointer;
 }
@@ -5816,10 +5816,6 @@ details[open] .collapsible-summary::before {
   color: var(--text-disabled);
   font-size: 0.75em;
   font-family: monospace;
-  margin-left: auto;
-  padding-left: 0.5em;
-  text-align: right;
-  min-width: 180px;
 }
 
 .effect-target-badge {

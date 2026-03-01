@@ -2887,6 +2887,8 @@ pub struct EffectsEditorState {
     pub expanded_effect: Option<String>,
     /// Search query
     pub search_query: String,
+    /// Whether to hide disabled effects
+    pub hide_disabled_effects: bool,
 }
 
 #[cfg(test)]
