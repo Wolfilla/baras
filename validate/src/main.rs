@@ -29,8 +29,8 @@ use baras_core::encounter::ChallengeTracker;
 use baras_core::encounter::combat::ActiveBoss;
 use baras_core::game_data::{effect_id, effect_type_id};
 use baras_core::signal_processor::{
-    EventProcessor, GameSignal, SignalHandler, check_counter_timer_triggers,
-    check_timer_phase_transitions,
+    EventProcessor, GameSignal, SignalHandler, check_counter_signal_triggers,
+    check_counter_timer_triggers, check_timer_phase_transitions,
 };
 use baras_core::state::SessionCache;
 use baras_core::timers::TimerManager;
@@ -436,63 +436,81 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             enc.update_timer_snapshot(snapshot);
         }
 
-        // ─── Step 1: Dispatch signals to timer manager (accumulate IDs, no output yet) ───
+        // ─── Step 1: Dispatch signals to timer manager (batch) ───
         let encounter = cache.current_encounter();
         let mut expired_timer_ids: Vec<String> = Vec::new();
         let mut canceled_timer_ids: Vec<String> = Vec::new();
         let mut started_timer_ids: Vec<String> = Vec::new();
 
-        for signal in &signals {
-            timer_manager.handle_signal(signal, encounter);
-            expired_timer_ids.extend(timer_manager.expired_timer_ids().iter().cloned());
-            canceled_timer_ids.extend(timer_manager.canceled_timer_ids().iter().cloned());
-            started_timer_ids.extend(timer_manager.started_timer_ids().iter().cloned());
+        timer_manager.handle_signals(&signals, encounter);
+        expired_timer_ids.extend(timer_manager.batch_expired_timer_ids().iter().cloned());
+        canceled_timer_ids.extend(timer_manager.batch_canceled_timer_ids().iter().cloned());
+        started_timer_ids.extend(timer_manager.batch_started_timer_ids().iter().cloned());
+
+        // ─── Step 2: Timer feedback loop (mirrors live process_timer_feedback_loop) ───
+        // Timer events → counter/phase triggers → dispatch new signals → repeat until quiescent.
+        let mut feedback_signals: Vec<GameSignal> = Vec::new();
+        {
+            // Current iteration's timer events (starts from initial dispatch, then narrows
+            // to only new events from each feedback iteration)
+            let mut iter_expired = expired_timer_ids.clone();
+            let mut iter_started = started_timer_ids.clone();
+            let mut iter_canceled = canceled_timer_ids.clone();
+
+            for _iteration in 0..10 {
+                if iter_expired.is_empty() && iter_started.is_empty() && iter_canceled.is_empty() {
+                    break;
+                }
+
+                let mut new_signals = Vec::new();
+
+                // Counter triggers from timer events
+                new_signals.extend(check_counter_timer_triggers(
+                    &iter_expired, &iter_started, &iter_canceled, &mut cache, event.timestamp,
+                ));
+
+                // Phase triggers from timer events
+                new_signals.extend(check_timer_phase_transitions(
+                    &iter_expired, &iter_started, &iter_canceled, &mut cache, event.timestamp,
+                ));
+
+                // Inner counter↔phase fixed-point loop on new signals
+                if !new_signals.is_empty() {
+                    let mut watermark = 0;
+                    for _ in 0..10 {
+                        let w = new_signals.len();
+                        if w == watermark { break; }
+                        let slice = &new_signals[watermark..];
+                        watermark = w;
+                        new_signals.extend(check_counter_signal_triggers(&mut cache, slice, event.timestamp));
+                    }
+                }
+
+                if new_signals.is_empty() {
+                    break;
+                }
+
+                // Dispatch new signals back to timer manager
+                let encounter = cache.current_encounter();
+                timer_manager.handle_signals(&new_signals, encounter);
+
+                // Read this iteration's new timer events
+                iter_expired = timer_manager.batch_expired_timer_ids().to_vec();
+                iter_started = timer_manager.batch_started_timer_ids().to_vec();
+                iter_canceled = timer_manager.batch_canceled_timer_ids().to_vec();
+
+                // Accumulate into totals for output
+                expired_timer_ids.extend(iter_expired.iter().cloned());
+                started_timer_ids.extend(iter_started.iter().cloned());
+                canceled_timer_ids.extend(iter_canceled.iter().cloned());
+
+                // Collect feedback signals for output
+                feedback_signals.extend(new_signals);
+            }
         }
 
-        // Collect fired alerts before further processing
+        // Collect fired alerts AFTER feedback loop (so cascade-triggered alerts are included)
         let fired_alerts = timer_manager.take_fired_alerts();
-
-        // ─── Step 2: Timer-driven counter and phase feedback loops ───
-
-        // Process counter triggers from timer events (expires and starts)
-        let timer_counter_signals = check_counter_timer_triggers(
-            &expired_timer_ids,
-            &started_timer_ids,
-            &canceled_timer_ids,
-            &mut cache,
-            event.timestamp,
-        );
-
-        // Feed counter signals back to timer manager (cascade support)
-        if !timer_counter_signals.is_empty() {
-            let encounter = cache.current_encounter();
-            for signal in &timer_counter_signals {
-                timer_manager.handle_signal(signal, encounter);
-                expired_timer_ids.extend(timer_manager.expired_timer_ids().iter().cloned());
-                canceled_timer_ids.extend(timer_manager.canceled_timer_ids().iter().cloned());
-                started_timer_ids.extend(timer_manager.started_timer_ids().iter().cloned());
-            }
-        }
-
-        // Check phase transitions triggered by timer events
-        let timer_phase_signals = check_timer_phase_transitions(
-            &expired_timer_ids,
-            &started_timer_ids,
-            &canceled_timer_ids,
-            &mut cache,
-            event.timestamp,
-        );
-
-        // Feed phase signals back to timer manager (phase-gated timer activation)
-        if !timer_phase_signals.is_empty() {
-            let encounter = cache.current_encounter();
-            for signal in &timer_phase_signals {
-                timer_manager.handle_signal(signal, encounter);
-                expired_timer_ids.extend(timer_manager.expired_timer_ids().iter().cloned());
-                canceled_timer_ids.extend(timer_manager.canceled_timer_ids().iter().cloned());
-                started_timer_ids.extend(timer_manager.started_timer_ids().iter().cloned());
-            }
-        }
 
         // Track entities, abilities, effects
         track_event(&mut state, &event, boss_def);
@@ -635,25 +653,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // Output timer-driven counter changes
-        for signal in &timer_counter_signals {
-            if let GameSignal::CounterChanged {
-                counter_id,
-                old_value,
-                new_value,
-                timestamp,
-            } = signal
-            {
-                cli.counter_change(*timestamp, counter_id, *old_value, *new_value);
-                challenge_ctx
-                    .counters
-                    .insert(counter_id.clone(), *new_value);
-            }
-        }
-
-        // Output timer-driven phase changes
-        for signal in &timer_phase_signals {
+        // Output feedback loop signals (counter/phase changes from timer cascades)
+        for signal in &feedback_signals {
             match signal {
+                GameSignal::CounterChanged {
+                    counter_id,
+                    old_value,
+                    new_value,
+                    timestamp,
+                    ..
+                } => {
+                    cli.counter_change(*timestamp, counter_id, *old_value, *new_value);
+                    challenge_ctx
+                        .counters
+                        .insert(counter_id.clone(), *new_value);
+                }
                 GameSignal::PhaseChanged {
                     old_phase,
                     new_phase,
