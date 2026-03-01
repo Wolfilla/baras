@@ -98,7 +98,7 @@ struct OverviewTableData {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ECharts JS Interop for Overview Donut Charts
+// ECharts JS Interop (used by usage-timeline chart)
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[wasm_bindgen]
@@ -124,196 +124,7 @@ fn init_overview_chart(element_id: &str) -> Option<JsValue> {
     Some(echarts_init(&element))
 }
 
-fn set_chart_option(chart: &JsValue, option: &JsValue) {
-    let set_option = js_sys::Reflect::get(chart, &JsValue::from_str("setOption"))
-        .ok()
-        .and_then(|f| f.dyn_into::<js_sys::Function>().ok());
 
-    if let Some(func) = set_option {
-        let _ = func.call1(chart, option);
-    }
-}
-
-fn resize_overview_chart(chart: &JsValue) {
-    let resize = js_sys::Reflect::get(chart, &JsValue::from_str("resize"))
-        .ok()
-        .and_then(|f| f.dyn_into::<js_sys::Function>().ok());
-
-    if let Some(func) = resize {
-        let _ = func.call0(chart);
-    }
-}
-
-fn dispose_overview_chart(element_id: &str) {
-    if let Some(window) = web_sys::window()
-        && let Some(document) = window.document()
-        && let Some(element) = document.get_element_by_id(element_id)
-    {
-        let instance = echarts_get_instance(&element);
-        if !instance.is_null() && !instance.is_undefined() {
-            let dispose = js_sys::Reflect::get(&instance, &JsValue::from_str("dispose"))
-                .ok()
-                .and_then(|f| f.dyn_into::<js_sys::Function>().ok());
-            if let Some(func) = dispose {
-                let _ = func.call0(&instance);
-            }
-        }
-    }
-}
-
-/// Dispose all overview donut charts - call when leaving overview or changing encounters
-fn dispose_all_overview_charts() {
-    dispose_overview_chart("donut-damage");
-    dispose_overview_chart("donut-threat");
-    dispose_overview_chart("donut-healing");
-    dispose_overview_chart("donut-taken");
-}
-
-/// Resize all overview donut charts - call on window resize
-fn resize_all_overview_charts() {
-    for id in [
-        "donut-damage",
-        "donut-threat",
-        "donut-healing",
-        "donut-taken",
-    ] {
-        if let Some(window) = web_sys::window()
-            && let Some(document) = window.document()
-            && let Some(element) = document.get_element_by_id(id)
-        {
-            let instance = echarts_get_instance(&element);
-            if !instance.is_null() && !instance.is_undefined() {
-                resize_overview_chart(&instance);
-            }
-        }
-    }
-}
-
-/// Build donut chart option for ECharts
-fn build_donut_option(title: &str, data: &[(String, f64)], color: &str) -> JsValue {
-    let obj = js_sys::Object::new();
-
-    // Title
-    let title_obj = js_sys::Object::new();
-    js_set(&title_obj, "text", &JsValue::from_str(title));
-    js_set(&title_obj, "left", &JsValue::from_str("center"));
-    js_set(&title_obj, "top", &JsValue::from_str("5"));
-    let title_style = js_sys::Object::new();
-    js_set(&title_style, "color", &JsValue::from_str("#e0e0e0"));
-    js_set(&title_style, "fontSize", &JsValue::from_f64(13.0));
-    js_set(&title_style, "fontWeight", &JsValue::from_str("600"));
-    js_set(&title_obj, "textStyle", &title_style);
-    js_set(&obj, "title", &title_obj);
-
-    // Tooltip
-    let tooltip = js_sys::Object::new();
-    js_set(&tooltip, "trigger", &JsValue::from_str("item"));
-    js_set(&tooltip, "formatter", &JsValue::from_str("{b}: {c} ({d}%)"));
-    js_set(&obj, "tooltip", &tooltip);
-
-    // Series (donut)
-    let series_arr = js_sys::Array::new();
-    let series = js_sys::Object::new();
-    js_set(&series, "type", &JsValue::from_str("pie"));
-    let radius_arr = js_sys::Array::new();
-    radius_arr.push(&JsValue::from_str("35%"));
-    radius_arr.push(&JsValue::from_str("65%"));
-    js_set(&series, "radius", &radius_arr);
-    let center_arr = js_sys::Array::new();
-    center_arr.push(&JsValue::from_str("50%"));
-    center_arr.push(&JsValue::from_str("55%"));
-    js_set(&series, "center", &center_arr);
-
-    // Label formatting - outside labels with overflow handling
-    let label = js_sys::Object::new();
-    js_set(&label, "show", &JsValue::TRUE);
-    js_set(&label, "formatter", &JsValue::from_str("{b}"));
-    js_set(&label, "color", &JsValue::from_str("#ccc"));
-    js_set(&label, "fontSize", &JsValue::from_f64(10.0));
-    js_set(&label, "overflow", &JsValue::from_str("truncate"));
-    js_set(&label, "ellipsis", &JsValue::from_str(".."));
-    js_set(&series, "label", &label);
-
-    // Label layout - keep labels within chart bounds
-    let label_layout = js_sys::Object::new();
-    js_set(&label_layout, "hideOverlap", &JsValue::TRUE);
-    js_set(&series, "labelLayout", &label_layout);
-
-    // Emphasis
-    let emphasis = js_sys::Object::new();
-    let emph_label = js_sys::Object::new();
-    js_set(&emph_label, "show", &JsValue::TRUE);
-    js_set(&emph_label, "fontSize", &JsValue::from_f64(12.0));
-    js_set(&emph_label, "fontWeight", &JsValue::from_str("bold"));
-    js_set(&emphasis, "label", &emph_label);
-    js_set(&series, "emphasis", &emphasis);
-
-    // Item style with base color
-    let item_style = js_sys::Object::new();
-    js_set(&item_style, "borderColor", &JsValue::from_str("#1a1a1a"));
-    js_set(&item_style, "borderWidth", &JsValue::from_f64(2.0));
-    js_set(&series, "itemStyle", &item_style);
-
-    // Color palette based on base color with variations
-    let colors = generate_color_palette(color, data.len());
-    let color_arr = js_sys::Array::new();
-    for c in colors {
-        color_arr.push(&JsValue::from_str(&c));
-    }
-    js_set(&obj, "color", &color_arr);
-
-    // Data
-    let data_arr = js_sys::Array::new();
-    for (name, value) in data {
-        let item = js_sys::Object::new();
-        js_set(&item, "name", &JsValue::from_str(name));
-        js_set(&item, "value", &JsValue::from_f64(*value));
-        data_arr.push(&item);
-    }
-    js_set(&series, "data", &data_arr);
-
-    series_arr.push(&series);
-    js_set(&obj, "series", &series_arr);
-
-    // No animation for faster renders
-    js_set(&obj, "animation", &JsValue::FALSE);
-
-    obj.into()
-}
-
-/// Generate a color palette with variations from a base HSL color
-fn generate_color_palette(base_color: &str, count: usize) -> Vec<String> {
-    // Parse base HSL values from color string like "hsl(0, 70%, 60%)"
-    let (h, s, l) = parse_hsl(base_color).unwrap_or((0.0, 70.0, 60.0));
-
-    let mut colors = Vec::with_capacity(count);
-    for i in 0..count {
-        // Vary lightness and slightly vary hue for each slice
-        let hue_offset = (i as f64 * 15.0) % 360.0;
-        let light_offset = (i as f64 * 5.0) % 20.0 - 10.0;
-        let new_h = (h + hue_offset) % 360.0;
-        let new_l = (l + light_offset).clamp(35.0, 75.0);
-        colors.push(format!("hsl({:.0}, {:.0}%, {:.0}%)", new_h, s, new_l));
-    }
-    colors
-}
-
-fn parse_hsl(color: &str) -> Option<(f64, f64, f64)> {
-    // Parse "hsl(h, s%, l%)" format
-    let color = color.trim();
-    if !color.starts_with("hsl(") || !color.ends_with(")") {
-        return None;
-    }
-    let inner = &color[4..color.len() - 1];
-    let parts: Vec<&str> = inner.split(',').collect();
-    if parts.len() != 3 {
-        return None;
-    }
-    let h: f64 = parts[0].trim().parse().ok()?;
-    let s: f64 = parts[1].trim().trim_end_matches('%').parse().ok()?;
-    let l: f64 = parts[2].trim().trim_end_matches('%').parse().ok()?;
-    Some((h, s, l))
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper Functions
@@ -374,6 +185,14 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
     let mut sidebar_collapsed = use_signal(|| false);
     let mut entity_collapsed = use_signal(|| false);
     let mut overview_fullscreen = use_signal(|| false);
+
+    // NPC health table: which grouped NPC names are expanded (not persisted)
+    let mut expanded_npc_groups = use_signal(HashSet::<String>::new);
+
+    // Overview sub-tab: NPC Health vs Challenges (not persisted)
+    let mut overview_sub_tab = use_signal(|| 0u8); // 0 = NPC Health, 1 = Challenges
+
+
 
     // Toast notifications
     let mut toast = use_toast();
@@ -545,122 +364,6 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         }
     });
 
-    // Memoized chart data for overview donut charts (derived from table data)
-    let chart_data = use_memo(move || {
-        let table_data = overview_table_data.read();
-
-        let damage_data: Vec<(String, f64)> = table_data
-            .rows
-            .iter()
-            .filter(|r| r.damage_total > 0.0)
-            .map(|r| (r.name.clone(), r.damage_total))
-            .collect();
-        let threat_data: Vec<(String, f64)> = table_data
-            .rows
-            .iter()
-            .filter(|r| r.threat_total > 0.0)
-            .map(|r| (r.name.clone(), r.threat_total))
-            .collect();
-        let healing_data: Vec<(String, f64)> = table_data
-            .rows
-            .iter()
-            .filter(|r| r.healing_effective > 0.0)
-            .map(|r| (r.name.clone(), r.healing_effective))
-            .collect();
-        let taken_data: Vec<(String, f64)> = table_data
-            .rows
-            .iter()
-            .filter(|r| r.damage_taken_total > 0.0)
-            .map(|r| (r.name.clone(), r.damage_taken_total))
-            .collect();
-
-        (damage_data, threat_data, healing_data, taken_data)
-    });
-
-    // Effect to initialize/update overview donut charts when data changes
-    use_effect(move || {
-        let (damage_data, threat_data, healing_data, taken_data) = chart_data();
-        let is_overview = matches!(*view_mode.read(), ViewMode::Overview);
-        let visible = *content_visible.read(); // subscribe so we re-run when DOM mounts
-
-        // Dispose charts when not showing overview (cleanup old instances)
-        if !is_overview {
-            dispose_all_overview_charts();
-            return;
-        }
-
-        // Wait for DOM to be mounted before trying to init charts
-        if !visible {
-            return;
-        }
-
-        // Only initialize charts when overview is visible and we have an encounter (or live query)
-        if selected_encounter.read().is_none() && !*live_query_active.read() {
-            return;
-        }
-
-        let is_live = *live_query_active.read();
-
-        // Helper: update a single donut chart in-place (init if needed, then setOption)
-        let update_donut = |id: &str, title: &str, data: &[(String, f64)], color: &str, needs_resize: bool| {
-            if data.is_empty() {
-                return;
-            }
-            if let Some(chart) = init_overview_chart(id) {
-                let opt = build_donut_option(title, data, color);
-                set_chart_option(&chart, &opt);
-                if needs_resize {
-                    resize_overview_chart(&chart);
-                }
-            }
-        };
-
-        if is_live {
-            // During live query, containers are already mounted — update charts synchronously
-            // without spawn/delay to avoid any visual flash between frames
-            update_donut("donut-damage", "Damage", &damage_data, "hsl(0, 70%, 60%)", false);
-            update_donut("donut-threat", "Threat", &threat_data, "hsl(210, 70%, 55%)", false);
-            update_donut("donut-healing", "Effective Healing", &healing_data, "hsl(120, 50%, 50%)", false);
-            update_donut("donut-taken", "Damage Taken", &taken_data, "hsl(30, 70%, 55%)", false);
-        } else {
-            // Historical: small delay to ensure DOM is ready, then init + resize
-            spawn(async move {
-                gloo_timers::future::TimeoutFuture::new(100).await;
-                update_donut("donut-damage", "Damage", &damage_data, "hsl(0, 70%, 60%)", true);
-                update_donut("donut-threat", "Threat", &threat_data, "hsl(210, 70%, 55%)", true);
-                update_donut("donut-healing", "Effective Healing", &healing_data, "hsl(120, 50%, 50%)", true);
-                update_donut("donut-taken", "Damage Taken", &taken_data, "hsl(30, 70%, 55%)", true);
-            });
-        }
-    });
-
-    // Window resize listener for overview donut charts
-    use_effect(|| {
-        let closure = Closure::wrap(Box::new(move || {
-            resize_all_overview_charts();
-        }) as Box<dyn Fn()>);
-
-        if let Some(window) = web_sys::window() {
-            let _ =
-                window.add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref());
-        }
-
-        closure.forget();
-    });
-
-    // Resize overview donut charts when layout changes (sidebar collapse, entity panel, fullscreen)
-    // CSS transitions take ~250ms, so delay resize to let the layout settle
-    use_effect(move || {
-        let _sidebar = *sidebar_collapsed.read();
-        let _entity = *entity_collapsed.read();
-        let _fullscreen = *overview_fullscreen.read();
-
-        spawn(async move {
-            gloo_timers::future::TimeoutFuture::new(300).await;
-            resize_all_overview_charts();
-        });
-    });
-
     // Load encounter list on mount (auto-select latest encounter unless user had one selected)
 
     use_effect(move || {
@@ -762,7 +465,6 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
 
     // Cleanup on component unmount
     use_drop(move || {
-        dispose_all_overview_charts();
         // Call unlisten to clean up the event listener
         if let Some(func) = unlisten_handle.peek().as_ref() {
             let _ = func.call0(&JsValue::NULL);
@@ -838,9 +540,6 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         // encounter that was just promoted from the buffer to a persisted file.
         // Also skip on initial mount when encounter hasn't changed.
         if !is_transition && is_encounter_change {
-            // Dispose charts immediately when encounter changes
-            dispose_all_overview_charts();
-
             // Clear previous tab data when encounter changes.
             // NOTE: timeline and time_range are NOT cleared here — the old values
             // keep the PhaseTimelineFilter rendered at its current height, preventing
@@ -2312,8 +2011,9 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                         }
                                     }
 
-                                    // Challenge Results (above donuts when available)
+                                    // Sub-section tabs: NPC Health | Challenges
                                     {
+                                        let npcs = npc_health.read();
                                         let challenges: Vec<ChallengeSummary> = if let Some(enc_idx) = *selected_encounter.read() {
                                             encounters().iter()
                                                 .find(|e| e.encounter_id as u32 == enc_idx)
@@ -2322,93 +2022,66 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                         } else {
                                             Vec::new()
                                         };
-                                        let format_compact = |n: i64| formatting::format_compact(n, eu);
-                                        rsx! {
-                                            if !challenges.is_empty() {
-                                                div { class: "challenge-results",
-                                                    h4 { class: "challenge-results-header",
-                                                        i { class: "fa-solid fa-trophy" }
-                                                        " Challenges"
-                                                    }
-                                                    div { class: "challenge-cards",
-                                                        for challenge in challenges.iter() {
-                                                            {
-                                                                let duration_str = formatting::format_duration(challenge.duration_secs as i64);
-                                                                let per_sec_str = challenge.per_second
-                                                                    .map(|ps| format_compact(ps as i64))
-                                                                    .unwrap_or_default();
+                                        let has_npcs = !npcs.is_empty();
+                                        let has_challenges = !challenges.is_empty();
+                                        let active_tab = *overview_sub_tab.read();
 
-                                                                rsx! {
-                                                                    div { class: "challenge-card",
-                                                                        div { class: "challenge-card-header",
-                                                                            span { class: "challenge-name", "{challenge.name}" }
-                                                                            span { class: "challenge-total",
-                                                                                "{format_compact(challenge.total_value)}"
-                                                                                if !per_sec_str.is_empty() {
-                                                                                    span { class: "text-muted", " ({per_sec_str}/s)" }
-                                                                                }
-                                                                            }
-                                                                            span { class: "challenge-duration text-muted", "{duration_str}" }
-                                                                        }
-                                                                        if !challenge.by_player.is_empty() {
-                                                                            div { class: "challenge-players",
-                                                                                for player in challenge.by_player.iter() {
-                                                                                    {
-                                                                                        let ps_str = player.per_second
-                                                                                            .map(|ps| format_compact(ps as i64))
-                                                                                            .unwrap_or_default();
-                                                                                        rsx! {
-                                                                                            div { class: "challenge-player-row",
-                                                                                                div {
-                                                                                                    class: "challenge-bar-fill",
-                                                                                                    style: "width: {player.percent:.1}%",
-                                                                                                }
-                                                                                                span { class: "challenge-player-name", "{player.name}" }
-                                                                                                if !ps_str.is_empty() {
-                                                                                                    span { class: "challenge-player-ps", "{ps_str}/s" }
-                                                                                                }
-                                                                                                span { class: "challenge-player-value", "{format_compact(player.value)}" }
-                                                                                                span { class: "challenge-player-pct", "{formatting::format_pct_f32(player.percent, eu)}" }
-                                                                                            }
-                                                                                        }
-                                                                                    }
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
+                                        // Group NPCs by name
+                                        let mut groups: Vec<(String, Vec<&NpcHealthRow>)> = {
+                                            let mut map: std::collections::BTreeMap<String, Vec<&NpcHealthRow>> = std::collections::BTreeMap::new();
+                                            for npc in npcs.iter() {
+                                                map.entry(npc.name.clone()).or_default().push(npc);
+                                            }
+                                            map.into_iter().collect()
+                                        };
+
+                                        // Sort: unique NPCs first (by max_hp desc), then grouped NPCs (by max_hp desc)
+                                        groups.sort_by(|a, b| {
+                                            let a_unique = a.1.len() == 1;
+                                            let b_unique = b.1.len() == 1;
+                                            match (a_unique, b_unique) {
+                                                (true, false) => std::cmp::Ordering::Less,
+                                                (false, true) => std::cmp::Ordering::Greater,
+                                                _ => {
+                                                    let a_max = a.1.iter().map(|n| n.max_hp).max().unwrap_or(0);
+                                                    let b_max = b.1.iter().map(|n| n.max_hp).max().unwrap_or(0);
+                                                    b_max.cmp(&a_max)
+                                                }
+                                            }
+                                        });
+
+                                        let npc_count: usize = groups.iter().map(|(_, v)| v.len()).sum();
+                                        let expanded = expanded_npc_groups.read();
+                                        let format_compact = |n: i64| formatting::format_compact(n, eu);
+
+                                        rsx! {
+                                            if has_npcs || has_challenges {
+                                                div { class: "overview-sub-section",
+                                                    // Tab bar
+                                                    div { class: "overview-sub-tabs",
+                                                        if has_npcs {
+                                                            button {
+                                                                class: if active_tab == 0 { "overview-sub-tab active" } else { "overview-sub-tab" },
+                                                                onclick: move |_| overview_sub_tab.set(0),
+                                                                i { class: "fa-solid fa-heart-pulse" }
+                                                                " NPC Health"
+                                                                span { class: "overview-sub-tab-count", "({npc_count})" }
+                                                            }
+                                                        }
+                                                        if has_challenges {
+                                                            button {
+                                                                class: if active_tab == 1 { "overview-sub-tab active" } else { "overview-sub-tab" },
+                                                                onclick: move |_| overview_sub_tab.set(1),
+                                                                i { class: "fa-solid fa-trophy" }
+                                                                " Challenges"
                                                             }
                                                         }
                                                     }
-                                                }
-                                            }
-                                        }
-                                    }
 
-                                    // Donut Charts Grid (2x2 below table)
-                                    div { class: "overview-charts-section",
-                                        h4 { class: "overview-charts-title", "Breakdown by Player" }
-                                        div { class: "overview-charts-grid",
-                                            div { id: "donut-damage", class: "overview-donut-chart" }
-                                            div { id: "donut-threat", class: "overview-donut-chart" }
-                                            div { id: "donut-healing", class: "overview-donut-chart" }
-                                            div { id: "donut-taken", class: "overview-donut-chart" }
-                                        }
-                                    }
-
-                                    // NPC Health Table - split into columns of 12
-                                    {
-                                        let npcs = npc_health.read();
-                                        let chunks: Vec<&[NpcHealthRow]> = npcs.chunks(15).collect();
-                                        rsx! {
-                                            if !npcs.is_empty() {
-                                                div { class: "npc-health-section",
-                                                    h4 { class: "npc-health-title",
-                                                        i { class: "fa-solid fa-heart-pulse" }
-                                                        " NPC Health ({npcs.len()})"
-                                                    }
-                                                    div { class: "npc-health-grid",
-                                                        for chunk in chunks.iter() {
+                                                    // Tab content
+                                                    div { class: "overview-sub-content",
+                                                        // NPC Health tab
+                                                        if active_tab == 0 && has_npcs {
                                                             table { class: "npc-health-table",
                                                                 thead {
                                                                     tr {
@@ -2419,26 +2092,176 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                                     }
                                                                 }
                                                                 tbody {
-                                                                    for npc in chunk.iter() {
-                                                                        {
-                                                                            let hp_class = if npc.final_hp == 0 { "dead" } else { "alive" };
-                                                                            let seen_str = formatting::format_duration(npc.first_seen_secs as i64);
-                                                                            let death_str = npc.death_time_secs.map(|t| formatting::format_duration(t as i64));
-                                                                            rsx! {
-                                                                                tr { class: "npc-row {hp_class}",
-                                                                                    td {
-                                                                                        span { class: "npc-name", "{npc.name}" }
-                                                                                        span { class: "npc-seen-time", " @{seen_str}" }
-                                                                                        if let Some(ref dt) = death_str {
-                                                                                            span { class: "npc-death-time",
-                                                                                                i { class: "fa-solid fa-skull" }
-                                                                                                " {dt}"
+                                                                    for (name, members) in groups.iter() {
+                                                                        if members.len() == 1 {
+                                                                            {
+                                                                                let npc = members[0];
+                                                                                let is_dead = npc.final_hp == 0;
+                                                                                let hp_class = if is_dead { "dead" } else { "alive" };
+                                                                                let seen_str = formatting::format_duration(npc.first_seen_secs as i64);
+                                                                                let death_str = npc.death_time_secs.map(|t| formatting::format_duration(t as i64));
+                                                                                rsx! {
+                                                                                    tr { class: "npc-row {hp_class}",
+                                                                                        td {
+                                                                                            span { class: "npc-name", "{npc.name}" }
+                                                                                            span { class: "npc-seen-time", " @{seen_str}" }
+                                                                                            if let Some(ref dt) = death_str {
+                                                                                                span { class: "npc-death-time",
+                                                                                                    i { class: "fa-solid fa-skull" }
+                                                                                                    " {dt}"
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                        td { class: "num",
+                                                                                            if is_dead {
+                                                                                                span { class: "npc-hp-dead",
+                                                                                                    i { class: "fa-solid fa-skull" }
+                                                                                                    " Dead"
+                                                                                                }
+                                                                                            } else {
+                                                                                                "{format_number(npc.final_hp as f64)}"
+                                                                                            }
+                                                                                        }
+                                                                                        td { class: "num", "{format_number(npc.max_hp as f64)}" }
+                                                                                        td { class: "num",
+                                                                                            if is_dead {
+                                                                                                span { class: "npc-hp-dead", "0.0%" }
+                                                                                            } else {
+                                                                                                "{formatting::format_pct_f32(npc.final_hp_pct, eu)}"
                                                                                             }
                                                                                         }
                                                                                     }
-                                                                                    td { class: "num", "{format_number(npc.final_hp as f64)}" }
-                                                                                    td { class: "num", "{format_number(npc.max_hp as f64)}" }
-                                                                                    td { class: "num", "{formatting::format_pct_f32(npc.final_hp_pct, eu)}" }
+                                                                                }
+                                                                            }
+                                                                        } else {
+                                                                            {
+                                                                                let is_expanded = expanded.contains(name);
+                                                                                let dead_count = members.iter().filter(|n| n.final_hp == 0).count();
+                                                                                let alive_count = members.len() - dead_count;
+                                                                                let max_hp = members.iter().map(|n| n.max_hp).max().unwrap_or(0);
+                                                                                let all_dead = alive_count == 0;
+                                                                                let group_hp_class = if all_dead { "dead" } else { "alive" };
+                                                                                let chevron_class = if is_expanded { "fa-solid fa-chevron-down" } else { "fa-solid fa-chevron-right" };
+                                                                                let toggle_name = name.clone();
+                                                                                rsx! {
+                                                                                    tr {
+                                                                                        class: "npc-group-header {group_hp_class}",
+                                                                                        onclick: move |_| {
+                                                                                            let mut set = expanded_npc_groups.write();
+                                                                                            if set.contains(&toggle_name) {
+                                                                                                set.remove(&toggle_name);
+                                                                                            } else {
+                                                                                                set.insert(toggle_name.clone());
+                                                                                            }
+                                                                                        },
+                                                                                        td { colspan: "4",
+                                                                                            i { class: "npc-group-chevron {chevron_class}" }
+                                                                                            span { class: "npc-name", "{name}" }
+                                                                                            span { class: "npc-group-count",
+                                                                                                if all_dead {
+                                                                                                    " ({dead_count} dead)"
+                                                                                                } else {
+                                                                                                    " ({alive_count} alive, {dead_count} dead)"
+                                                                                                }
+                                                                                            }
+                                                                                            span { class: "npc-group-max", " \u{2014} {format_number(max_hp as f64)}" }
+                                                                                        }
+                                                                                    }
+                                                                                    if is_expanded {
+                                                                                        for npc in members.iter() {
+                                                                                            {
+                                                                                                let is_dead = npc.final_hp == 0;
+                                                                                                let hp_class = if is_dead { "dead" } else { "alive" };
+                                                                                                let seen_str = formatting::format_duration(npc.first_seen_secs as i64);
+                                                                                                let death_str = npc.death_time_secs.map(|t| formatting::format_duration(t as i64));
+                                                                                                rsx! {
+                                                                                                    tr { class: "npc-row npc-sub-row {hp_class}",
+                                                                                                        td {
+                                                                                                            span { class: "npc-seen-time", "@{seen_str}" }
+                                                                                                            if let Some(ref dt) = death_str {
+                                                                                                                span { class: "npc-death-time",
+                                                                                                                    i { class: "fa-solid fa-skull" }
+                                                                                                                    " {dt}"
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                        td { class: "num",
+                                                                                                            if is_dead {
+                                                                                                                span { class: "npc-hp-dead",
+                                                                                                                    i { class: "fa-solid fa-skull" }
+                                                                                                                    " Dead"
+                                                                                                                }
+                                                                                                            } else {
+                                                                                                                "{format_number(npc.final_hp as f64)}"
+                                                                                                            }
+                                                                                                        }
+                                                                                                        td { class: "num", "{format_number(npc.max_hp as f64)}" }
+                                                                                                        td { class: "num",
+                                                                                                            if is_dead {
+                                                                                                                span { class: "npc-hp-dead", "0.0%" }
+                                                                                                            } else {
+                                                                                                                "{formatting::format_pct_f32(npc.final_hp_pct, eu)}"
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // Challenges tab
+                                                        if active_tab == 1 && has_challenges {
+                                                            div { class: "challenge-cards",
+                                                                for challenge in challenges.iter() {
+                                                                    {
+                                                                        let duration_str = formatting::format_duration(challenge.duration_secs as i64);
+                                                                        let per_sec_str = challenge.per_second
+                                                                            .map(|ps| format_compact(ps as i64))
+                                                                            .unwrap_or_default();
+
+                                                                        rsx! {
+                                                                            div { class: "challenge-card",
+                                                                                div { class: "challenge-card-header",
+                                                                                    span { class: "challenge-name", "{challenge.name}" }
+                                                                                    span { class: "challenge-total",
+                                                                                        "{format_compact(challenge.total_value)}"
+                                                                                        if !per_sec_str.is_empty() {
+                                                                                            span { class: "text-muted", " ({per_sec_str}/s)" }
+                                                                                        }
+                                                                                    }
+                                                                                    span { class: "challenge-duration text-muted", "{duration_str}" }
+                                                                                }
+                                                                                if !challenge.by_player.is_empty() {
+                                                                                    div { class: "challenge-players",
+                                                                                        for player in challenge.by_player.iter() {
+                                                                                            {
+                                                                                                let ps_str = player.per_second
+                                                                                                    .map(|ps| format_compact(ps as i64))
+                                                                                                    .unwrap_or_default();
+                                                                                                rsx! {
+                                                                                                    div { class: "challenge-player-row",
+                                                                                                        div {
+                                                                                                            class: "challenge-bar-fill",
+                                                                                                            style: "width: {player.percent:.1}%",
+                                                                                                        }
+                                                                                                        span { class: "challenge-player-name", "{player.name}" }
+                                                                                                        if !ps_str.is_empty() {
+                                                                                                            span { class: "challenge-player-ps", "{ps_str}/s" }
+                                                                                                        }
+                                                                                                        span { class: "challenge-player-value", "{format_compact(player.value)}" }
+                                                                                                        span { class: "challenge-player-pct", "{formatting::format_pct_f32(player.percent, eu)}" }
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    }
                                                                                 }
                                                                             }
                                                                         }
