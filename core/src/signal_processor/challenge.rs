@@ -91,10 +91,22 @@ pub fn process_challenge_events(event: &CombatEvent, cache: &mut SessionCache) {
                     &source,
                     &target,
                     event.effect.effect_id as u64,
+                    event.details.charges,
+                    false,
                     timestamp,
                 );
             } else if event.effect.type_id == effect_type_id::MODIFYCHARGES {
                 tracker.process_effect_applied(
+                    &ctx,
+                    &source,
+                    &target,
+                    event.effect.effect_id as u64,
+                    event.details.charges,
+                    true,
+                    timestamp,
+                );
+            } else if event.effect.type_id == effect_type_id::REMOVEEFFECT {
+                tracker.process_effect_removed(
                     &ctx,
                     &source,
                     &target,

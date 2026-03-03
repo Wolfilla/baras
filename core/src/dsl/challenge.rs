@@ -90,6 +90,10 @@ pub enum ChallengeMetric {
     /// Count of effect applications
     EffectCount,
 
+    /// Sum of max effect stacks per application window
+    /// Tracks peak charges between apply and remove, then sums across windows
+    EffectStacks,
+
     /// Total damage absorbed by target shields
     DamageAbsorbed,
 }

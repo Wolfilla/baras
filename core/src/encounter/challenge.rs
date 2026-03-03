@@ -99,6 +99,10 @@ pub struct ChallengeTracker {
 
     /// Total encounter duration in seconds (for DPS calculations)
     total_duration_secs: f32,
+
+    /// Pending max stacks per EffectStacks challenge window: challenge_id → (entity_id → max_charges)
+    /// Flushed to value on REMOVEEFFECT or encounter end.
+    pending_stacks: HashMap<String, HashMap<i64, i32>>,
 }
 
 impl ChallengeTracker {
@@ -121,6 +125,7 @@ impl ChallengeTracker {
         self.phase_durations.clear();
         self.current_phase_start = None;
         self.total_duration_secs = 0.0;
+        self.pending_stacks.clear();
         self.active = true;
 
         // Pre-initialize values for all challenges
@@ -157,6 +162,7 @@ impl ChallengeTracker {
     /// Stop tracking and return final values
     pub fn stop(&mut self, timestamp: chrono::NaiveDateTime) -> Vec<ChallengeValue> {
         self.end_current_phase(timestamp);
+        self.flush_all_pending_stacks();
         self.active = false;
         self.values.values().cloned().collect()
     }
@@ -169,6 +175,7 @@ impl ChallengeTracker {
         self.phase_durations.clear();
         self.current_phase_start = None;
         self.total_duration_secs = 0.0;
+        self.pending_stacks.clear();
         self.active = false;
     }
 
@@ -216,6 +223,7 @@ impl ChallengeTracker {
     /// Finalize the tracker on combat end
     pub fn finalize(&mut self, timestamp: chrono::NaiveDateTime, duration_secs: f32) {
         self.end_current_phase(timestamp);
+        self.flush_all_pending_stacks();
         self.total_duration_secs = duration_secs;
     }
 
@@ -289,10 +297,17 @@ impl ChallengeTracker {
             .map(|val| {
                 let duration_secs = self.calculate_duration(val, current_time);
 
+                // For EffectStacks, include pending (not-yet-flushed) stacks in the live value
+                let pending_extra = self
+                    .pending_stacks
+                    .get(&val.id)
+                    .map(|m| m.values().map(|&v| v as i64).sum::<i64>())
+                    .unwrap_or(0);
+
                 ChallengeValue {
                     id: val.id.clone(),
                     name: val.name.clone(),
-                    value: val.value,
+                    value: val.value + pending_extra,
                     event_count: val.event_count,
                     by_player: val.by_player.clone(),
                     duration_secs,
@@ -575,8 +590,103 @@ impl ChallengeTracker {
         updated
     }
 
-    /// Process an effect application or charge modification (for count metrics)
+    /// Process an effect application or charge modification (for count and stacks metrics)
     pub fn process_effect_applied(
+        &mut self,
+        ctx: &ChallengeContext,
+        source: &EntityInfo,
+        target: &EntityInfo,
+        effect_id: u64,
+        charges: i32,
+        is_modify: bool,
+        timestamp: chrono::NaiveDateTime,
+    ) -> Vec<String> {
+        if !self.active {
+            return Vec::new();
+        }
+
+        let mut updated = Vec::new();
+
+        for def in &self.definitions {
+            if !matches!(
+                def.metric,
+                ChallengeMetric::EffectCount | ChallengeMetric::EffectStacks
+            ) {
+                continue;
+            }
+
+            if def.matches(
+                ctx,
+                &self.entities,
+                Some(source),
+                Some(target),
+                None,
+                Some(effect_id),
+            ) {
+                // Determine tracking entity: if challenge tracks by target (player), use target;
+                // otherwise use source (default behavior)
+                let entity = if target.is_player && has_player_target_condition(&def.conditions) {
+                    target
+                } else {
+                    source
+                };
+                if !entity.is_player {
+                    continue;
+                }
+
+                match def.metric {
+                    ChallengeMetric::EffectCount => {
+                        if let Some(val) = self.values.get_mut(&def.id) {
+                            if val.first_event_time.is_none() {
+                                val.first_event_time = Some(timestamp);
+                            }
+                            val.value += 1;
+                            val.event_count += 1;
+                            *val.by_player.entry(entity.entity_id).or_insert(0) += 1;
+                            updated.push(def.id.clone());
+                        }
+                    }
+                    ChallengeMetric::EffectStacks => {
+                        let stacks = if is_modify { charges } else { charges.max(1) };
+                        let pending = self
+                            .pending_stacks
+                            .entry(def.id.clone())
+                            .or_default();
+
+                        if is_modify {
+                            // Update max for existing window
+                            let current = pending.entry(entity.entity_id).or_insert(0);
+                            *current = (*current).max(stacks);
+                        } else {
+                            // New application — flush any existing window first
+                            if let Some(prev_max) = pending.remove(&entity.entity_id) {
+                                if let Some(val) = self.values.get_mut(&def.id) {
+                                    val.value += prev_max as i64;
+                                    val.event_count += 1;
+                                    *val.by_player.entry(entity.entity_id).or_insert(0) +=
+                                        prev_max as i64;
+                                }
+                            }
+                            pending.insert(entity.entity_id, stacks);
+                        }
+
+                        if let Some(val) = self.values.get_mut(&def.id)
+                            && val.first_event_time.is_none()
+                        {
+                            val.first_event_time = Some(timestamp);
+                        }
+                        updated.push(def.id.clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        updated
+    }
+
+    /// Process an effect removal — flushes pending EffectStacks windows
+    pub fn process_effect_removed(
         &mut self,
         ctx: &ChallengeContext,
         source: &EntityInfo,
@@ -591,7 +701,7 @@ impl ChallengeTracker {
         let mut updated = Vec::new();
 
         for def in &self.definitions {
-            if def.metric != ChallengeMetric::EffectCount {
+            if def.metric != ChallengeMetric::EffectStacks {
                 continue;
             }
 
@@ -602,28 +712,46 @@ impl ChallengeTracker {
                 Some(target),
                 None,
                 Some(effect_id),
-            ) && let Some(val) = self.values.get_mut(&def.id)
-            {
-                // Determine tracking entity: if challenge tracks by target (player), use target;
-                // otherwise use source (default behavior)
+            ) {
                 let entity = if target.is_player && has_player_target_condition(&def.conditions) {
                     target
                 } else {
                     source
                 };
-                if entity.is_player {
+                if !entity.is_player {
+                    continue;
+                }
+
+                // Flush the pending max stacks for this entity
+                if let Some(pending) = self.pending_stacks.get_mut(&def.id)
+                    && let Some(max_stacks) = pending.remove(&entity.entity_id)
+                    && let Some(val) = self.values.get_mut(&def.id)
+                {
+                    val.value += max_stacks as i64;
+                    val.event_count += 1;
+                    *val.by_player.entry(entity.entity_id).or_insert(0) += max_stacks as i64;
                     if val.first_event_time.is_none() {
                         val.first_event_time = Some(timestamp);
                     }
-                    val.value += 1;
-                    val.event_count += 1;
-                    *val.by_player.entry(entity.entity_id).or_insert(0) += 1;
                     updated.push(def.id.clone());
                 }
             }
         }
 
         updated
+    }
+
+    /// Flush all remaining pending stacks (called on encounter end)
+    fn flush_all_pending_stacks(&mut self) {
+        for (challenge_id, entity_map) in self.pending_stacks.drain() {
+            if let Some(val) = self.values.get_mut(&challenge_id) {
+                for (entity_id, max_stacks) in entity_map {
+                    val.value += max_stacks as i64;
+                    val.event_count += 1;
+                    *val.by_player.entry(entity_id).or_insert(0) += max_stacks as i64;
+                }
+            }
+        }
     }
 }
 

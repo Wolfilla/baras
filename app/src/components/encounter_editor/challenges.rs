@@ -417,6 +417,7 @@ fn ChallengeEditForm(
                                         "HealingTaken" => ChallengeMetric::HealingTaken,
                                         "AbilityCount" => ChallengeMetric::AbilityCount,
                                         "EffectCount" => ChallengeMetric::EffectCount,
+                                        "EffectStacks" => ChallengeMetric::EffectStacks,
                                         "DamageAbsorbed" => ChallengeMetric::DamageAbsorbed,
                                         _ => ChallengeMetric::Damage,
                                     };
