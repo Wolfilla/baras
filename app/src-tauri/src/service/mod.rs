@@ -18,7 +18,7 @@ use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{RwLock, mpsc};
 
-use baras_core::context::{AppConfig, AppConfigExt, DirectoryIndex, ParsingSession, resolve};
+use baras_core::context::{AppConfig, AppConfigExt, ChallengeColumns, DirectoryIndex, ParsingSession, resolve};
 use baras_core::directory_watcher::DirectoryWatcher;
 use baras_core::encounter::{EncounterState, PhaseType};
 use baras_core::encounter::summary::classify_encounter;
@@ -2602,6 +2602,54 @@ async fn calculate_combat_data(shared: &Arc<SharedState>) -> Option<CombatData> 
         let difficulty = summary.difficulty.clone();
         let metrics = summary.player_metrics.clone();
 
+        // Build ChallengeData from historical summary if challenges exist
+        let challenges = if !summary.challenges.is_empty() {
+            let entries: Vec<ChallengeEntry> = summary
+                .challenges
+                .iter()
+                .map(|cs| {
+                    let by_player: Vec<PlayerContribution> = cs
+                        .by_player
+                        .iter()
+                        .map(|p| PlayerContribution {
+                            entity_id: p.entity_id,
+                            name: p.name.clone(),
+                            value: p.value,
+                            percent: p.percent,
+                            per_second: p.per_second,
+                        })
+                        .collect();
+                    ChallengeEntry {
+                        name: cs.name.clone(),
+                        value: cs.total_value,
+                        event_count: cs.event_count,
+                        per_second: cs.per_second,
+                        by_player,
+                        duration_secs: cs.duration_secs,
+                        enabled: true,
+                        color: cs.color.map(|c| Color::from_rgba8(c[0], c[1], c[2], c[3])),
+                        columns: match cs.columns.as_str() {
+                            "TotalPercent" => ChallengeColumns::TotalPercent,
+                            "TotalPerSecond" => ChallengeColumns::TotalPerSecond,
+                            "PerSecondPercent" => ChallengeColumns::PerSecondPercent,
+                            "TotalOnly" => ChallengeColumns::TotalOnly,
+                            "PerSecondOnly" => ChallengeColumns::PerSecondOnly,
+                            "PercentOnly" => ChallengeColumns::PercentOnly,
+                            _ => ChallengeColumns::default(),
+                        },
+                    }
+                })
+                .collect();
+            Some(ChallengeData {
+                entries,
+                boss_name: summary.boss_name.clone(),
+                duration_secs: summary.duration_seconds.max(1) as f32,
+                phase_durations: Default::default(),
+            })
+        } else {
+            None
+        };
+
         Some(CombatData {
             metrics,
             player_entity_id,
@@ -2610,7 +2658,7 @@ async fn calculate_combat_data(shared: &Arc<SharedState>) -> Option<CombatData> 
             class_discipline,
             encounter_name,
             difficulty,
-            challenges: None,
+            challenges,
             current_phase: None,
             phase_time_secs: 0.0,
         })

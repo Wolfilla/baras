@@ -26,6 +26,12 @@ pub struct ChallengeSummary {
     pub duration_secs: f32,
     pub per_second: Option<f32>,
     pub by_player: Vec<ChallengePlayerSummary>,
+    /// Which columns to display (from challenge definition)
+    #[serde(default)]
+    pub columns: String,
+    /// Bar color [r, g, b, a] (None = use overlay default)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<[u8; 4]>,
 }
 
 /// Per-player contribution to a challenge
@@ -449,6 +455,7 @@ pub fn create_encounter_summary(
     npc_names.sort();
 
     // Build challenge summaries from the encounter's tracker
+    let challenge_defs = encounter.challenge_tracker.definitions();
     let challenges: Vec<ChallengeSummary> = encounter
         .challenge_tracker
         .snapshot()
@@ -487,7 +494,10 @@ pub fn create_encounter_summary(
 
             ChallengeSummary {
                 name: val.name,
-                metric: format!("{:?}", val.columns),
+                metric: challenge_defs.iter()
+                    .find(|d| d.id == val.id)
+                    .map(|d| format!("{:?}", d.metric))
+                    .unwrap_or_else(|| format!("{:?}", val.columns)),
                 total_value: val.value,
                 event_count: val.event_count,
                 duration_secs: challenge_duration,
@@ -497,6 +507,8 @@ pub fn create_encounter_summary(
                     None
                 },
                 by_player,
+                columns: format!("{:?}", val.columns),
+                color: val.color,
             }
         })
         .collect();

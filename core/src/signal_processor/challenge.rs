@@ -82,11 +82,16 @@ pub fn process_challenge_events(event: &CombatEvent, cache: &mut SessionCache) {
                 timestamp,
             );
         }
-        effect_id::DEATH => {
-            tracker.process_death(&ctx, &target, timestamp);
-        }
         _ => {
             if event.effect.type_id == effect_type_id::APPLYEFFECT {
+                tracker.process_effect_applied(
+                    &ctx,
+                    &source,
+                    &target,
+                    event.effect.effect_id as u64,
+                    timestamp,
+                );
+            } else if event.effect.type_id == effect_type_id::MODIFYCHARGES {
                 tracker.process_effect_applied(
                     &ctx,
                     &source,
@@ -97,6 +102,9 @@ pub fn process_challenge_events(event: &CombatEvent, cache: &mut SessionCache) {
             }
         }
     }
+
+    // Update condition-active duration tracking (BossHpRange, Counter scoping)
+    tracker.update_condition_tracking(&ctx, timestamp);
 }
 
 /// Convert a combat log Entity to EntityInfo for challenge matching.

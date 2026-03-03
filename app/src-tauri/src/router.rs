@@ -415,10 +415,8 @@ async fn process_overlay_update(
                     channels.push((tx.clone(), OverlayData::TimersB(Default::default())));
                 }
 
-                // Challenges overlay
-                if let Some(tx) = state.get_challenges_tx() {
-                    channels.push((tx.clone(), OverlayData::Challenges(Default::default())));
-                }
+                // NOTE: Challenges overlay is NOT cleared on combat end — the finalized
+                // snapshot remains visible until the next encounter starts or data is cleared.
 
                 // Combat time overlay
                 if let Some(tx) = state.get_combat_time_tx() {

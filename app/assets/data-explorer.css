@@ -602,6 +602,38 @@
   overflow-x: auto;
 }
 
+/* Side-by-side NPC Health + Challenges layout */
+.overview-columns {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.overview-column {
+  flex: 1;
+  min-width: 300px;
+  overflow-x: auto;
+}
+
+.overview-column-header {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: var(--space-sm);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.overview-column-header i {
+  font-size: 10px;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    NPC Health Table
    ───────────────────────────────────────────────────────────────────────────── */

@@ -21,7 +21,7 @@ use crate::dsl::entity_filter::{EntityFilter, EntityFilterMatching};
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// A challenge metric to track during a boss encounter
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChallengeDefinition {
     /// Unique identifier (auto-generated from name if empty)
     pub id: String,
@@ -89,12 +89,6 @@ pub enum ChallengeMetric {
 
     /// Count of effect applications
     EffectCount,
-
-    /// Death count
-    Deaths,
-
-    /// Threat generated
-    Threat,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -102,7 +96,7 @@ pub enum ChallengeMetric {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// A condition that must be met for an event to count toward a challenge
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum ChallengeCondition {
     /// Only during specified phase(s)

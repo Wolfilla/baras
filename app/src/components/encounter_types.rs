@@ -98,6 +98,11 @@ pub struct ChallengeSummary {
     pub duration_secs: f32,
     pub per_second: Option<f32>,
     pub by_player: Vec<ChallengePlayerSummary>,
+    /// Which columns to display (from challenge definition)
+    #[serde(default)]
+    pub columns: String,
+    #[serde(default)]
+    pub color: Option<[u8; 4]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

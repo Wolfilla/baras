@@ -189,8 +189,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
     // NPC health table: which grouped NPC names are expanded (not persisted)
     let mut expanded_npc_groups = use_signal(HashSet::<String>::new);
 
-    // Overview sub-tab: NPC Health vs Challenges (not persisted)
-    let mut overview_sub_tab = use_signal(|| 0u8); // 0 = NPC Health, 1 = Challenges
+    // (overview_sub_tab removed — NPC Health and Challenges now shown side-by-side)
 
 
 
@@ -2011,7 +2010,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                         }
                                     }
 
-                                    // Sub-section tabs: NPC Health | Challenges
+                                    // Side-by-side: NPC Health + Challenges
                                     {
                                         let npcs = npc_health.read();
                                         let challenges: Vec<ChallengeSummary> = if let Some(enc_idx) = *selected_encounter.read() {
@@ -2024,7 +2023,6 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                         };
                                         let has_npcs = !npcs.is_empty();
                                         let has_challenges = !challenges.is_empty();
-                                        let active_tab = *overview_sub_tab.read();
 
                                         // Group NPCs by name
                                         let mut groups: Vec<(String, Vec<&NpcHealthRow>)> = {
@@ -2056,32 +2054,15 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
 
                                         rsx! {
                                             if has_npcs || has_challenges {
-                                                div { class: "overview-sub-section",
-                                                    // Tab bar
-                                                    div { class: "overview-sub-tabs",
-                                                        if has_npcs {
-                                                            button {
-                                                                class: if active_tab == 0 { "overview-sub-tab active" } else { "overview-sub-tab" },
-                                                                onclick: move |_| overview_sub_tab.set(0),
+                                                div { class: "overview-columns",
+                                                    // ─── NPC Health column ───────────────────
+                                                    if has_npcs {
+                                                        div { class: "overview-column",
+                                                            div { class: "overview-column-header",
                                                                 i { class: "fa-solid fa-heart-pulse" }
                                                                 " NPC Health"
-                                                                span { class: "overview-sub-tab-count", "({npc_count})" }
+                                                                span { class: "text-muted", " ({npc_count})" }
                                                             }
-                                                        }
-                                                        if has_challenges {
-                                                            button {
-                                                                class: if active_tab == 1 { "overview-sub-tab active" } else { "overview-sub-tab" },
-                                                                onclick: move |_| overview_sub_tab.set(1),
-                                                                i { class: "fa-solid fa-trophy" }
-                                                                " Challenges"
-                                                            }
-                                                        }
-                                                    }
-
-                                                    // Tab content
-                                                    div { class: "overview-sub-content",
-                                                        // NPC Health tab
-                                                        if active_tab == 0 && has_npcs {
                                                             table { class: "npc-health-table",
                                                                 thead {
                                                                     tr {
@@ -2215,9 +2196,15 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                                 }
                                                             }
                                                         }
+                                                    }
 
-                                                        // Challenges tab
-                                                        if active_tab == 1 && has_challenges {
+                                                    // ─── Challenges column ────────────────────
+                                                    if has_challenges {
+                                                        div { class: "overview-column",
+                                                            div { class: "overview-column-header",
+                                                                i { class: "fa-solid fa-trophy" }
+                                                                " Challenges"
+                                                            }
                                                             div { class: "challenge-cards",
                                                                 for challenge in challenges.iter() {
                                                                     {
@@ -2225,6 +2212,13 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                                         let per_sec_str = challenge.per_second
                                                                             .map(|ps| format_compact(ps as i64))
                                                                             .unwrap_or_default();
+                                                                        let columns = challenge.columns.as_str();
+                                                                        let show_total = matches!(columns, "TotalPercent" | "TotalPerSecond" | "TotalOnly");
+                                                                        let show_ps = matches!(columns, "PerSecondPercent" | "TotalPerSecond" | "PerSecondOnly");
+                                                                        let show_pct = matches!(columns, "TotalPercent" | "PerSecondPercent" | "PercentOnly");
+                                                                        let bar_color = challenge.color
+                                                                            .map(|c| format!("rgba({}, {}, {}, 0.15)", c[0], c[1], c[2]))
+                                                                            .unwrap_or_else(|| "rgba(74, 144, 217, 0.15)".to_string());
 
                                                                         rsx! {
                                                                             div { class: "challenge-card",
@@ -2240,6 +2234,19 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                                                 }
                                                                                 if !challenge.by_player.is_empty() {
                                                                                     div { class: "challenge-players",
+                                                                                        // Column headers
+                                                                                        div { class: "challenge-player-header",
+                                                                                            span { class: "challenge-player-name", "Player" }
+                                                                                            if show_ps {
+                                                                                                span { class: "challenge-player-ps", "/s" }
+                                                                                            }
+                                                                                            if show_total {
+                                                                                                span { class: "challenge-player-value", "Total" }
+                                                                                            }
+                                                                                            if show_pct {
+                                                                                                span { class: "challenge-player-pct", "%" }
+                                                                                            }
+                                                                                        }
                                                                                         for player in challenge.by_player.iter() {
                                                                                             {
                                                                                                 let ps_str = player.per_second
@@ -2249,14 +2256,18 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                                                                     div { class: "challenge-player-row",
                                                                                                         div {
                                                                                                             class: "challenge-bar-fill",
-                                                                                                            style: "width: {player.percent:.1}%",
+                                                                                                            style: "width: {player.percent:.1}%; background: {bar_color}",
                                                                                                         }
                                                                                                         span { class: "challenge-player-name", "{player.name}" }
-                                                                                                        if !ps_str.is_empty() {
+                                                                                                        if show_ps && !ps_str.is_empty() {
                                                                                                             span { class: "challenge-player-ps", "{ps_str}/s" }
                                                                                                         }
-                                                                                                        span { class: "challenge-player-value", "{format_compact(player.value)}" }
-                                                                                                        span { class: "challenge-player-pct", "{formatting::format_pct_f32(player.percent, eu)}" }
+                                                                                                        if show_total {
+                                                                                                            span { class: "challenge-player-value", "{format_compact(player.value)}" }
+                                                                                                        }
+                                                                                                        if show_pct {
+                                                                                                            span { class: "challenge-player-pct", "{formatting::format_pct_f32(player.percent, eu)}" }
+                                                                                                        }
                                                                                                     }
                                                                                                 }
                                                                                             }

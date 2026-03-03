@@ -326,6 +326,12 @@ pub struct BossWithPath {
     /// Counter IDs from the bundled definition that the user has modified.
     #[serde(default)]
     pub modified_counter_ids: Vec<String>,
+    /// Challenge IDs from the bundled definition that are unmodified.
+    #[serde(default)]
+    pub builtin_challenge_ids: Vec<String>,
+    /// Challenge IDs from the bundled definition that the user has modified.
+    #[serde(default)]
+    pub modified_challenge_ids: Vec<String>,
 }
 
 /// Full boss encounter definition (mirrors baras_core::dsl::BossEncounterDefinition)
@@ -834,8 +840,6 @@ pub enum ChallengeMetric {
     HealingTaken,
     AbilityCount,
     EffectCount,
-    Deaths,
-    Threat,
 }
 
 impl ChallengeMetric {
@@ -848,8 +852,6 @@ impl ChallengeMetric {
             Self::HealingTaken => "Healing Taken",
             Self::AbilityCount => "Ability Count",
             Self::EffectCount => "Effect Count",
-            Self::Deaths => "Deaths",
-            Self::Threat => "Threat",
         }
     }
 
@@ -862,8 +864,6 @@ impl ChallengeMetric {
             Self::HealingTaken,
             Self::AbilityCount,
             Self::EffectCount,
-            Self::Deaths,
-            Self::Threat,
         ]
     }
 }

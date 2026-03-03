@@ -6,8 +6,10 @@
 use std::collections::HashMap;
 
 use crate::dsl::{
-    ChallengeContext, ChallengeDefinition, ChallengeMetric, EntityDefinition, EntityInfo,
+    ChallengeCondition, ChallengeContext, ChallengeDefinition, ChallengeMetric, EntityDefinition,
+    EntityInfo,
 };
+use crate::EntityFilter;
 use baras_types::ChallengeColumns;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -41,6 +43,12 @@ pub struct ChallengeValue {
     /// When the challenge context became active (for duration calculation)
     /// Set when phase starts, HP threshold crossed, or encounter starts for unconditional challenges
     pub activated_time: Option<chrono::NaiveDateTime>,
+
+    /// Accumulated duration when non-phase conditions (BossHpRange, Counter) are satisfied
+    pub condition_active_secs: f32,
+
+    /// When the non-phase conditions last became active (for live tracking)
+    pub condition_active_start: Option<chrono::NaiveDateTime>,
 
     // ─────────────────────────────────────────────────────────────────────────
     // Display Settings (copied from ChallengeDefinition)
@@ -135,6 +143,8 @@ impl ChallengeTracker {
                     duration_secs: 0.0, // Calculated in snapshot()
                     first_event_time: None,
                     activated_time,
+                    condition_active_secs: 0.0,
+                    condition_active_start: None,
                     // Display settings from definition
                     enabled: def.enabled,
                     color: def.color,
@@ -247,14 +257,25 @@ impl ChallengeTracker {
 
             total
         } else {
-            // Non-phase challenge: elapsed time from activation
-            val.activated_time
-                .or(val.first_event_time)
-                .map(|start| {
+            let def = self.definitions.iter().find(|d| d.id == val.id);
+            if def.is_some_and(|d| has_scoping_condition(d)) {
+                // Condition-scoped challenge: use accumulated + current active span
+                let mut total = val.condition_active_secs;
+                if let Some(start) = val.condition_active_start {
                     let elapsed = current_time.signed_duration_since(start);
-                    (elapsed.num_milliseconds() as f32 / 1000.0).max(0.0)
-                })
-                .unwrap_or(0.0)
+                    total += (elapsed.num_milliseconds() as f32 / 1000.0).max(0.0);
+                }
+                total
+            } else {
+                // Non-phase, non-scoped challenge: elapsed time from activation
+                val.activated_time
+                    .or(val.first_event_time)
+                    .map(|start| {
+                        let elapsed = current_time.signed_duration_since(start);
+                        (elapsed.num_milliseconds() as f32 / 1000.0).max(0.0)
+                    })
+                    .unwrap_or(0.0)
+            }
         }
     }
 
@@ -277,6 +298,8 @@ impl ChallengeTracker {
                     duration_secs,
                     first_event_time: val.first_event_time,
                     activated_time: val.activated_time,
+                    condition_active_secs: val.condition_active_secs,
+                    condition_active_start: val.condition_active_start,
                     // Display settings
                     enabled: val.enabled,
                     color: val.color,
@@ -303,6 +326,8 @@ impl ChallengeTracker {
                     duration_secs,
                     first_event_time: val.first_event_time,
                     activated_time: val.activated_time,
+                    condition_active_secs: val.condition_active_secs,
+                    condition_active_start: val.condition_active_start,
                     // Display settings
                     enabled: val.enabled,
                     color: val.color,
@@ -313,13 +338,12 @@ impl ChallengeTracker {
     }
 
     /// Calculate duration for a finalized (ended) encounter.
-    /// Phase-scoped challenges use cumulative phase time, others use total encounter time.
+    /// Phase-scoped challenges use cumulative phase time.
+    /// BossHpRange/Counter-scoped challenges use condition-active time.
+    /// Unconditional challenges use total encounter time.
     fn finalized_duration(&self, val: &ChallengeValue) -> f32 {
-        let phase_ids = self
-            .definitions
-            .iter()
-            .find(|d| d.id == val.id)
-            .and_then(|d| d.phase_ids());
+        let def = self.definitions.iter().find(|d| d.id == val.id);
+        let phase_ids = def.and_then(|d| d.phase_ids());
 
         if let Some(phase_ids) = phase_ids {
             let total: f32 = phase_ids
@@ -327,9 +351,56 @@ impl ChallengeTracker {
                 .filter_map(|pid| self.phase_durations.get(pid))
                 .sum();
             total.max(1.0)
+        } else if val.condition_active_secs > 0.0 && def.is_some_and(|d| has_scoping_condition(d))
+        {
+            // Use condition-scoped duration for BossHpRange/Counter challenges
+            val.condition_active_secs.max(1.0)
         } else {
             self.total_duration_secs.max(1.0)
         }
+    }
+
+    /// Update condition-active duration tracking for non-phase scoping conditions.
+    /// Called after each event to track when BossHpRange/Counter conditions are met.
+    pub fn update_condition_tracking(
+        &mut self,
+        ctx: &ChallengeContext,
+        timestamp: chrono::NaiveDateTime,
+    ) {
+        for def in &self.definitions {
+            if def.has_phase_condition() || !has_scoping_condition(def) {
+                continue;
+            }
+
+            // Check if scoping conditions (BossHpRange, Counter) are currently met
+            let conditions_met = def.conditions.iter().all(|c| match c {
+                ChallengeCondition::BossHpRange { .. } | ChallengeCondition::Counter { .. } => {
+                    c.matches(ctx, &self.entities, None, None, None, None)
+                }
+                _ => true, // Non-scoping conditions don't affect duration
+            });
+
+            let Some(val) = self.values.get_mut(&def.id) else {
+                continue;
+            };
+
+            if conditions_met {
+                // Start tracking if not already active
+                if val.condition_active_start.is_none() {
+                    val.condition_active_start = Some(timestamp);
+                }
+            } else if let Some(start) = val.condition_active_start.take() {
+                // Accumulate the elapsed active time
+                let elapsed = timestamp.signed_duration_since(start);
+                val.condition_active_secs +=
+                    (elapsed.num_milliseconds() as f32 / 1000.0).max(0.0);
+            }
+        }
+    }
+
+    /// Get the challenge definitions
+    pub fn definitions(&self) -> &[ChallengeDefinition] {
+        &self.definitions
     }
 
     /// Get a specific challenge value
@@ -479,22 +550,30 @@ impl ChallengeTracker {
                 Some(ability_id),
                 None,
             ) && let Some(val) = self.values.get_mut(&def.id)
-                && source.is_player
             {
-                if val.first_event_time.is_none() {
-                    val.first_event_time = Some(timestamp);
+                // Determine tracking entity: if challenge tracks by target (player), use target;
+                // otherwise use source (default behavior)
+                let entity = if target.is_player && has_player_target_condition(&def.conditions) {
+                    target
+                } else {
+                    source
+                };
+                if entity.is_player {
+                    if val.first_event_time.is_none() {
+                        val.first_event_time = Some(timestamp);
+                    }
+                    val.value += 1;
+                    val.event_count += 1;
+                    *val.by_player.entry(entity.entity_id).or_insert(0) += 1;
+                    updated.push(def.id.clone());
                 }
-                val.value += 1;
-                val.event_count += 1;
-                *val.by_player.entry(source.entity_id).or_insert(0) += 1;
-                updated.push(def.id.clone());
             }
         }
 
         updated
     }
 
-    /// Process an effect application (for count metrics)
+    /// Process an effect application or charge modification (for count metrics)
     pub fn process_effect_applied(
         &mut self,
         ctx: &ChallengeContext,
@@ -522,90 +601,51 @@ impl ChallengeTracker {
                 None,
                 Some(effect_id),
             ) && let Some(val) = self.values.get_mut(&def.id)
-                && source.is_player
             {
-                if val.first_event_time.is_none() {
-                    val.first_event_time = Some(timestamp);
+                // Determine tracking entity: if challenge tracks by target (player), use target;
+                // otherwise use source (default behavior)
+                let entity = if target.is_player && has_player_target_condition(&def.conditions) {
+                    target
+                } else {
+                    source
+                };
+                if entity.is_player {
+                    if val.first_event_time.is_none() {
+                        val.first_event_time = Some(timestamp);
+                    }
+                    val.value += 1;
+                    val.event_count += 1;
+                    *val.by_player.entry(entity.entity_id).or_insert(0) += 1;
+                    updated.push(def.id.clone());
                 }
-                val.value += 1;
-                val.event_count += 1;
-                *val.by_player.entry(source.entity_id).or_insert(0) += 1;
-                updated.push(def.id.clone());
             }
         }
 
         updated
     }
+}
 
-    /// Process a death event
-    pub fn process_death(
-        &mut self,
-        ctx: &ChallengeContext,
-        entity: &EntityInfo,
-        timestamp: chrono::NaiveDateTime,
-    ) -> Vec<String> {
-        if !self.active {
-            return Vec::new();
-        }
+/// Check if a challenge definition has non-phase scoping conditions (BossHpRange, Counter)
+/// that should affect duration calculation.
+fn has_scoping_condition(def: &ChallengeDefinition) -> bool {
+    def.conditions.iter().any(|c| {
+        matches!(
+            c,
+            ChallengeCondition::BossHpRange { .. } | ChallengeCondition::Counter { .. }
+        )
+    })
+}
 
-        let mut updated = Vec::new();
-
-        for def in &self.definitions {
-            if def.metric != ChallengeMetric::Deaths {
-                continue;
-            }
-
-            if def.matches(ctx, &self.entities, None, Some(entity), None, None)
-                && let Some(val) = self.values.get_mut(&def.id)
-                && entity.is_player
-            {
-                if val.first_event_time.is_none() {
-                    val.first_event_time = Some(timestamp);
-                }
-                val.value += 1;
-                val.event_count += 1;
-                *val.by_player.entry(entity.entity_id).or_insert(0) += 1;
-                updated.push(def.id.clone());
-            }
-        }
-
-        updated
-    }
-
-    /// Process a threat event
-    pub fn process_threat(
-        &mut self,
-        ctx: &ChallengeContext,
-        source: &EntityInfo,
-        target: &EntityInfo,
-        threat: i64,
-        timestamp: chrono::NaiveDateTime,
-    ) -> Vec<String> {
-        if !self.active || threat == 0 {
-            return Vec::new();
-        }
-
-        let mut updated = Vec::new();
-
-        for def in &self.definitions {
-            if def.metric != ChallengeMetric::Threat {
-                continue;
-            }
-
-            if def.matches(ctx, &self.entities, Some(source), Some(target), None, None)
-                && let Some(val) = self.values.get_mut(&def.id)
-                && source.is_player
-            {
-                if val.first_event_time.is_none() {
-                    val.first_event_time = Some(timestamp);
-                }
-                val.value += threat;
-                val.event_count += 1;
-                *val.by_player.entry(source.entity_id).or_insert(0) += threat;
-                updated.push(def.id.clone());
-            }
-        }
-
-        updated
-    }
+/// Check if a challenge has a Target condition that matches players.
+/// Used to determine whether to track count metrics by target (received) vs source (used).
+fn has_player_target_condition(conditions: &[ChallengeCondition]) -> bool {
+    conditions.iter().any(|c| matches!(c,
+        ChallengeCondition::Target { matcher }
+            if matches!(matcher,
+                EntityFilter::AnyPlayer
+                | EntityFilter::LocalPlayer
+                | EntityFilter::OtherPlayers
+                | EntityFilter::AnyPlayerOrCompanion
+            )
+    ))
 }

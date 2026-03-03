@@ -185,9 +185,15 @@ impl ChallengeOverlay {
             // Scale content up to fill available space when fewer challenges are shown.
             // Estimate per-card height: header + separator + player bars + optional footer
             let sep_overhead = bar_spacing * 2.0 + 4.0 * scale;
+            // Use actual player counts per card instead of MAX_PLAYERS constant
+            let max_players_in_cards = enabled_challenges
+                .iter()
+                .map(|c| c.by_player.len().min(MAX_PLAYERS))
+                .max()
+                .unwrap_or(MAX_PLAYERS);
             let card_height_est = header_font_size
                 + sep_overhead
-                + MAX_PLAYERS as f32 * (bar_height + bar_spacing)
+                + max_players_in_cards as f32 * (bar_height + bar_spacing)
                 + if show_footer {
                     font_size + bar_spacing
                 } else {
@@ -203,7 +209,7 @@ impl ChallengeOverlay {
                 ChallengeLayout::Horizontal => card_height_est + padding * 2.0,
             };
 
-            let content_scale = (height / content_height_est).clamp(1.0, 2.0);
+            let content_scale = (height / content_height_est).clamp(0.8, 1.8);
             bar_height *= content_scale;
             bar_spacing *= content_scale;
             font_size *= content_scale;

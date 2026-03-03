@@ -138,6 +138,15 @@ fn ChallengeRow(
     let metric_label = challenge.metric.label();
     let condition_count = challenge.conditions.len();
 
+    // Origin classification
+    let is_builtin = boss_with_path.builtin_challenge_ids.contains(&challenge.id);
+    let is_modified = boss_with_path.modified_challenge_ids.contains(&challenge.id);
+
+    // Clones for enable toggle closure
+    let challenge_for_enable = challenge.clone();
+    let challenges_for_enable = all_challenges.clone();
+    let bwp_for_enable = boss_with_path.clone();
+
     // Extract context for API calls
     let boss_id = boss_with_path.boss.id.clone();
     let file_path = boss_with_path.file_path.clone();
@@ -148,7 +157,31 @@ fn ChallengeRow(
             div {
                 class: "list-item-header",
                 onclick: move |_| on_toggle.call(()),
+
+                // Expand arrow
                 span { class: "list-item-expand", if expanded { "▼" } else { "▶" } }
+
+                // Origin indicator (B)uilt-in / (M)odified / (C)ustom
+                if is_builtin {
+                    span {
+                        class: "timer-origin timer-origin-builtin",
+                        title: "Built-in: ships with the app",
+                        "B"
+                    }
+                } else if is_modified {
+                    span {
+                        class: "timer-origin timer-origin-modified",
+                        title: "Modified: built-in challenge you have edited",
+                        "M"
+                    }
+                } else {
+                    span {
+                        class: "timer-origin timer-origin-custom",
+                        title: "Custom: created by you",
+                        "C"
+                    }
+                }
+
                 span { class: "font-medium", "{challenge.name}" }
                 if expanded && is_dirty() {
                     span { class: "unsaved-indicator", title: "Unsaved changes" }
@@ -156,6 +189,34 @@ fn ChallengeRow(
                 span { class: "tag", "{metric_label}" }
                 if condition_count > 0 {
                     span { class: "tag tag-secondary", "{condition_count} conditions" }
+                }
+
+                // Right side - enable toggle
+                div { class: "flex items-center gap-xs", style: "margin-left: auto; flex-shrink: 0;",
+                    span {
+                        class: "row-toggle",
+                        title: if challenge.enabled { "Disable challenge" } else { "Enable challenge" },
+                        onclick: move |e| {
+                            e.stop_propagation();
+                            let mut updated = challenge_for_enable.clone();
+                            updated.enabled = !updated.enabled;
+                            let mut current = challenges_for_enable.clone();
+                            if let Some(idx) = current.iter().position(|c| c.id == updated.id) {
+                                current[idx] = updated.clone();
+                                on_change.call(current);
+                            }
+                            let boss_id = bwp_for_enable.boss.id.clone();
+                            let file_path = bwp_for_enable.file_path.clone();
+                            let item = EncounterItem::Challenge(updated);
+                            spawn(async move {
+                                let _ = api::update_encounter_item(&boss_id, &file_path, &item, None).await;
+                            });
+                        },
+                        span {
+                            class: if challenge.enabled { "text-success" } else { "text-muted" },
+                            if challenge.enabled { "✓" } else { "○" }
+                        }
+                    }
                 }
             }
 
@@ -351,12 +412,11 @@ fn ChallengeEditForm(
                                     d.metric = match e.value().as_str() {
                                         "Damage" => ChallengeMetric::Damage,
                                         "Healing" => ChallengeMetric::Healing,
+                                        "EffectiveHealing" => ChallengeMetric::EffectiveHealing,
                                         "DamageTaken" => ChallengeMetric::DamageTaken,
                                         "HealingTaken" => ChallengeMetric::HealingTaken,
                                         "AbilityCount" => ChallengeMetric::AbilityCount,
                                         "EffectCount" => ChallengeMetric::EffectCount,
-                                        "Deaths" => ChallengeMetric::Deaths,
-                                        "Threat" => ChallengeMetric::Threat,
                                         _ => ChallengeMetric::Damage,
                                     };
                                     draft.set(d);
@@ -481,7 +541,7 @@ fn ChallengeEditForm(
                             for (idx, condition) in draft().conditions.iter().enumerate() {
                                 ChallengeConditionRow {
                                     condition: condition.clone(),
-                                    available_phases: encounter_data.phase_ids(),
+                                    encounter_data: encounter_data.clone(),
                                     on_change: move |updated| {
                                         let mut d = draft();
                                         d.conditions[idx] = updated;
@@ -534,166 +594,194 @@ fn ChallengeEditForm(
 #[component]
 fn ChallengeConditionRow(
     condition: ChallengeCondition,
-    available_phases: Vec<String>,
+    encounter_data: EncounterData,
     on_change: EventHandler<ChallengeCondition>,
     on_remove: EventHandler<()>,
 ) -> Element {
     let condition_type = condition.label();
 
     rsx! {
-        div {
-            class: "flex gap-sm items-start",
-            style: "padding: 8px; background: var(--bg-secondary); border-radius: 4px; margin-bottom: 4px;",
+        div { class: "condition-card",
+            div { class: "condition-card-content",
+                div { class: "condition-simple",
+                    // Row 1: Type selector
+                    div { class: "condition-simple-fields",
+                        span { class: "condition-label", "Type" }
+                        select {
+                            class: "select",
+                            value: "{condition_type}",
+                            onchange: move |e| {
+                                let new_condition = match e.value().as_str() {
+                                    "Phase" => ChallengeCondition::Phase { phase_ids: vec![] },
+                                    "Source" => ChallengeCondition::Source { matcher: EntityFilter::Boss },
+                                    "Target" => ChallengeCondition::Target { matcher: EntityFilter::Boss },
+                                    "Ability" => ChallengeCondition::Ability { ability_ids: vec![] },
+                                    "Effect" => ChallengeCondition::Effect { effect_ids: vec![] },
+                                    "Counter" => ChallengeCondition::Counter {
+                                        counter_id: String::new(),
+                                        operator: ComparisonOp::Eq,
+                                        value: 0,
+                                    },
+                                    "Boss HP Range" => ChallengeCondition::BossHpRange {
+                                        min_hp: None,
+                                        max_hp: None,
+                                        npc_id: None,
+                                    },
+                                    _ => condition.clone(),
+                                };
+                                on_change.call(new_condition);
+                            },
+                            option { value: "Phase", "Phase" }
+                            option { value: "Source", "Source" }
+                            option { value: "Target", "Target" }
+                            option { value: "Ability", "Ability" }
+                            option { value: "Effect", "Effect" }
+                            option { value: "Counter", "Counter" }
+                            option { value: "Boss HP Range", "Boss HP Range" }
+                        }
+                    }
 
-            // Condition type selector
-            select {
-                class: "input-inline",
-                style: "width: 120px; flex-shrink: 0;",
-                value: "{condition_type}",
-                onchange: move |e| {
-                    let new_condition = match e.value().as_str() {
-                        "Phase" => ChallengeCondition::Phase { phase_ids: vec![] },
-                        "Source" => ChallengeCondition::Source { matcher: EntityFilter::Boss },
-                        "Target" => ChallengeCondition::Target { matcher: EntityFilter::Boss },
-                        "Ability" => ChallengeCondition::Ability { ability_ids: vec![] },
-                        "Effect" => ChallengeCondition::Effect { effect_ids: vec![] },
-                        "Counter" => ChallengeCondition::Counter {
-                            counter_id: String::new(),
-                            operator: ComparisonOp::Eq,
-                            value: 0,
-                        },
-                        "Boss HP Range" => ChallengeCondition::BossHpRange {
-                            min_hp: None,
-                            max_hp: None,
-                            npc_id: None,
-                        },
-                        _ => condition.clone(),
-                    };
-                    on_change.call(new_condition);
-                },
-                option { value: "Phase", "Phase" }
-                option { value: "Source", "Source" }
-                option { value: "Target", "Target" }
-                option { value: "Ability", "Ability" }
-                option { value: "Effect", "Effect" }
-                option { value: "Counter", "Counter" }
-                option { value: "Boss HP Range", "Boss HP Range" }
-            }
-
-            // Condition-specific editor
-            div {
-                {
+                    // Row 2: Condition-specific fields
+                    div { class: "condition-simple-fields",
+                        {
                     match &condition {
-                        ChallengeCondition::Phase { phase_ids } => {
-                            rsx! {
-                                PhaseSelector {
-                                    selected: phase_ids.clone(),
-                                    available: available_phases.clone(),
-                                    on_change: move |ids| {
-                                        on_change.call(ChallengeCondition::Phase { phase_ids: ids });
-                                    }
+                        ChallengeCondition::Phase { phase_ids } => rsx! {
+                            span { class: "condition-label", "Phase" }
+                            PhaseSelector {
+                                selected: phase_ids.clone(),
+                                available: encounter_data.phase_ids(),
+                                on_change: move |ids| {
+                                    on_change.call(ChallengeCondition::Phase { phase_ids: ids });
                                 }
                             }
-                        }
-                        ChallengeCondition::Source { matcher } => {
-                            rsx! {
-                                EntityFilterDropdown {
-                                    label: "",
-                                    value: matcher.clone(),
-                                    options: EntityFilter::common_options(),
-                                    on_change: move |m| {
-                                        on_change.call(ChallengeCondition::Source { matcher: m });
-                                    }
+                        },
+                        ChallengeCondition::Source { matcher } => rsx! {
+                            span { class: "condition-label", "Entity" }
+                            EntityFilterDropdown {
+                                label: "",
+                                value: matcher.clone(),
+                                options: EntityFilter::common_options(),
+                                on_change: move |m| {
+                                    on_change.call(ChallengeCondition::Source { matcher: m });
                                 }
                             }
-                        }
-                        ChallengeCondition::Target { matcher } => {
-                            rsx! {
-                                EntityFilterDropdown {
-                                    label: "",
-                                    value: matcher.clone(),
-                                    options: EntityFilter::common_options(),
-                                    on_change: move |m| {
-                                        on_change.call(ChallengeCondition::Target { matcher: m });
-                                    }
+                        },
+                        ChallengeCondition::Target { matcher } => rsx! {
+                            span { class: "condition-label", "Entity" }
+                            EntityFilterDropdown {
+                                label: "",
+                                value: matcher.clone(),
+                                options: EntityFilter::common_options(),
+                                on_change: move |m| {
+                                    on_change.call(ChallengeCondition::Target { matcher: m });
                                 }
                             }
-                        }
+                        },
                         ChallengeCondition::Ability { ability_ids } => rsx! {
-                            IdListInput {
+                            span { class: "condition-label", "IDs" }
+                            IdChipEditor {
                                 ids: ability_ids.clone(),
-                                placeholder: "ability_id1, ability_id2, ...",
+                                placeholder: "Ability ID (Enter)",
                                 on_change: move |ids| on_change.call(ChallengeCondition::Ability { ability_ids: ids })
                             }
                         },
                         ChallengeCondition::Effect { effect_ids } => rsx! {
-                            IdListInput {
+                            span { class: "condition-label", "IDs" }
+                            IdChipEditor {
                                 ids: effect_ids.clone(),
-                                placeholder: "effect_id1, effect_id2, ...",
+                                placeholder: "Effect ID (Enter)",
                                 on_change: move |ids| on_change.call(ChallengeCondition::Effect { effect_ids: ids })
                             }
                         },
                         ChallengeCondition::Counter { counter_id, operator, value } => {
-                            let counter_id_for_select = counter_id.clone();
-                            let counter_id_for_input = counter_id.clone();
+                            let selected_counter = if counter_id.is_empty() {
+                                "__none__".to_string()
+                            } else {
+                                counter_id.clone()
+                            };
+                            let counters = encounter_data.counter_ids();
+                            let counter_id_for_op = counter_id.clone();
+                            let counter_id_for_val = counter_id.clone();
+                            let has_counter = !counter_id.is_empty();
                             let current_op = *operator;
                             let current_val = *value;
+                            let op_value = match operator {
+                                ComparisonOp::Eq => "eq",
+                                ComparisonOp::Lt => "lt",
+                                ComparisonOp::Gt => "gt",
+                                ComparisonOp::Lte => "lte",
+                                ComparisonOp::Gte => "gte",
+                                ComparisonOp::Ne => "ne",
+                            };
                             rsx! {
-                                div { class: "flex gap-xs items-center flex-wrap",
-                                    input {
-                                        class: "input-inline text-mono",
-                                        style: "width: 150px;",
-                                        placeholder: "counter_id",
-                                        value: "{counter_id}",
-                                        oninput: move |e| {
-                                            on_change.call(ChallengeCondition::Counter {
-                                                counter_id: e.value(),
-                                                operator: current_op,
-                                                value: current_val,
-                                            });
-                                        }
+                                span { class: "condition-label", "Counter" }
+                                select {
+                                    class: "select",
+                                    value: "{selected_counter}",
+                                    onchange: move |e| {
+                                        let new_id = if e.value() == "__none__" {
+                                            String::new()
+                                        } else {
+                                            e.value()
+                                        };
+                                        on_change.call(ChallengeCondition::Counter {
+                                            counter_id: new_id,
+                                            operator: current_op,
+                                            value: current_val,
+                                        });
+                                    },
+                                    option { value: "__none__", selected: selected_counter == "__none__", "(select counter)" }
+                                    for cid in &counters {
+                                        option { value: "{cid}", selected: *cid == selected_counter, "{cid}" }
                                     }
+                                }
+                                if has_counter {
                                     select {
-                                        class: "input-inline",
-                                        style: "width: 60px;",
-                                        value: "{current_op:?}",
-                                        onchange: move |e| {
-                                            let op = match e.value().as_str() {
-                                                "Eq" => ComparisonOp::Eq,
-                                                "Lt" => ComparisonOp::Lt,
-                                                "Gt" => ComparisonOp::Gt,
-                                                "Lte" => ComparisonOp::Lte,
-                                                "Gte" => ComparisonOp::Gte,
-                                                "Ne" => ComparisonOp::Ne,
-                                                _ => ComparisonOp::Eq,
-                                            };
-                                            on_change.call(ChallengeCondition::Counter {
-                                                counter_id: counter_id_for_select.clone(),
-                                                operator: op,
-                                                value: current_val,
-                                            });
-                                        },
-                                        for op in ComparisonOp::all() {
-                                            option {
-                                                value: "{op:?}",
-                                                selected: current_op == *op,
-                                                "{op.label()}"
+                                        class: "select",
+                                        style: "width: 55px; flex-shrink: 0;",
+                                        value: "{op_value}",
+                                        onchange: {
+                                            let cid = counter_id_for_op.clone();
+                                            move |e| {
+                                                let op = match e.value().as_str() {
+                                                    "eq" => ComparisonOp::Eq,
+                                                    "lt" => ComparisonOp::Lt,
+                                                    "gt" => ComparisonOp::Gt,
+                                                    "lte" => ComparisonOp::Lte,
+                                                    "gte" => ComparisonOp::Gte,
+                                                    "ne" => ComparisonOp::Ne,
+                                                    _ => ComparisonOp::Eq,
+                                                };
+                                                on_change.call(ChallengeCondition::Counter {
+                                                    counter_id: cid.clone(),
+                                                    operator: op,
+                                                    value: current_val,
+                                                });
                                             }
-                                        }
+                                        },
+                                        option { value: "eq", selected: op_value == "eq", "=" }
+                                        option { value: "lt", selected: op_value == "lt", "<" }
+                                        option { value: "gt", selected: op_value == "gt", ">" }
+                                        option { value: "lte", selected: op_value == "lte", "\u{2264}" }
+                                        option { value: "gte", selected: op_value == "gte", "\u{2265}" }
+                                        option { value: "ne", selected: op_value == "ne", "\u{2260}" }
                                     }
                                     input {
                                         r#type: "number",
-                                        min: "0",
                                         class: "input-inline",
-                                        style: "width: 70px;",
+                                        style: "width: 55px; flex-shrink: 0;",
+                                        min: "0",
                                         value: "{current_val}",
-                                        oninput: move |e| {
-                                            if let Ok(v) = e.value().parse::<u32>() {
-                                                on_change.call(ChallengeCondition::Counter {
-                                                    counter_id: counter_id_for_input.clone(),
-                                                    operator: current_op,
-                                                    value: v,
-                                                });
+                                        oninput: {
+                                            let cid = counter_id_for_val.clone();
+                                            move |e| {
+                                                if let Ok(v) = e.value().parse::<u32>() {
+                                                    on_change.call(ChallengeCondition::Counter {
+                                                        counter_id: cid.clone(),
+                                                        operator: current_op,
+                                                        value: v,
+                                                    });
+                                                }
                                             }
                                         }
                                     }
@@ -705,55 +793,54 @@ fn ChallengeConditionRow(
                             let current_max = *max_hp;
                             let current_npc = *npc_id;
                             rsx! {
-                                div { class: "flex gap-xs items-center",
-                                    span { class: "text-sm", "HP:" }
-                                    input {
-                                        r#type: "number",
-                                        min: "0",
-                                        max: "100",
-                                        class: "input-inline",
-                                        style: "width: 70px;",
-                                        placeholder: "min",
-                                        value: "{current_min.map(|v| v.to_string()).unwrap_or_default()}",
-                                        oninput: move |e| {
-                                            let min = e.value().parse().ok();
-                                            on_change.call(ChallengeCondition::BossHpRange {
-                                                min_hp: min,
-                                                max_hp: current_max,
-                                                npc_id: current_npc,
-                                            });
-                                        }
+                                span { class: "condition-label", "HP %" }
+                                input {
+                                    r#type: "number",
+                                    min: "0",
+                                    max: "100",
+                                    class: "input-inline",
+                                    style: "width: 70px;",
+                                    placeholder: "min",
+                                    value: "{current_min.map(|v| v.to_string()).unwrap_or_default()}",
+                                    oninput: move |e| {
+                                        let min = e.value().parse().ok();
+                                        on_change.call(ChallengeCondition::BossHpRange {
+                                            min_hp: min,
+                                            max_hp: current_max,
+                                            npc_id: current_npc,
+                                        });
                                     }
-                                    span { class: "text-sm", "to" }
-                                    input {
-                                        r#type: "number",
-                                        min: "0",
-                                        max: "100",
-                                        class: "input-inline",
-                                        style: "width: 70px;",
-                                        placeholder: "max",
-                                        value: "{current_max.map(|v| v.to_string()).unwrap_or_default()}",
-                                        oninput: move |e| {
-                                            let max = e.value().parse().ok();
-                                            on_change.call(ChallengeCondition::BossHpRange {
-                                                min_hp: current_min,
-                                                max_hp: max,
-                                                npc_id: current_npc,
-                                            });
-                                        }
-                                    }
-                                    span { class: "text-sm", "%" }
                                 }
+                                span { class: "text-sm text-muted", "to" }
+                                input {
+                                    r#type: "number",
+                                    min: "0",
+                                    max: "100",
+                                    class: "input-inline",
+                                    style: "width: 70px;",
+                                    placeholder: "max",
+                                    value: "{current_max.map(|v| v.to_string()).unwrap_or_default()}",
+                                    oninput: move |e| {
+                                        let max = e.value().parse().ok();
+                                        on_change.call(ChallengeCondition::BossHpRange {
+                                            min_hp: current_min,
+                                            max_hp: max,
+                                            npc_id: current_npc,
+                                        });
+                                    }
+                                }
+                                span { class: "text-sm text-muted", "%" }
                             }
                         }
                     }
                 }
+                    }
+                }
             }
 
-            // Remove button (flex-shrink-0 to keep fixed size)
+            // Remove button
             button {
                 class: "btn btn-danger btn-xs",
-                style: "flex-shrink: 0;",
                 onclick: move |_| on_remove.call(()),
                 "×"
             }
@@ -762,32 +849,81 @@ fn ChallengeConditionRow(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Comma-separated ID input
+// Chip-based ID editor (adapted from NpcIdChipEditor for u64 IDs)
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[component]
-fn IdListInput(
+fn IdChipEditor(
     ids: Vec<u64>,
     placeholder: &'static str,
     on_change: EventHandler<Vec<u64>>,
 ) -> Element {
-    let ids_str = ids
-        .iter()
-        .map(|id| id.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
+    let mut new_input = use_signal(String::new);
+    let ids_for_keydown = ids.clone();
+    let ids_for_click = ids.clone();
+
     rsx! {
-        input {
-            class: "input-inline text-mono",
-            style: "width: 100%;",
-            placeholder: placeholder,
-            value: "{ids_str}",
-            oninput: move |e| {
-                let parsed: Vec<u64> = e.value()
-                    .split(',')
-                    .filter_map(|s| s.trim().parse().ok())
-                    .collect();
-                on_change.call(parsed);
+        div { class: "flex-col gap-xs",
+            // ID chips
+            if !ids.is_empty() {
+                div { class: "flex flex-wrap gap-xs mb-xs",
+                    for (idx, id) in ids.iter().enumerate() {
+                        {
+                            let ids_clone = ids.clone();
+                            rsx! {
+                                span { class: "chip text-mono",
+                                    "{id}"
+                                    button {
+                                        class: "chip-remove",
+                                        onclick: move |_| {
+                                            let mut new_ids = ids_clone.clone();
+                                            new_ids.remove(idx);
+                                            on_change.call(new_ids);
+                                        },
+                                        "×"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Add new ID
+            div { class: "flex gap-xs",
+                input {
+                    r#type: "text",
+                    class: "input-inline text-mono",
+                    style: "width: 150px;",
+                    placeholder: placeholder,
+                    value: "{new_input}",
+                    oninput: move |e| new_input.set(e.value()),
+                    onkeydown: move |e| {
+                        if e.key() == Key::Enter && !new_input().trim().is_empty()
+                            && let Ok(id) = new_input().trim().parse::<u64>() {
+                                let mut new_ids = ids_for_keydown.clone();
+                                if !new_ids.contains(&id) {
+                                    new_ids.push(id);
+                                    on_change.call(new_ids);
+                                }
+                                new_input.set(String::new());
+                            }
+                    }
+                }
+                button {
+                    class: "btn btn-sm",
+                    onclick: move |_| {
+                        if let Ok(id) = new_input().trim().parse::<u64>() {
+                            let mut new_ids = ids_for_click.clone();
+                            if !new_ids.contains(&id) {
+                                new_ids.push(id);
+                                on_change.call(new_ids);
+                            }
+                            new_input.set(String::new());
+                        }
+                    },
+                    "Add"
+                }
             }
         }
     }

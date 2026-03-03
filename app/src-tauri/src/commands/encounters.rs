@@ -52,6 +52,12 @@ pub struct BossWithPathResponse {
     /// Counter IDs that exist in the bundled definition but have been modified by the user.
     #[serde(default)]
     pub modified_counter_ids: Vec<String>,
+    /// Challenge IDs that exist in the bundled definition, unmodified.
+    #[serde(default)]
+    pub builtin_challenge_ids: Vec<String>,
+    /// Challenge IDs that exist in the bundled definition but have been modified by the user.
+    #[serde(default)]
+    pub modified_challenge_ids: Vec<String>,
 }
 
 impl From<BossWithPath> for BossWithPathResponse {
@@ -66,6 +72,8 @@ impl From<BossWithPath> for BossWithPathResponse {
             modified_phase_ids: Vec::new(),
             builtin_counter_ids: Vec::new(),
             modified_counter_ids: Vec::new(),
+            builtin_challenge_ids: Vec::new(),
+            modified_challenge_ids: Vec::new(),
         }
     }
 }
@@ -422,18 +430,20 @@ pub async fn fetch_area_bosses(
     // Load the original bundled definitions (before custom merge) so the UI can
     // distinguish: built-in (unmodified), modified (built-in but changed), custom (new).
     // We store full definitions to compare against the merged result.
-    let (bundled_timers, bundled_phases, bundled_counters): (
+    let (bundled_timers, bundled_phases, bundled_counters, bundled_challenges): (
         std::collections::HashMap<String, Vec<BossTimerDefinition>>,
         std::collections::HashMap<String, Vec<PhaseDefinition>>,
         std::collections::HashMap<String, Vec<CounterDefinition>>,
+        std::collections::HashMap<String, Vec<ChallengeDefinition>>,
     ) = if get_custom_path_if_bundled(&path, &app_handle).is_some() {
         let originals = load_bosses_from_file(&path).unwrap_or_default();
         let timers = originals.iter().map(|b| (b.id.clone(), b.timers.clone())).collect();
         let phases = originals.iter().map(|b| (b.id.clone(), b.phases.clone())).collect();
         let counters = originals.iter().map(|b| (b.id.clone(), b.counters.clone())).collect();
-        (timers, phases, counters)
+        let challenges = originals.iter().map(|b| (b.id.clone(), b.challenges.clone())).collect();
+        (timers, phases, counters, challenges)
     } else {
-        (std::collections::HashMap::new(), std::collections::HashMap::new(), std::collections::HashMap::new())
+        (std::collections::HashMap::new(), std::collections::HashMap::new(), std::collections::HashMap::new(), std::collections::HashMap::new())
     };
 
     let mut bosses = load_file_with_custom(&path)?;
@@ -491,6 +501,8 @@ pub async fn fetch_area_bosses(
             let mut modified_phase_ids = Vec::new();
             let mut builtin_counter_ids = Vec::new();
             let mut modified_counter_ids = Vec::new();
+            let mut builtin_challenge_ids: Vec<String> = Vec::new();
+            let mut modified_challenge_ids: Vec<String> = Vec::new();
 
             if let Some(original_timers) = bundled_timers.get(&bwp.boss.id) {
                 for timer in &bwp.boss.timers {
@@ -528,6 +540,18 @@ pub async fn fetch_area_bosses(
                 }
             }
 
+            if let Some(original_challenges) = bundled_challenges.get(&bwp.boss.id) {
+                for challenge in &bwp.boss.challenges {
+                    if let Some(original) = original_challenges.iter().find(|c| c.id == challenge.id) {
+                        if *original == *challenge {
+                            builtin_challenge_ids.push(challenge.id.clone());
+                        } else {
+                            modified_challenge_ids.push(challenge.id.clone());
+                        }
+                    }
+                }
+            }
+
             // Populate roles for frontend (after comparison so it doesn't affect modified detection)
             for timer in &mut bwp.boss.timers {
                 if timer.roles.is_empty() {
@@ -542,6 +566,8 @@ pub async fn fetch_area_bosses(
             resp.modified_phase_ids = modified_phase_ids;
             resp.builtin_counter_ids = builtin_counter_ids;
             resp.modified_counter_ids = modified_counter_ids;
+            resp.builtin_challenge_ids = builtin_challenge_ids;
+            resp.modified_challenge_ids = modified_challenge_ids;
             resp
         })
         .collect())
