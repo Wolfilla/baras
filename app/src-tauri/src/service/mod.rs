@@ -2877,7 +2877,11 @@ async fn build_timer_data_with_audio(
         let entry = TimerEntry {
             name: timer.name.clone(),
             remaining_secs: remaining,
-            total_secs: timer.duration.as_secs_f32(),
+            total_secs: if timer.show_at_secs > 0.0 {
+                timer.show_at_secs
+            } else {
+                timer.duration.as_secs_f32()
+            },
             color: timer.color,
             icon_ability_id: timer.icon_ability_id,
             icon,
