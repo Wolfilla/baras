@@ -921,7 +921,9 @@ impl OverlayManager {
         let settings = &config.overlay_settings;
         let globally_visible = settings.overlays_visible;
 
-        // Handle each overlay type
+        // Handle each overlay type, collecting newly spawned overlays for initial data
+        let mut newly_spawned: Vec<(OverlayType, tokio::sync::mpsc::Sender<OverlayCommand>)> = Vec::new();
+
         for overlay_type in Self::all_overlay_types() {
             let key = overlay_type.config_key();
             let enabled = settings.enabled.get(key).copied().unwrap_or(false);
@@ -943,7 +945,9 @@ impl OverlayManager {
                 if let Ok(result) = Self::spawn(overlay_type, settings)
                     && let Ok(mut s) = state.lock()
                 {
+                    let tx = result.handle.tx.clone();
                     s.insert(result.handle);
+                    newly_spawned.push((overlay_type, tx));
                 }
                 service.set_overlay_active(key, true);
             }
@@ -1017,6 +1021,22 @@ impl OverlayManager {
             let config_update =
                 Self::create_config_update(kind, settings, config.european_number_format);
             let _ = tx.send(OverlayCommand::UpdateConfig(config_update)).await;
+        }
+
+        // Send initial data to newly spawned overlays so they don't appear empty
+        if !newly_spawned.is_empty() {
+            let combat_data = service.current_combat_data().await;
+            for (kind, tx) in newly_spawned {
+                Self::send_initial_data(kind, &tx, combat_data.as_ref()).await;
+
+                if matches!(kind, OverlayType::Notes) {
+                    if let Some(notes_data) = service.get_current_notes().await {
+                        let _ = tx
+                            .send(OverlayCommand::UpdateData(OverlayData::Notes(notes_data)))
+                            .await;
+                    }
+                }
+            }
         }
 
         Ok(true)
