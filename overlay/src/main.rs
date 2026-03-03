@@ -53,6 +53,7 @@ mod examples {
             true,
             1.0,
             true,
+            false,
         ) {
             Ok(m) => m,
             Err(e) => {
@@ -167,6 +168,7 @@ mod examples {
             true,
             1.0,
             true,
+            false,
         ) {
             Ok(m) => m,
             Err(e) => {
@@ -269,6 +271,7 @@ mod examples {
             true,
             1.0,
             true,
+            false,
         ) {
             Ok(m) => m,
             Err(e) => {

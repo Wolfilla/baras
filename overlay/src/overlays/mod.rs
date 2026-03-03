@@ -125,8 +125,8 @@ pub enum OverlayData {
 /// and `european_number_format` (`bool`) for number display formatting.
 #[derive(Debug, Clone)]
 pub enum OverlayConfigUpdate {
-    /// Appearance config for metric overlays (+ alpha, show_empty, stack_bottom, scale, show_class_icons, font_scale, dynamic_background, european)
-    Metric(OverlayAppearanceConfig, u8, bool, bool, f32, bool, f32, bool, bool),
+    /// Appearance config for metric overlays (+ alpha, show_empty, stack_bottom, scale, show_class_icons, font_scale, dynamic_background, european, show_background_bar)
+    Metric(OverlayAppearanceConfig, u8, bool, bool, f32, bool, f32, bool, bool, bool),
     /// Config for personal overlay (+ background alpha, european)
     Personal(PersonalOverlayConfig, u8, bool),
     /// Config for raid overlay (+ background alpha, european)

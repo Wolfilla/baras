@@ -534,9 +534,15 @@ impl ChallengeOverlay {
                 0.0
             };
 
+            let bg_color = if self.config.show_background_bar {
+                colors::dps_bar_bg()
+            } else {
+                Color::from_rgba8(0, 0, 0, 0)
+            };
+
             let mut bar = ProgressBar::new(display_name, progress)
                 .with_fill_color(bar_color)
-                .with_bg_color(colors::dps_bar_bg())
+                .with_bg_color(bg_color)
                 .with_text_color(font_color);
 
             // Use per-challenge columns setting

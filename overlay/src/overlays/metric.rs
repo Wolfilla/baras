@@ -119,6 +119,8 @@ pub struct MetricOverlay {
     font_scale: f32,
     /// Global dynamic background setting for metrics
     dynamic_background: bool,
+    /// Show grey background bar behind each player's fill bar
+    show_background_bar: bool,
     /// Use European number formatting (swap `.` and `,`)
     european_number_format: bool,
 }
@@ -136,6 +138,7 @@ impl MetricOverlay {
         show_class_icons: bool,
         font_scale: f32,
         dynamic_background: bool,
+        show_background_bar: bool,
     ) -> Result<Self, PlatformError> {
         let mut frame = OverlayFrame::new(config, BASE_WIDTH, BASE_HEIGHT)?;
         frame.set_background_alpha(background_alpha);
@@ -152,6 +155,7 @@ impl MetricOverlay {
             show_class_icons,
             font_scale: font_scale.clamp(1.0, 2.0),
             dynamic_background,
+            show_background_bar,
             european_number_format: false,
         })
     }
@@ -194,6 +198,11 @@ impl MetricOverlay {
     /// Update dynamic background setting
     pub fn set_dynamic_background(&mut self, dynamic: bool) {
         self.dynamic_background = dynamic;
+    }
+
+    /// Update show background bar setting
+    pub fn set_show_background_bar(&mut self, show: bool) {
+        self.show_background_bar = show;
     }
 
     /// Update the metric entries
@@ -385,9 +394,15 @@ impl MetricOverlay {
                 0.0
             };
 
+            let bg_color = if self.show_background_bar {
+                colors::dps_bar_bg()
+            } else {
+                Color::from_rgba8(0, 0, 0, 0)
+            };
+
             let mut bar = ProgressBar::new(display_name, progress)
                 .with_fill_color(fill_color)
-                .with_bg_color(colors::dps_bar_bg())
+                .with_bg_color(bg_color)
                 .with_text_color(font_color);
 
             // Add label offset to make room for icon
@@ -531,6 +546,7 @@ impl Overlay for MetricOverlay {
             font_scale,
             dynamic_bg,
             european,
+            show_bg_bar,
         ) = config
         {
             self.set_appearance(appearance);
@@ -542,6 +558,7 @@ impl Overlay for MetricOverlay {
             self.set_font_scale(font_scale);
             self.set_dynamic_background(dynamic_bg);
             self.european_number_format = european;
+            self.set_show_background_bar(show_bg_bar);
         }
     }
 

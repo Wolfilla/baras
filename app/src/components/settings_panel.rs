@@ -97,6 +97,7 @@ pub fn SettingsPanel(
                 config.overlay_settings.metric_scaling_factor = new_settings.metric_scaling_factor;
                 config.overlay_settings.metric_font_scale = new_settings.metric_font_scale;
                 config.overlay_settings.metric_dynamic_background = new_settings.metric_dynamic_background;
+                config.overlay_settings.metric_show_background_bar = new_settings.metric_show_background_bar;
                 config.overlay_settings.class_icons_enabled = new_settings.class_icons_enabled;
                 config.overlay_settings.personal_opacity = new_settings.personal_opacity;
                 config.overlay_settings.raid_overlay = new_settings.raid_overlay.clone();
@@ -638,6 +639,19 @@ pub fn SettingsPanel(
                                     onchange: move |e: Event<FormData>| {
                                         let mut new_settings = draft_settings();
                                         new_settings.metric_dynamic_background = e.checked();
+                                        update_draft(new_settings);
+                                    }
+                                }
+                            }
+
+                            div { class: "setting-row",
+                                label { "Show Background Bar" }
+                                input {
+                                    r#type: "checkbox",
+                                    checked: current_settings.metric_show_background_bar,
+                                    onchange: move |e: Event<FormData>| {
+                                        let mut new_settings = draft_settings();
+                                        new_settings.metric_show_background_bar = e.checked();
                                         update_draft(new_settings);
                                     }
                                 }
@@ -1899,6 +1913,19 @@ pub fn SettingsPanel(
                                     onchange: move |e: Event<FormData>| {
                                         let mut new_settings = draft_settings();
                                         new_settings.challenge_overlay.show_duration = e.checked();
+                                        update_draft(new_settings);
+                                    }
+                                }
+                            }
+
+                            div { class: "setting-row",
+                                label { "Show Background Bar" }
+                                input {
+                                    r#type: "checkbox",
+                                    checked: challenge_config.show_background_bar,
+                                    onchange: move |e: Event<FormData>| {
+                                        let mut new_settings = draft_settings();
+                                        new_settings.challenge_overlay.show_background_bar = e.checked();
                                         update_draft(new_settings);
                                     }
                                 }

@@ -1602,6 +1602,9 @@ pub struct ChallengeOverlayConfig {
     /// Layout direction for challenge cards
     #[serde(default)]
     pub layout: ChallengeLayout,
+    /// When true, show grey background bar behind each player's fill bar
+    #[serde(default)]
+    pub show_background_bar: bool,
     /// Font scale multiplier (1.0 - 2.0, default 1.0)
     #[serde(default = "default_scaling_factor")]
     pub font_scale: f32,
@@ -1626,6 +1629,7 @@ impl Default for ChallengeOverlayConfig {
             show_duration: true,
             max_display: 4,
             layout: ChallengeLayout::Vertical,
+            show_background_bar: false,
             font_scale: 1.0,
             dynamic_background: false,
         }
@@ -2031,6 +2035,9 @@ pub struct OverlaySettings {
     /// When true, metric overlay backgrounds shrink to fit content
     #[serde(default)]
     pub metric_dynamic_background: bool,
+    /// When true, show grey background bar behind each player's fill bar
+    #[serde(default)]
+    pub metric_show_background_bar: bool,
     #[serde(default = "default_opacity")]
     pub personal_opacity: u8,
     #[serde(default = "default_true")]
@@ -2115,6 +2122,7 @@ impl Default for OverlaySettings {
             metric_scaling_factor: 1.0,
             metric_font_scale: 1.0,
             metric_dynamic_background: false,
+            metric_show_background_bar: false,
             personal_opacity: 180,
             class_icons_enabled: true,
             default_appearances: HashMap::new(),
