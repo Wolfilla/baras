@@ -46,6 +46,7 @@ pub fn SettingsPanel(
     let mut profile_status = use_signal(String::new);
     let mut renaming_profile: Signal<Option<String>> = use_signal(|| None);
     let mut rename_input = use_signal(String::new);
+    let mut metrics_global_open = use_signal(|| false);
     let mut toast = use_toast();
 
     let current_settings = draft_settings();
@@ -433,30 +434,30 @@ pub fn SettingsPanel(
                 div { class: "tab-group",
                     span { class: "tab-group-label", "General" }
                     div { class: "tab-group-buttons",
-                        TabButton { label: "Personal Stats", tab_key: "personal", selected_tab: selected_tab }
-                        TabButton { label: "Raid Frames", tab_key: "raid", selected_tab: selected_tab }
-                        TabButton { label: "Alerts", tab_key: "alerts", selected_tab: selected_tab }
-                        TabButton { label: "Combat Time", tab_key: "combat_time", selected_tab: selected_tab }
-                        TabButton { label: "Op Timer", tab_key: "operation_timer", selected_tab: selected_tab }
+                        TabButton { label: "Personal Stats", tab_key: "personal", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
+                        TabButton { label: "Raid Frames", tab_key: "raid", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
+                        TabButton { label: "Alerts", tab_key: "alerts", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
+                        TabButton { label: "Combat Time", tab_key: "combat_time", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
+                        TabButton { label: "Op Timer", tab_key: "operation_timer", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
                     }
                 }
                 div { class: "tab-group",
                     span { class: "tab-group-label", "Encounters" }
                     div { class: "tab-group-buttons",
-                        TabButton { label: "Boss Health", tab_key: "boss_health", selected_tab: selected_tab }
-                        TabButton { label: "Timers A", tab_key: "timers_a", selected_tab: selected_tab }
-                        TabButton { label: "Timers B", tab_key: "timers_b", selected_tab: selected_tab }
-                        TabButton { label: "Challenges", tab_key: "challenges", selected_tab: selected_tab }
-                        TabButton { label: "Notes", tab_key: "notes", selected_tab: selected_tab }
+                        TabButton { label: "Boss Health", tab_key: "boss_health", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
+                        TabButton { label: "Timers A", tab_key: "timers_a", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
+                        TabButton { label: "Timers B", tab_key: "timers_b", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
+                        TabButton { label: "Challenges", tab_key: "challenges", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
+                        TabButton { label: "Notes", tab_key: "notes", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
                     }
                 }
                 div { class: "tab-group",
                     span { class: "tab-group-label", "Effects" }
                     div { class: "tab-group-buttons",
-                        TabButton { label: "Effects A", tab_key: "effects_a", selected_tab: selected_tab }
-                        TabButton { label: "Effects B", tab_key: "effects_b", selected_tab: selected_tab }
-                        TabButton { label: "Cooldowns", tab_key: "cooldowns", selected_tab: selected_tab }
-                        TabButton { label: "DOT Tracker", tab_key: "dot_tracker", selected_tab: selected_tab }
+                        TabButton { label: "Effects A", tab_key: "effects_a", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
+                        TabButton { label: "Effects B", tab_key: "effects_b", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
+                        TabButton { label: "Cooldowns", tab_key: "cooldowns", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
+                        TabButton { label: "DOT Tracker", tab_key: "dot_tracker", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
                     }
                 }
                 div { class: "tab-group",
@@ -468,15 +469,19 @@ pub fn SettingsPanel(
                                 label: overlay_type.label(),
                                 tab_key: overlay_type.config_key(),
                                 selected_tab: selected_tab,
+                                metrics_global_open: metrics_global_open,
                             }
                         }
                     }
-                    details { class: "settings-section collapsible metrics-global",
-                        summary { class: "collapsible-summary",
+                    div { class: if metrics_global_open() { "settings-section collapsible metrics-global open" } else { "settings-section collapsible metrics-global" },
+                        div {
+                            class: "collapsible-summary",
+                            onclick: move |_| metrics_global_open.set(!metrics_global_open()),
                             i { class: "fa-solid fa-sliders summary-icon" }
                             "Global Metrics Settings"
                         }
-                        div { class: "collapsible-content",
+                        if metrics_global_open() {
+                            div { class: "collapsible-content",
                             div { class: "setting-row",
                                 label { "Background Opacity" }
                                 input {
@@ -582,6 +587,7 @@ pub fn SettingsPanel(
                                         update_draft(new_settings);
                                     }
                                 }
+                            }
                             }
                         }
                     }
@@ -2673,12 +2679,15 @@ pub fn SettingsPanel(
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[component]
-fn TabButton(label: &'static str, tab_key: &'static str, selected_tab: Signal<String>) -> Element {
+fn TabButton(label: &'static str, tab_key: &'static str, selected_tab: Signal<String>, metrics_global_open: Signal<bool>) -> Element {
     let is_active = selected_tab() == tab_key;
     rsx! {
         button {
             class: if is_active { "tab-btn active" } else { "tab-btn" },
-            onclick: move |_| selected_tab.set(tab_key.to_string()),
+            onclick: move |_| {
+                selected_tab.set(tab_key.to_string());
+                metrics_global_open.set(false);
+            },
             "{label}"
         }
     }

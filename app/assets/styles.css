@@ -2224,6 +2224,17 @@ details[open] .collapsible-summary::before {
   color: var(--text-secondary);
 }
 
+/* Signal-controlled collapsible (metrics-global) — uses .open class instead of details[open] */
+.metrics-global > .collapsible-summary::before {
+  content: "▶";
+  font-size: 0.7em;
+  transition: transform 0.2s;
+}
+
+.metrics-global.open > .collapsible-summary::before {
+  transform: rotate(90deg);
+}
+
 .collapsible-content {
   padding-top: 0.5em;
 }
