@@ -513,6 +513,36 @@ select optgroup {
   font-size: 0.85em;
 }
 
+/* Customize button in header (gold-tinted to stand out) */
+.btn-header-customize {
+  color: #d4a849 !important;
+  border-color: rgba(212, 168, 73, 0.25) !important;
+}
+
+.btn-header-customize:hover:not(:disabled) {
+  color: #f0c860 !important;
+  border-color: rgba(212, 168, 73, 0.4) !important;
+  background: rgba(212, 168, 73, 0.12) !important;
+}
+
+/* Profile unsaved hint (compact, in header nav row) */
+.header-unsaved-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: 0.7em;
+  color: rgba(240, 173, 78, 0.8);
+  white-space: nowrap;
+  padding: 0.2em 0.5em;
+  border-radius: var(--radius-sm);
+  background: rgba(240, 173, 78, 0.06);
+}
+
+.header-unsaved-hint i {
+  font-size: 0.85em;
+  color: rgba(240, 173, 78, 0.7);
+}
+
 /* Status dot (inside header-overlay-controls) */
 .header-overlay-controls .status-dot {
   width: 8px;
@@ -1686,6 +1716,19 @@ button:active {
   padding: 0.3em 0.7em;
 }
 
+/* Auto-hide toggles in session settings row */
+.session-auto-hide-toggles {
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  margin-left: auto;
+}
+
+.session-auto-hide-toggles .toggle-text {
+  font-size: 0.8em;
+  white-space: nowrap;
+}
+
 /* Session toolbar */
 .session-toolbar {
   display: flex;
@@ -2762,23 +2805,6 @@ details[open] .collapsible-summary::before {
    ───────────────────────────────────────────────────────────────────────────── */
 
 /* Overlays top bar - Customize + Profiles + Toggle switches */
-.overlays-top-bar {
-  display: flex;
-  align-items: center;
-  gap: 1em;
-  margin-bottom: 0.75em;
-  padding-bottom: 0.75em;
-  border-bottom: 1px solid var(--blue-alpha-15);
-}
-
-/* Auto-hide toggle switches container */
-.overlay-auto-hide-toggles {
-  display: flex;
-  align-items: center;
-  gap: 1.25em;
-  margin-left: auto;
-}
-
 /* Toggle switch label (wraps switch + text) */
 .toggle-switch-label {
   display: flex;
@@ -2856,44 +2882,6 @@ details[open] .collapsible-summary::before {
 
 .toggle-switch-label:hover input:checked + .toggle-slider {
   border-color: #7a9aca;
-}
-
-/* Customize button - prominent gold styling */
-.btn-customize {
-  display: flex;
-  align-items: center;
-  gap: 0.5em;
-  padding: 0.6em 1.2em;
-  background: linear-gradient(
-    180deg,
-    rgba(180, 140, 50, 0.25) 0%,
-    rgba(140, 100, 30, 0.15) 100%
-  );
-  border: 1px solid #d4a849;
-  border-radius: var(--radius-lg);
-  color: #f0c860;
-  font-size: 0.9em;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 0 10px rgba(212, 168, 73, 0.3);
-}
-
-.btn-customize:hover {
-  background: linear-gradient(
-    180deg,
-    rgba(200, 160, 60, 0.35) 0%,
-    rgba(160, 120, 40, 0.25) 100%
-  );
-  box-shadow: 0 0 20px rgba(212, 168, 73, 0.5);
-  color: #ffe080;
-}
-
-.btn-customize i {
-  font-size: 0.95em;
-  color: #d4a849;
 }
 
 /* profile-selector, profile-dropdown, profile-save-btn, btn-create-profile styles
@@ -4305,6 +4293,17 @@ details[open] .collapsible-summary::before {
   .header-live-status {
     gap: 0.25em;
   }
+  /* Compact auto-hide toggle labels in session row */
+  .session-auto-hide-toggles .toggle-text {
+    font-size: 0.7em;
+  }
+  .session-auto-hide-toggles {
+    gap: 0.6em;
+  }
+  /* Shorten unsaved hint text */
+  .header-unsaved-hint {
+    font-size: 0.6em;
+  }
 }
 
 /* Small: hide tab text labels, show only icons */
@@ -4331,6 +4330,14 @@ details[open] .collapsible-summary::before {
   }
   .header-controls-divider {
     height: 16px;
+  }
+  /* Hide auto-hide toggle labels, show only switches */
+  .session-auto-hide-toggles .toggle-text {
+    display: none;
+  }
+  /* Hide unsaved hint */
+  .header-unsaved-hint {
+    display: none;
   }
 }
 

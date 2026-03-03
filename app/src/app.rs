@@ -650,25 +650,6 @@ pub fn App() -> Element {
                                 },
                                 i { class: "fa-solid fa-rotate" }
                             }
-                            // Resume Live button (when paused/historical)
-                            if !live_tailing {
-                                button {
-                                    class: "btn-resume-live",
-                                    title: "Resume live tailing",
-                                    onclick: move |_| {
-                                        let mut toast = use_toast();
-                                        spawn(async move {
-                                            if let Err(err) = api::resume_live_tailing().await {
-                                                toast.show(format!("Failed to resume live tailing: {}", err), ToastSeverity::Normal);
-                                            } else {
-                                                is_live_tailing.set(true);
-                                            }
-                                        });
-                                    },
-                                    span { class: "resume-live-label", "Resume Live " }
-                                    i { class: "fa-solid fa-play" }
-                                }
-                            }
                         }
                         button {
                             class: "btn btn-header-files",
@@ -756,6 +737,42 @@ pub fn App() -> Element {
                             disabled: !raid_on,
                             onclick: move |_| { spawn(async move { api::clear_raid_registry().await; }); },
                             i { class: "fa-solid fa-eraser" }
+                        }
+                        span { class: "header-controls-divider" }
+                        button {
+                            class: "btn btn-header-overlay btn-header-customize",
+                            title: "Customize overlay appearance",
+                            onclick: move |_| settings_open.set(!settings_open()),
+                            i { class: "fa-solid fa-screwdriver-wrench" }
+                        }
+                    }
+
+                    // Resume Live button (when paused/historical)
+                    if !live_tailing {
+                        button {
+                            class: "btn-resume-live",
+                            title: "Resume live tailing",
+                            onclick: move |_| {
+                                let mut toast = use_toast();
+                                spawn(async move {
+                                    if let Err(err) = api::resume_live_tailing().await {
+                                        toast.show(format!("Failed to resume live tailing: {}", err), ToastSeverity::Normal);
+                                    } else {
+                                        is_live_tailing.set(true);
+                                    }
+                                });
+                            },
+                            span { class: "resume-live-label", "Resume Live " }
+                            i { class: "fa-solid fa-play" }
+                        }
+                    }
+
+                    // Profile unsaved changes hint (header)
+                    if profile_dirty() && active_profile().is_some() {
+                        span { class: "header-unsaved-hint",
+                            title: "Overlay profile has unsaved changes",
+                            i { class: "fa-solid fa-circle-info" }
+                            " Changes not saved"
                         }
                     }
 
@@ -1193,6 +1210,65 @@ pub fn App() -> Element {
                                         }
                                     }
                                 }
+
+                                span { class: "session-settings-divider" }
+
+                                // Auto-hide toggles
+                                div { class: "session-auto-hide-toggles",
+                                    label {
+                                        class: "toggle-switch-label",
+                                        title: "Automatically hide overlays when viewing historical files or when logged out",
+                                        span { class: "toggle-switch",
+                                            input {
+                                                r#type: "checkbox",
+                                                checked: overlay_settings().hide_when_not_live,
+                                                onchange: move |e| {
+                                                    let enabled = e.checked();
+                                                    let mut toast = use_toast();
+                                                    spawn(async move {
+                                                        if let Some(mut cfg) = api::get_config().await {
+                                                            cfg.overlay_settings.hide_when_not_live = enabled;
+                                                            if let Err(err) = api::update_config(&cfg).await {
+                                                                toast.show(format!("Failed to save settings: {}", err), ToastSeverity::Normal);
+                                                            } else {
+                                                                overlay_settings.set(cfg.overlay_settings);
+                                                                api::apply_not_live_auto_hide().await;
+                                                            }
+                                                        }
+                                                    });
+                                                },
+                                            }
+                                            span { class: "toggle-slider" }
+                                        }
+                                        span { class: "toggle-text", "Auto-hide when not live" }
+                                    }
+                                    label {
+                                        class: "toggle-switch-label",
+                                        title: "Automatically hide overlays during in-game conversations",
+                                        span { class: "toggle-switch",
+                                            input {
+                                                r#type: "checkbox",
+                                                checked: overlay_settings().hide_during_conversations,
+                                                onchange: move |e| {
+                                                    let enabled = e.checked();
+                                                    let mut toast = use_toast();
+                                                    spawn(async move {
+                                                        if let Some(mut cfg) = api::get_config().await {
+                                                            cfg.overlay_settings.hide_during_conversations = enabled;
+                                                            if let Err(err) = api::update_config(&cfg).await {
+                                                                toast.show(format!("Failed to save settings: {}", err), ToastSeverity::Normal);
+                                                            } else {
+                                                                overlay_settings.set(cfg.overlay_settings);
+                                                            }
+                                                        }
+                                                    });
+                                                },
+                                            }
+                                            span { class: "toggle-slider" }
+                                        }
+                                        span { class: "toggle-text", "Hide in conversations" }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1216,72 +1292,6 @@ pub fn App() -> Element {
                                 span { " Changes not saved to profile" }
                             }
                         }
-                        // Top bar: Customize button + Profile selector
-                        div { class: "overlays-top-bar",
-                            button {
-                                class: "btn btn-customize",
-                                title: "Open overlay appearance and behavior settings",
-                                onclick: move |_| settings_open.set(!settings_open()),
-                                i { class: "fa-solid fa-screwdriver-wrench" }
-                                span { " Customize" }
-                            }
-                            div { class: "overlay-auto-hide-toggles",
-                                label {
-                                    class: "toggle-switch-label",
-                                    title: "Automatically hide overlays when viewing historical files or when logged out",
-                                    span { class: "toggle-switch",
-                                        input {
-                                            r#type: "checkbox",
-                                            checked: overlay_settings().hide_when_not_live,
-                                            onchange: move |e| {
-                                                let enabled = e.checked();
-                                                let mut toast = use_toast();
-                                                spawn(async move {
-                                                    if let Some(mut cfg) = api::get_config().await {
-                                                        cfg.overlay_settings.hide_when_not_live = enabled;
-                                                        if let Err(err) = api::update_config(&cfg).await {
-                                                            toast.show(format!("Failed to save settings: {}", err), ToastSeverity::Normal);
-                                                        } else {
-                                                            overlay_settings.set(cfg.overlay_settings);
-                                                            api::apply_not_live_auto_hide().await;
-                                                        }
-                                                    }
-                                                });
-                                            },
-                                        }
-                                        span { class: "toggle-slider" }
-                                    }
-                                    span { class: "toggle-text", "Auto-hide when not live" }
-                                }
-                                label {
-                                    class: "toggle-switch-label",
-                                    title: "Automatically hide overlays during in-game conversations",
-                                    span { class: "toggle-switch",
-                                        input {
-                                            r#type: "checkbox",
-                                            checked: overlay_settings().hide_during_conversations,
-                                            onchange: move |e| {
-                                                let enabled = e.checked();
-                                                let mut toast = use_toast();
-                                                spawn(async move {
-                                                    if let Some(mut cfg) = api::get_config().await {
-                                                        cfg.overlay_settings.hide_during_conversations = enabled;
-                                                        if let Err(err) = api::update_config(&cfg).await {
-                                                            toast.show(format!("Failed to save settings: {}", err), ToastSeverity::Normal);
-                                                        } else {
-                                                            overlay_settings.set(cfg.overlay_settings);
-                                                        }
-                                                    }
-                                                });
-                                            },
-                                        }
-                                        span { class: "toggle-slider" }
-                                    }
-                                    span { class: "toggle-text", "Hide in conversations" }
-                                }
-                            }
-                        }
-
                         // Controls
                         h4 { class: "subsection-title", "Controls" }
                         div { class: "settings-controls",
@@ -1544,31 +1554,6 @@ pub fn App() -> Element {
                         }
 
                     }
-
-                    // Overlay settings modal
-                    if settings_open() {
-                        div {
-                            class: "modal-backdrop",
-                            onclick: move |_| settings_open.set(false),
-                            div {
-                                onclick: move |e| e.stop_propagation(),
-                                SettingsPanel {
-                                    settings: overlay_settings,
-                                    selected_tab: selected_overlay_tab,
-                                    profile_names: profile_names,
-                                    active_profile: active_profile,
-                                    metric_overlays_enabled: metric_overlays_enabled,
-                                    personal_enabled: personal_enabled,
-                                    raid_enabled: raid_enabled,
-                                    overlays_visible: overlays_visible,
-                                    profile_dirty: profile_dirty,
-                                    on_close: move |_| settings_open.set(false),
-                                    on_header_mousedown: move |_| {},
-                                    on_settings_saved: move |_| profile_dirty.set(true),
-                                }
-                            }
-                        }
-                    }
                 }
 
                 // ─────────────────────────────────────────────────────────────
@@ -1615,6 +1600,31 @@ pub fn App() -> Element {
                         },
                         DataExplorerPanel {
                             state: ui_state,
+                        }
+                    }
+                }
+            }
+
+            // Overlay settings modal (accessible from any tab via header customize button)
+            if settings_open() {
+                div {
+                    class: "modal-backdrop",
+                    onclick: move |_| settings_open.set(false),
+                    div {
+                        onclick: move |e| e.stop_propagation(),
+                        SettingsPanel {
+                            settings: overlay_settings,
+                            selected_tab: selected_overlay_tab,
+                            profile_names: profile_names,
+                            active_profile: active_profile,
+                            metric_overlays_enabled: metric_overlays_enabled,
+                            personal_enabled: personal_enabled,
+                            raid_enabled: raid_enabled,
+                            overlays_visible: overlays_visible,
+                            profile_dirty: profile_dirty,
+                            on_close: move |_| settings_open.set(false),
+                            on_header_mousedown: move |_| {},
+                            on_settings_saved: move |_| profile_dirty.set(true),
                         }
                     }
                 }
