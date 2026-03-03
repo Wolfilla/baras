@@ -1,3 +1,38 @@
+# v2026.3.4
+
+Can't stop won't stop. I literally can't stop updating help me.
+
+## Challenges
+
+Challenge system has been debugged and revamped.
+
+- Challenge overlays no longer disappear on combat end
+- Challenges have been revamped so condition scoping and duration calculation works properly
+- Added "Damage Absorbed" challenge type
+- Added effect stacks challenge type
+- Challenge results now display in the data explorer with their selected bar color
+- Duration scoping should now work on non-phase condition
+- Challenge editor UI updated
+
+## Boss HP Thresholds and Shields
+
+In the encounter builder entity roster, you can now add HP thresholds and shields to entities. HP thresholds will display on the boss bar with a line and a small label below.
+Shields will display above the health bar when the effect for the shield is applied, and disappear when the HP threshold is met or the shield is removed.
+
+**Current Target has been moved above the boss HP bar to prevent clipping issues with new labels**
+
+## Encounter Definitions
+
+- Added Voltinator shield to Apex
+- Added Voltinator DPS challenge to Apex
+- Updated TFB (the boss) timers and phases (Credit to Keetsune)
+
+## Other
+
+- Added option to toggle background bars in metrics/challenges overlays. Default to false so your background bars are gone unless you want to toggle them back on.
+- Timer bars now render based on the `Show at` value instead of absolute value if a `Show at` value is present.
+- Added link to Github for those who want to view the source code
+
 # v2026.3.3
 
 ## Role-Based Profile Switching
