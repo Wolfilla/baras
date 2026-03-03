@@ -1432,6 +1432,9 @@ pub struct BossHealthConfig {
     /// When true, background shrinks to fit content instead of filling the window
     #[serde(default)]
     pub dynamic_background: bool,
+    /// When true (default), boss health clears after combat ends
+    #[serde(default = "default_true")]
+    pub clear_after_combat: bool,
 }
 
 fn default_boss_bar_color() -> Color {
@@ -1447,6 +1450,7 @@ impl Default for BossHealthConfig {
             show_target: true,
             font_scale: 1.0,
             dynamic_background: false,
+            clear_after_combat: true,
         }
     }
 }

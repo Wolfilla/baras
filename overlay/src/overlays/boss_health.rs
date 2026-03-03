@@ -289,8 +289,13 @@ impl BossHealthOverlay {
 impl Overlay for BossHealthOverlay {
     fn update_data(&mut self, data: OverlayData) -> bool {
         if let OverlayData::BossHealth(boss_data) = data {
+            // When clear_after_combat is disabled, ignore empty clears
+            // so the last boss health remains visible
+            if boss_data.entries.is_empty() && !self.config.clear_after_combat {
+                return false;
+            }
             self.set_data(boss_data);
-            true // Boss health always renders when updated (only sent during combat)
+            true
         } else {
             false
         }
