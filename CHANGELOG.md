@@ -11,7 +11,7 @@ Challenge system has been debugged and revamped.
 - Added "Damage Absorbed" challenge type
 - Added effect stacks challenge type
 - Challenge results now display in the data explorer with their selected bar color
-- Duration scoping should now work on non-phase condition
+- Duration scoping should now work on counter conditions
 - Challenge editor UI updated
 
 ## Boss HP Thresholds and Shields
