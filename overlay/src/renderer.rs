@@ -259,6 +259,11 @@ impl Renderer {
         radius: f32,
         color: Color,
     ) {
+        // Guard against degenerate dimensions that produce empty paths
+        if w <= 0.0 || h <= 0.0 {
+            return;
+        }
+
         let Some(mut pixmap) = PixmapMut::from_bytes(buffer, width, height) else {
             return;
         };
@@ -293,6 +298,10 @@ impl Renderer {
         stroke_width: f32,
         color: Color,
     ) {
+        if w <= 0.0 || h <= 0.0 {
+            return;
+        }
+
         let Some(mut pixmap) = PixmapMut::from_bytes(buffer, width, height) else {
             return;
         };
@@ -330,6 +339,10 @@ impl Renderer {
         dash_length: f32,
         gap_length: f32,
     ) {
+        if w <= 0.0 || h <= 0.0 {
+            return;
+        }
+
         let Some(mut pixmap) = PixmapMut::from_bytes(buffer, width, height) else {
             return;
         };

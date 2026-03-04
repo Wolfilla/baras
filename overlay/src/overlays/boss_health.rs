@@ -359,7 +359,7 @@ impl BossHealthOverlay {
             // ── HP Marker Line (vertical line through the bar) ──────────
             if let Some((hp_pct, _)) = marker {
                 let marker_x = padding + (hp_pct / 100.0) * content_width;
-                let line_width = 1.2_f32;
+                let line_width = 2.0_f32;
                 self.frame.fill_rect(
                     marker_x - line_width / 2.0,
                     bar_y,
