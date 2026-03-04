@@ -273,6 +273,30 @@ pub(super) fn handle_phase_ended(
     manager.cancel_timers_matching(|t| t.matches_phase_ended(phase_id));
 }
 
+/// Handle any phase change - check for AnyPhaseChange triggers
+///
+/// This fires on every phase transition regardless of which phase is entered or exited.
+/// Called from the PhaseChanged signal handler alongside PhaseEntered/PhaseEnded handlers.
+pub(super) fn handle_any_phase_change(
+    manager: &mut TimerManager,
+    encounter: Option<&CombatEncounter>,
+    timestamp: NaiveDateTime,
+) {
+    let matching: Vec<_> = manager
+        .definitions_for_kind(TriggerKind::AnyPhaseChange)
+        .iter()
+        .filter(|d| manager.is_definition_active(d, encounter))
+        .cloned()
+        .collect();
+
+    for def in matching {
+        manager.start_timer(&def, timestamp, None);
+    }
+
+    // Check for cancel triggers on any phase change
+    manager.cancel_timers_matching(|t| t.is_any_phase_change());
+}
+
 /// Handle counter change - check for CounterReaches triggers
 pub(super) fn handle_counter_change(
     manager: &mut TimerManager,

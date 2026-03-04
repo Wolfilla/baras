@@ -670,6 +670,143 @@ fn test_phase_entered_and_ended_both_trigger() {
     );
 }
 
+#[test]
+fn test_any_phase_change_starts_timer() {
+    let mut manager = TimerManager::new();
+
+    let timer = make_timer(
+        "any_phase",
+        "Any Phase Change",
+        TimerTrigger::AnyPhaseChange,
+        10.0,
+    );
+    manager.load_definitions(vec![timer]);
+
+    // No timers active initially
+    assert!(manager.active_timers().is_empty());
+
+    // Phase change should trigger the timer
+    manager.handle_signal(
+        &GameSignal::PhaseChanged {
+            boss_id: "test_boss".to_string(),
+            old_phase: None,
+            new_phase: "phase_1".to_string(),
+            timestamp: now(),
+        },
+        None,
+    );
+
+    let active = manager.active_timers();
+    assert_eq!(
+        active.len(),
+        1,
+        "AnyPhaseChange timer should start on phase transition"
+    );
+    assert_eq!(active[0].name, "Any Phase Change");
+}
+
+#[test]
+fn test_any_phase_change_starts_on_every_transition() {
+    let mut manager = TimerManager::new();
+
+    // per_target=false so we can observe restarts
+    let mut timer = make_timer(
+        "any_phase",
+        "Any Phase Change",
+        TimerTrigger::AnyPhaseChange,
+        10.0,
+    );
+    timer.can_be_refreshed = true;
+    timer.per_target = false;
+    manager.load_definitions(vec![timer]);
+
+    // First transition
+    manager.handle_signal(
+        &GameSignal::PhaseChanged {
+            boss_id: "test_boss".to_string(),
+            old_phase: None,
+            new_phase: "phase_1".to_string(),
+            timestamp: now(),
+        },
+        None,
+    );
+    assert_eq!(manager.active_timers().len(), 1);
+
+    // Second transition - should still be active (refreshed)
+    manager.handle_signal(
+        &GameSignal::PhaseChanged {
+            boss_id: "test_boss".to_string(),
+            old_phase: Some("phase_1".to_string()),
+            new_phase: "phase_2".to_string(),
+            timestamp: now(),
+        },
+        None,
+    );
+    assert_eq!(
+        manager.active_timers().len(),
+        1,
+        "AnyPhaseChange timer should fire on every phase transition"
+    );
+}
+
+#[test]
+fn test_any_phase_change_cancel_trigger() {
+    let mut manager = TimerManager::new();
+
+    // Timer that starts on ability cast but is canceled on any phase change
+    let mut timer = make_timer(
+        "ability_timer",
+        "Canceled By Phase",
+        TimerTrigger::AbilityCast {
+            abilities: vec![AbilitySelector::Id(12345)],
+            source: EntityFilter::Any,
+            target: EntityFilter::Any,
+        },
+        30.0,
+    );
+    timer.cancel_trigger = Some(TimerTrigger::AnyPhaseChange);
+    timer.per_target = false;
+    manager.load_definitions(vec![timer]);
+
+    // Start the timer via ability cast
+    manager.handle_signal(
+        &GameSignal::AbilityActivated {
+            source_id: 1,
+            source_entity_type: crate::combat_log::EntityType::Npc,
+            source_name: crate::context::intern("Boss"),
+            source_npc_id: 100,
+            target_id: 2,
+            target_entity_type: crate::combat_log::EntityType::Player,
+            target_name: crate::context::intern("Player"),
+            target_npc_id: 0,
+            ability_id: 12345,
+            ability_name: crate::context::intern("Big Attack"),
+            timestamp: now(),
+        },
+        None,
+    );
+    assert_eq!(
+        manager.active_timers().len(),
+        1,
+        "Timer should be active after ability cast"
+    );
+
+    // Phase change should cancel it
+    manager.handle_signal(
+        &GameSignal::PhaseChanged {
+            boss_id: "test_boss".to_string(),
+            old_phase: Some("phase_1".to_string()),
+            new_phase: "phase_2".to_string(),
+            timestamp: now(),
+        },
+        None,
+    );
+    assert!(
+        manager.active_timers().is_empty(),
+        "Timer with AnyPhaseChange cancel_trigger should be canceled on phase change"
+    );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Integration Tests with Real Log Data
 // ═══════════════════════════════════════════════════════════════════════════

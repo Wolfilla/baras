@@ -526,6 +526,16 @@ impl Trigger {
         }
     }
 
+    /// Check if trigger is or contains an `AnyPhaseChange` variant.
+    /// Used by the timer system for cancel trigger matching on phase changes.
+    pub fn is_any_phase_change(&self) -> bool {
+        match self {
+            Self::AnyPhaseChange => true,
+            Self::AnyOf { conditions } => conditions.iter().any(|c| c.is_any_phase_change()),
+            _ => false,
+        }
+    }
+
     /// Check if trigger matches a phase being entered.
     pub fn matches_phase_entered(&self, phase_id: &str) -> bool {
         match self {

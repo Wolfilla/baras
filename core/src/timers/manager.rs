@@ -1381,6 +1381,8 @@ impl SignalHandler for TimerManager {
                 }
                 // Trigger phase-entered timers
                 signal_handlers::handle_phase_change(self, encounter, new_phase, *timestamp);
+                // Trigger any-phase-change timers (start + cancel)
+                signal_handlers::handle_any_phase_change(self, encounter, *timestamp);
             }
 
             GameSignal::CounterChanged {
