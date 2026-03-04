@@ -1267,7 +1267,6 @@ fn SimplePhaseTriggerEditor(
                             counter_id: String::new(),
                             value: 1,
                         },
-                        "time_elapsed" => PhaseTrigger::TimeElapsed { secs: 30.0 },
                         "npc_appears" => PhaseTrigger::NpcAppears {
                             selector: vec![],
                         },
@@ -1290,7 +1289,6 @@ fn SimplePhaseTriggerEditor(
                 option { value: "damage_taken", "Damage Taken" }
                 option { value: "healing_taken", "Healing Taken" }
                 option { value: "counter_reaches", "Counter Reaches" }
-                option { value: "time_elapsed", "Time Elapsed" }
                 option { value: "npc_appears", "NPC Appears" }
                 option { value: "entity_death", "Entity Death" }
                 option { value: "phase_ended", "Phase Ended" }
@@ -1608,24 +1606,8 @@ fn SimplePhaseTriggerEditor(
                             }
                         }
                     },
-                    PhaseTrigger::TimeElapsed { secs } => rsx! {
-                        div { class: "flex items-center gap-xs",
-                            label { class: "text-sm text-secondary", "Seconds" }
-                            input {
-                                r#type: "number",
-                                step: "0.1",
-                                min: "0",
-                                class: "input-inline",
-                                style: "width: 80px;",
-                                value: "{secs}",
-                                oninput: move |e| {
-                                    if let Ok(val) = e.value().parse::<f32>() {
-                                        on_change.call(PhaseTrigger::TimeElapsed { secs: val });
-                                    }
-                                }
-                            }
-                            span { class: "hint", "into combat" }
-                        }
+                    PhaseTrigger::TimeElapsed { .. } => rsx! {
+                        span { class: "hint text-warning", "Time Elapsed is not supported for phase triggers" }
                     },
                     PhaseTrigger::NpcAppears { selector } => rsx! {
                         EntitySelectorEditor {
