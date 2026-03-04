@@ -733,19 +733,6 @@ fn TimerEditForm(
                                 }
                             }
 
-                            div { class: "form-row-hz",
-                                label { "Timer Enabled" }
-                                input {
-                                    r#type: "checkbox",
-                                    checked: draft().enabled,
-                                    onchange: move |e| {
-                                        let mut d = draft();
-                                        d.enabled = e.checked();
-                                        draft.set(d);
-                                    }
-                                }
-                            }
-
                             if !draft().is_alert {
                                 div { class: "form-row-hz",
                                     label { class: "flex items-center",
@@ -1369,6 +1356,34 @@ fn TimerEditForm(
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+
+                    // ─── Advanced Card ───────────────────────────────────────
+                    div { class: "form-card",
+                        div { class: "form-card-header",
+                            i { class: "fa-solid fa-triangle-exclamation" }
+                            span { "Advanced" }
+                        }
+                        div { class: "form-card-content",
+                            label { class: "flex items-center gap-xs text-sm",
+                                input {
+                                    r#type: "checkbox",
+                                    checked: draft().enabled,
+                                    onchange: move |e| {
+                                        let mut d = draft();
+                                        d.enabled = e.checked();
+                                        draft.set(d);
+                                    }
+                                }
+                                "Timer Enabled"
+                            }
+                            if !draft().enabled {
+                                div { class: "text-xs text-warning mt-xs",
+                                    i { class: "fa-solid fa-triangle-exclamation" }
+                                    " Disabling a timer may break phases, counters, or other timers that depend on it."
                                 }
                             }
                         }

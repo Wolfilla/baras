@@ -173,9 +173,6 @@ fn CounterRow(
 ) -> Element {
     let mut is_dirty = use_signal(|| false);
     let trigger_label = counter.increment_on.label();
-    let counter_for_enable = counter.clone();
-    let counters_for_enable = all_counters.clone();
-    let bwp_for_enable = boss_with_path.clone();
 
     rsx! {
         div { class: "list-item",
@@ -217,35 +214,6 @@ fn CounterRow(
                     span { class: "tag tag-info", "↓ Decrement" }
                 } else if counter.decrement {
                     span { class: "tag tag-warning", "Decrement" }
-                }
-
-                // Right side - enabled toggle
-                div { class: "flex items-center gap-xs", style: "flex-shrink: 0; margin-left: auto;",
-                    span {
-                        class: "row-toggle",
-                        title: if counter.enabled { "Disable counter" } else { "Enable counter" },
-                        onclick: move |e| {
-                            e.stop_propagation();
-                            let mut updated = counter_for_enable.clone();
-                            updated.enabled = !updated.enabled;
-                            let mut current = counters_for_enable.clone();
-                            if let Some(idx) = current.iter().position(|c| c.id == updated.id) {
-                                current[idx] = updated.clone();
-                                on_change.call(current);
-                            }
-                            let boss_id = bwp_for_enable.boss.id.clone();
-                            let file_path = bwp_for_enable.file_path.clone();
-                            let item = EncounterItem::Counter(updated);
-                            spawn(async move {
-                                let _ = api::update_encounter_item(&boss_id, &file_path, &item, None).await;
-                                on_refetch.call(());
-                            });
-                        },
-                        span {
-                            class: if counter.enabled { "text-success" } else { "text-muted" },
-                            if counter.enabled { "✓" } else { "○" }
-                        }
-                    }
                 }
             }
 
@@ -598,6 +566,34 @@ fn CounterEditForm(
                                     draft.set(d);
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // ─── Advanced Card ───────────────────────────────────────
+            div { class: "form-card",
+                div { class: "form-card-header",
+                    i { class: "fa-solid fa-triangle-exclamation" }
+                    span { "Advanced" }
+                }
+                div { class: "form-card-content",
+                    label { class: "flex items-center gap-xs text-sm",
+                        input {
+                            r#type: "checkbox",
+                            checked: draft().enabled,
+                            onchange: move |e| {
+                                let mut d = draft();
+                                d.enabled = e.checked();
+                                draft.set(d);
+                            }
+                        }
+                        "Counter Enabled"
+                    }
+                    if !draft().enabled {
+                        div { class: "text-xs text-warning mt-xs",
+                            i { class: "fa-solid fa-triangle-exclamation" }
+                            " Disabling a counter may break phases or timers that depend on it."
                         }
                     }
                 }

@@ -1262,27 +1262,6 @@ fn EffectEditForm(
                                     }
                                 }
 
-                                // Instant Alert Only
-                                div { class: "form-row-hz",
-                                    label { class: "flex items-center",
-                                        "Instant Alert Only"
-                                        span {
-                                            class: "help-icon",
-                                            title: "Shows a brief alert notification instead of tracking the effect. No duration, no overlay bar/icon — only alert text and audio fire on trigger.",
-                                            "?"
-                                        }
-                                    }
-                                    input {
-                                        r#type: "checkbox",
-                                        checked: draft().is_alert,
-                                        onchange: move |e| {
-                                            let mut d = draft();
-                                            d.is_alert = e.checked();
-                                            draft.set(d);
-                                        }
-                                    }
-                                }
-
                                 // Entry Enabled
                                 div { class: "form-row-hz",
                                     label { "Entry Enabled" }
@@ -1554,13 +1533,34 @@ fn EffectEditForm(
                     div { class: "effect-edit-right",
 
                         // ─── Timing Card ─────────────────────────────────────────────
-                        if !draft().is_alert {
                         div { class: "form-card",
                             div { class: "form-card-header",
                                 i { class: "fa-solid fa-clock" }
                                 span { "Timing" }
                             }
                             div { class: "form-card-content",
+                                // Instant Alert Only
+                                div { class: "form-row-hz",
+                                    label { class: "flex items-center",
+                                        "Instant Alert Only"
+                                        span {
+                                            class: "help-icon",
+                                            title: "Shows a brief alert notification instead of tracking the effect. No duration, no overlay bar/icon — only alert text and audio fire on trigger.",
+                                            "?"
+                                        }
+                                    }
+                                    input {
+                                        r#type: "checkbox",
+                                        checked: draft().is_alert,
+                                        onchange: move |e| {
+                                            let mut d = draft();
+                                            d.is_alert = e.checked();
+                                            draft.set(d);
+                                        }
+                                    }
+                                }
+
+                                if !draft().is_alert {
                                 // Duration
                                 div { class: "form-row-hz",
                                     label { class: "flex items-center",
@@ -1690,8 +1690,8 @@ fn EffectEditForm(
                                         span { class: "text-sm text-muted", "sec" }
                                     }
                                 }
+                                } // end if !draft().is_alert
                             }
-                        }
                         }
 
                         // ─── Alerts Card ─────────────────────────────────────────────

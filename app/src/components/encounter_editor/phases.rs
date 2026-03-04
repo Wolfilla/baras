@@ -170,9 +170,6 @@ fn PhaseRow(
 ) -> Element {
     let mut is_dirty = use_signal(|| false);
     let trigger_label = phase.start_trigger.label();
-    let phase_for_enable = phase.clone();
-    let phases_for_enable = all_phases.clone();
-    let bwp_for_enable = boss_with_path.clone();
 
     rsx! {
         div { class: "list-item",
@@ -211,35 +208,6 @@ fn PhaseRow(
                 }
                 span { class: "text-xs text-mono text-muted", "{phase.id}" }
                 span { class: "tag", "{trigger_label}" }
-
-                // Right side - enabled toggle
-                div { class: "flex items-center gap-xs", style: "flex-shrink: 0; margin-left: auto;",
-                    span {
-                        class: "row-toggle",
-                        title: if phase.enabled { "Disable phase" } else { "Enable phase" },
-                        onclick: move |e| {
-                            e.stop_propagation();
-                            let mut updated = phase_for_enable.clone();
-                            updated.enabled = !updated.enabled;
-                            let mut current = phases_for_enable.clone();
-                            if let Some(idx) = current.iter().position(|p| p.id == updated.id) {
-                                current[idx] = updated.clone();
-                                on_change.call(current);
-                            }
-                            let boss_id = bwp_for_enable.boss.id.clone();
-                            let file_path = bwp_for_enable.file_path.clone();
-                            let item = EncounterItem::Phase(updated);
-                            spawn(async move {
-                                let _ = api::update_encounter_item(&boss_id, &file_path, &item, None).await;
-                                on_refetch.call(());
-                            });
-                        },
-                        span {
-                            class: if phase.enabled { "text-success" } else { "text-muted" },
-                            if phase.enabled { "✓" } else { "○" }
-                        }
-                    }
-                }
             }
 
             // Expanded content
@@ -603,6 +571,34 @@ fn PhaseEditForm(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // ─── Advanced Card ───────────────────────────────────────
+            div { class: "form-card",
+                div { class: "form-card-header",
+                    i { class: "fa-solid fa-triangle-exclamation" }
+                    span { "Advanced" }
+                }
+                div { class: "form-card-content",
+                    label { class: "flex items-center gap-xs text-sm",
+                        input {
+                            r#type: "checkbox",
+                            checked: draft().enabled,
+                            onchange: move |e| {
+                                let mut d = draft();
+                                d.enabled = e.checked();
+                                draft.set(d);
+                            }
+                        }
+                        "Phase Enabled"
+                    }
+                    if !draft().enabled {
+                        div { class: "text-xs text-warning mt-xs",
+                            i { class: "fa-solid fa-triangle-exclamation" }
+                            " Disabling a phase may break timers or other phases that depend on it."
                         }
                     }
                 }
