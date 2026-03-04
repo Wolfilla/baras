@@ -48,3 +48,6 @@ validate-revan:
 
 validate-xr:
   cargo run --bin baras-validate -- --boss propagator_core_xr53 --log test-log-files/operations/hm_propagator.txt
+
+build-validate-windows:
+  cross build --release -p baras-validate --target x86_64-pc-windows-gnu
