@@ -520,6 +520,7 @@ impl EventProcessor {
         // If combat is active, the encounter should keep its original area info
         // (e.g., when player uses ReturnToMedCenter, we don't want to overwrite
         // the raid area with the medcenter/fleet area)
+        let local_id = cache.player.id;
         if let Some(enc) = cache.current_encounter_mut() {
             if enc.state == EncounterState::NotStarted {
                 if event.effect.difficulty_id != 0 {
@@ -541,6 +542,10 @@ impl EventProcessor {
                 let area_name = Some(resolve(event.effect.effect_name).to_string());
                 let area_entered_line = Some(event.line_number);
                 enc.set_area(area_id, area_name, area_entered_line);
+
+                // Evict stale players that leaked in via TargetSet/TargetCleared
+                // between encounters — they'll be re-discovered once combat starts.
+                enc.players.retain(|&id, _| id == local_id);
             }
         }
 
@@ -777,8 +782,9 @@ impl EventProcessor {
         };
 
         match effect_type {
-            effect_type_id::APPLYEFFECT if event.effect.effect_id != effect_id::DAMAGE
-                && event.effect.effect_id != effect_id::HEAL =>
+            effect_type_id::APPLYEFFECT
+                if event.effect.effect_id != effect_id::DAMAGE
+                    && event.effect.effect_id != effect_id::HEAL =>
             {
                 let target_class_id = event.target_entity.class_id;
                 if target_class_id == 0 || event.target_entity.entity_type != EntityType::Npc {
@@ -790,7 +796,10 @@ impl EventProcessor {
                     .current_encounter()
                     .and_then(|enc| enc.boss_definitions()[def_idx].entity_for_id(target_class_id))
                     .map(|entity_def| {
-                        entity_def.shields.iter().enumerate()
+                        entity_def
+                            .shields
+                            .iter()
+                            .enumerate()
                             .filter(|(_, s)| s.trigger_effect == eid as u64)
                             .map(|(idx, s)| (idx, s.total))
                             .collect()
@@ -813,7 +822,10 @@ impl EventProcessor {
                     .current_encounter()
                     .and_then(|enc| enc.boss_definitions()[def_idx].entity_for_id(source_class_id))
                     .map(|entity_def| {
-                        entity_def.shields.iter().enumerate()
+                        entity_def
+                            .shields
+                            .iter()
+                            .enumerate()
                             .filter(|(_, s)| s.end_trigger_effect == eid as u64)
                             .map(|(idx, _)| idx)
                             .collect()
