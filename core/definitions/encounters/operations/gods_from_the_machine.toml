@@ -1561,7 +1561,6 @@ target = "any"
 
 [boss.timer.audio]
 enabled = true
-file = 'C:\Program Files\DubaTech\Orbs (Old Republic Battle Parser)\resources\Audio\TimerAudio\Induction.mp3'
 offset = 0
 countdown_start = 5
 countdown_voice = "Jim"
@@ -1587,7 +1586,6 @@ target = "any"
 
 [boss.timer.audio]
 enabled = true
-file = 'C:\Program Files\DubaTech\Orbs (Old Republic Battle Parser)\resources\Audio\TimerAudio\Induction.mp3'
 offset = 0
 countdown_start = 0
 
