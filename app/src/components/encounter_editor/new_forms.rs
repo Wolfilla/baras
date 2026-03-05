@@ -67,7 +67,6 @@ pub fn NewAreaForm(
                         option { value: "operation", "Operation (Raid)" }
                         option { value: "flashpoint", "Flashpoint" }
                         option { value: "lair_boss", "Lair Boss" }
-                        option { value: "training_dummy", "Training Dummy" }
                         option { value: "other", "Other" }
                     }
                 }
