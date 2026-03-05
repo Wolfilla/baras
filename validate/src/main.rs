@@ -113,6 +113,17 @@ struct Args {
     all_entities: bool,
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Encounter Selection
+    // ─────────────────────────────────────────────────────────────────────────
+    /// Only show a specific encounter by number (1-indexed)
+    #[arg(long, conflicts_with = "latest")]
+    encounter: Option<usize>,
+
+    /// Only show the latest (last) encounter
+    #[arg(long, conflicts_with = "encounter")]
+    latest: bool,
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Verification
     // ─────────────────────────────────────────────────────────────────────────
     /// Path to expectations TOML file for checkpoint verification
@@ -314,6 +325,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let session_date = extract_session_date(&lines[0])?;
     let parser = LogParser::new(session_date);
 
+    // Resolve encounter filter (--encounter N or --latest)
+    if let Some(n) = args.encounter {
+        if n == 0 {
+            return Err("--encounter must be 1 or greater (1-indexed)".into());
+        }
+        cli.set_encounter_filter(n as u32);
+        eprintln!("Filtering: encounter #{}", n);
+    } else if args.latest {
+        // Pre-scan to count boss encounters so we can show only the last one
+        let total = count_boss_encounters(&lines, &parser, &state.boss_entity_ids);
+        if total == 0 {
+            eprintln!("Warning: no boss encounters found in log");
+        } else {
+            cli.set_encounter_filter(total);
+            eprintln!("Filtering: latest encounter (#{} of {})", total, total);
+        }
+    }
+
     // Initialize processing components
     let mut processor = EventProcessor::new();
     let mut cache = SessionCache::default();
@@ -437,6 +466,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // ─── Step 1: Dispatch signals to timer manager (batch) ───
+        // Snapshot active timer names before dispatch (so expire/cancel can show display names)
+        let timer_names: HashMap<String, String> = timer_manager
+            .active_timers()
+            .iter()
+            .map(|t| (t.definition_id.clone(), t.name.clone()))
+            .collect();
+
         let encounter = cache.current_encounter();
         let mut expired_timer_ids: Vec<String> = Vec::new();
         let mut canceled_timer_ids: Vec<String> = Vec::new();
@@ -706,14 +742,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // ─── Step 4: Output timer events (after state changes) ───
 
-        // Log expired timers
+        // Log expired timers (use snapshotted name → definition name → raw ID)
         for expired_id in &expired_timer_ids {
-            cli.timer_expire(event.timestamp, expired_id, expired_id);
+            let name = timer_names
+                .get(expired_id)
+                .map(|s| s.as_str())
+                .or_else(|| timer_manager.definition_name(expired_id))
+                .unwrap_or(expired_id);
+            cli.timer_expire(event.timestamp, name, expired_id);
         }
 
-        // Log canceled timers
+        // Log canceled timers (use snapshotted name → definition name → raw ID)
         for canceled_id in &canceled_timer_ids {
-            cli.timer_cancel(event.timestamp, canceled_id, canceled_id);
+            let name = timer_names
+                .get(canceled_id)
+                .map(|s| s.as_str())
+                .or_else(|| timer_manager.definition_name(canceled_id))
+                .unwrap_or(canceled_id);
+            cli.timer_cancel(event.timestamp, name, canceled_id);
         }
 
         // Log new/restarted timers
@@ -846,6 +892,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/// Quick pre-scan of the log to count how many boss encounters occur.
+/// A "boss encounter" is a combat session where a boss entity NPC appears.
+/// This avoids full signal processing — just parses events and checks entity IDs.
+fn count_boss_encounters(
+    lines: &[&str],
+    parser: &LogParser,
+    boss_entity_ids: &HashSet<i64>,
+) -> u32 {
+    let mut count = 0u32;
+    let mut in_combat = false;
+    let mut boss_seen_this_combat = false;
+
+    for (line_num, line) in lines.iter().enumerate() {
+        let Some(event) = parser.parse_line(line_num as u64, line) else {
+            continue;
+        };
+
+        // Detect combat boundaries via the EnterCombat/ExitCombat effect IDs
+        let eid = event.effect.effect_id;
+        if eid == effect_id::ENTERCOMBAT {
+            in_combat = true;
+            boss_seen_this_combat = false;
+        } else if eid == effect_id::EXITCOMBAT {
+            in_combat = false;
+        }
+
+        // Check if a boss entity appears during combat
+        if in_combat && !boss_seen_this_combat {
+            for entity in [&event.source_entity, &event.target_entity] {
+                if entity.entity_type == EntityType::Npc
+                    && boss_entity_ids.contains(&entity.class_id)
+                {
+                    boss_seen_this_combat = true;
+                    count += 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    count
+}
 
 fn parse_time_arg(s: &str) -> Result<f32, Box<dyn std::error::Error>> {
     if s.contains(':') {

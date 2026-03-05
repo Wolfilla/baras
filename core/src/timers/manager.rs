@@ -459,6 +459,11 @@ impl TimerManager {
         self.active_timers.values().collect()
     }
 
+    /// Look up a timer definition's display name by its ID.
+    pub fn definition_name(&self, id: &str) -> Option<&str> {
+        self.definitions.get(id).map(|def| def.name.as_str())
+    }
+
     /// Build a snapshot of timer remaining seconds keyed by definition_id.
     /// For per-target timers with multiple instances, uses the maximum remaining time
     /// (any instance active = most time remaining wins).

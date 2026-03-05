@@ -63,6 +63,9 @@ pub struct CliOutput {
     current_phase: Option<(String, NaiveDateTime)>,
     // Boss HP tracking for current encounter
     boss_hp: HashMap<i64, BossHpState>,
+    // Encounter filtering
+    encounter_count: u32,
+    encounter_filter: Option<u32>,
 }
 
 impl Default for CliOutput {
@@ -88,12 +91,25 @@ impl CliOutput {
             phase_spans: Vec::new(),
             current_phase: None,
             boss_hp: HashMap::new(),
+            encounter_count: 0,
+            encounter_filter: None,
         }
     }
 
-    /// Check if we should output (boss detected in current combat)
+    /// Set encounter filter (1-indexed encounter number to show)
+    pub fn set_encounter_filter(&mut self, encounter: u32) {
+        self.encounter_filter = Some(encounter);
+    }
+
+    /// Check if we should output (boss detected in current combat, matching encounter filter)
     fn should_output(&self) -> bool {
-        self.boss_detected_in_combat
+        if !self.boss_detected_in_combat {
+            return false;
+        }
+        if let Some(filter) = self.encounter_filter {
+            return self.encounter_count == filter;
+        }
+        true
     }
 
     /// Set combat start time for relative timestamps
@@ -345,11 +361,30 @@ impl CliOutput {
     /// Log boss detection - prints buffered combat start
     pub fn boss_detected(&mut self, time: NaiveDateTime, boss_name: &str) {
         self.boss_detected_in_combat = true;
+        self.encounter_count += 1;
+
+        if !self.should_output() {
+            // Still consume the pending start so it doesn't leak to the next encounter
+            self.pending_combat_start = None;
+            return;
+        }
 
         // Print buffered combat start
         if let Some(start_time) = self.pending_combat_start.take() {
             if self.level >= OutputLevel::Timers {
-                let label = self.bold(&self.green("═══ COMBAT START ═══"));
+                let encounter_label = if self.encounter_filter.is_some() {
+                    format!("═══ COMBAT START (encounter {}) ═══", self.encounter_count)
+                } else {
+                    format!(
+                        "═══ COMBAT START{} ═══",
+                        if self.encounter_count > 1 {
+                            format!(" (encounter {})", self.encounter_count)
+                        } else {
+                            String::new()
+                        }
+                    )
+                };
+                let label = self.bold(&self.green(&encounter_label));
                 println!("\n{}\n", label);
             }
             // Ensure combat_start is set for time formatting
