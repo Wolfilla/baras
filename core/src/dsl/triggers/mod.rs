@@ -424,7 +424,7 @@ impl Trigger {
                 selector,
             } => {
                 // Check HP threshold crossing
-                let crossed = old_hp > *hp_percent && new_hp <= *hp_percent;
+                let crossed = old_hp > *hp_percent && new_hp <= *hp_percent + 0.01;
                 if !crossed {
                     return false;
                 }
@@ -460,7 +460,7 @@ impl Trigger {
                 selector,
             } => {
                 // Check HP threshold crossing
-                let crossed = old_hp < *hp_percent && new_hp >= *hp_percent;
+                let crossed = old_hp < *hp_percent && new_hp >= *hp_percent - 0.01;
                 if !crossed {
                     return false;
                 }
