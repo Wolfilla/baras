@@ -505,53 +505,28 @@ impl EffectsABOverlay {
                     colors::white(),
                 );
 
-                // Countdown below
-                if self.config.show_countdown && effect.total_secs > 0.0 {
-                    let time_text = effect.format_time(self.european_number_format);
-                    let time_y = name_y + font_size + 2.0;
+                // Source name below effect name
+                if effect.display_source && !effect.source_name.is_empty() {
+                    let source_font_size = font_size * 0.8;
                     self.frame.draw_text_glowed(
-                        &time_text,
+                        &effect.source_name,
                         text_x,
-                        time_y,
-                        font_size * 0.9,
+                        name_y + font_size + 2.0,
+                        source_font_size,
                         colors::white(),
                     );
-
-                    // Source name below countdown
-                    if effect.display_source && !effect.source_name.is_empty() {
-                        let source_font_size = font_size * 0.8;
-                        self.frame.draw_text_glowed(
-                            &effect.source_name,
-                            text_x,
-                            time_y + font_size * 0.9 + 2.0,
-                            source_font_size,
-                            colors::white(),
-                        );
-                    }
                 }
             } else {
-                // Just countdown centered
-                if self.config.show_countdown && effect.total_secs > 0.0 {
-                    let time_text = effect.format_time(self.european_number_format);
+                // Source name centered to the right of icon
+                if effect.display_source && !effect.source_name.is_empty() {
+                    let source_font_size = font_size * 0.8;
                     self.frame.draw_text_glowed(
-                        &time_text,
+                        &effect.source_name,
                         text_x,
                         text_y + font_size / 3.0,
-                        font_size,
+                        source_font_size,
                         colors::white(),
                     );
-
-                    // Source name below countdown
-                    if effect.display_source && !effect.source_name.is_empty() {
-                        let source_font_size = font_size * 0.8;
-                        self.frame.draw_text_glowed(
-                            &effect.source_name,
-                            text_x,
-                            text_y + font_size / 3.0 + font_size + 2.0,
-                            source_font_size,
-                            colors::white(),
-                        );
-                    }
                 }
             }
 
@@ -815,7 +790,7 @@ impl EffectsABOverlay {
         // Sample preview data: (time, stacks)
         let previews = [("12.3", 3u8), ("45", 1u8), ("8.5", 2u8)];
 
-        for (time_text, stacks) in &previews {
+        for (_time_text, stacks) in &previews {
             let x = padding;
 
             // Placeholder icon background
@@ -861,27 +836,6 @@ impl EffectsABOverlay {
                 let name_y = text_y - font_size * 0.3;
                 self.frame
                     .draw_text_glowed("Effect", text_x, name_y, font_size, colors::white());
-
-                // Countdown below
-                if self.config.show_countdown {
-                    let time_y = name_y + font_size + 2.0;
-                    self.frame.draw_text_glowed(
-                        time_text,
-                        text_x,
-                        time_y,
-                        font_size * 0.9,
-                        colors::white(),
-                    );
-                }
-            } else if self.config.show_countdown {
-                // Just countdown centered
-                self.frame.draw_text_glowed(
-                    time_text,
-                    text_x,
-                    text_y + font_size / 3.0,
-                    font_size,
-                    colors::white(),
-                );
             }
 
             y += row_height;
