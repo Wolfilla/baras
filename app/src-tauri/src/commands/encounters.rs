@@ -16,7 +16,7 @@ use baras_core::boss::{
     AreaType, BossEncounterDefinition, BossTimerDefinition, BossWithPath, ChallengeDefinition,
     CounterDefinition, EntityDefinition, PhaseDefinition, find_custom_file, load_area_config,
     load_bosses_from_file, load_bosses_with_custom, load_bosses_with_paths, merge_boss_definition,
-    save_bosses_to_file,
+    save_bosses_to_file, save_bosses_to_file_with_area,
 };
 use baras_core::timers::{TimerPreferences, boss_counter_key, boss_phase_key, boss_timer_key};
 
@@ -1081,8 +1081,11 @@ pub struct BossEditItem {
 }
 
 /// Create a new boss in an area file.
+/// For bundled areas, the new boss is written to the `_custom.toml` overlay
+/// so that bundled definitions remain untouched.
 #[tauri::command]
 pub async fn create_boss(
+    app_handle: AppHandle,
     service: State<'_, ServiceHandle>,
     boss: BossEditItem,
 ) -> Result<BossEditItem, String> {
@@ -1092,34 +1095,60 @@ pub async fn create_boss(
         return Err(format!("Area file not found: {}", boss.file_path));
     }
 
-    // Load existing bosses
-    let mut bosses = load_bosses_from_file(&file_path)?;
+    // Read [area] header from the source file so the boss inherits correct metadata
+    let area_config = load_area_config(&file_path).ok().flatten();
+    let area_type = area_config.as_ref().map(|a| a.area_type).unwrap_or_default();
 
-    // Check for duplicate
-    if bosses.iter().any(|b| b.id == boss.id) {
-        return Err(format!("Boss '{}' already exists", boss.id));
-    }
-
-    // Create new boss definition
+    // Create new boss definition with all boss-level area fields populated
     let new_boss = BossEncounterDefinition {
         id: boss.id.clone(),
         name: boss.name.clone(),
         area_name: boss.area_name.clone(),
         area_id: boss.area_id,
+        area_type,
         difficulties: boss.difficulties.clone(),
         ..Default::default()
     };
 
-    bosses.push(new_boss);
-    save_bosses_to_file(&bosses, &file_path)?;
+    if let Some(custom_path) = get_custom_path_if_bundled(&file_path, &app_handle) {
+        // Bundled area: check for duplicates against merged view (bundled + custom)
+        let user_dir = get_user_encounters_dir();
+        let merged = load_bosses_with_custom(&file_path, user_dir.as_deref())?;
+        if merged.iter().any(|b| b.id == boss.id) {
+            return Err(format!("Boss '{}' already exists", boss.id));
+        }
+
+        // Write the new boss to the custom overlay file, including the [area]
+        // header from the bundled source so the custom file is self-describing.
+        let mut custom_bosses = if custom_path.exists() {
+            load_bosses_from_file(&custom_path).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        custom_bosses.push(new_boss);
+        if let Some(parent) = custom_path.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        save_bosses_to_file_with_area(&custom_bosses, &custom_path, area_config)?;
+    } else {
+        // User file: load, check duplicate, append, save directly
+        let mut bosses = load_bosses_from_file(&file_path)?;
+        if bosses.iter().any(|b| b.id == boss.id) {
+            return Err(format!("Boss '{}' already exists", boss.id));
+        }
+        bosses.push(new_boss);
+        save_bosses_to_file(&bosses, &file_path)?;
+    }
 
     let _ = service.reload_timer_definitions().await;
     Ok(boss)
 }
 
-/// Update boss notes
+/// Update boss notes.
+/// For bundled areas, notes are written to the `_custom.toml` overlay.
 #[tauri::command]
 pub async fn update_boss_notes(
+    app_handle: AppHandle,
     service: State<'_, ServiceHandle>,
     boss_id: String,
     file_path: String,
@@ -1131,19 +1160,42 @@ pub async fn update_boss_notes(
         return Err(format!("Area file not found: {}", file_path));
     }
 
-    // Load existing bosses
-    let mut bosses = load_bosses_from_file(&file_path_buf)?;
+    if let Some(custom_path) = get_custom_path_if_bundled(&file_path_buf, &app_handle) {
+        // Bundled area: save notes to custom overlay with [area] header
+        let area_config = load_area_config(&file_path_buf).ok().flatten();
 
-    // Find and update the boss
-    let boss = bosses
-        .iter_mut()
-        .find(|b| b.id == boss_id)
-        .ok_or_else(|| format!("Boss '{}' not found", boss_id))?;
+        let mut custom_bosses = if custom_path.exists() {
+            load_bosses_from_file(&custom_path).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
 
-    boss.notes = notes;
+        // Find or create the boss entry in the custom file
+        if let Some(boss) = custom_bosses.iter_mut().find(|b| b.id == boss_id) {
+            boss.notes = notes;
+        } else {
+            let stub = BossEncounterDefinition {
+                id: boss_id.clone(),
+                notes,
+                ..Default::default()
+            };
+            custom_bosses.push(stub);
+        }
 
-    // Save back to file
-    save_bosses_to_file(&bosses, &file_path_buf)?;
+        if let Some(parent) = custom_path.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        save_bosses_to_file_with_area(&custom_bosses, &custom_path, area_config)?;
+    } else {
+        // User file: load, update, save directly
+        let mut bosses = load_bosses_from_file(&file_path_buf)?;
+        let boss = bosses
+            .iter_mut()
+            .find(|b| b.id == boss_id)
+            .ok_or_else(|| format!("Boss '{}' not found", boss_id))?;
+        boss.notes = notes;
+        save_bosses_to_file(&bosses, &file_path_buf)?;
+    }
 
     // Trigger definition reload
     let _ = service.reload_timer_definitions().await;

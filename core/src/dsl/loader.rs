@@ -228,18 +228,31 @@ pub fn save_boss_to_file(boss: &BossEncounterDefinition, path: &Path) -> Result<
 /// Save multiple boss definitions to a single TOML file
 /// Preserves the existing [area] header if present
 pub fn save_bosses_to_file(bosses: &[BossEncounterDefinition], path: &Path) -> Result<(), String> {
-    // Read existing file to preserve [area] section
-    let existing_area = if path.exists() {
-        fs::read_to_string(path)
-            .ok()
-            .and_then(|content| toml::from_str::<BossConfig>(&content).ok())
-            .and_then(|config| config.area)
-    } else {
-        None
-    };
+    save_bosses_to_file_with_area(bosses, path, None)
+}
+
+/// Save multiple boss definitions to a single TOML file, with an explicit [area] header.
+/// If `area` is Some, it is written as the [area] header (used when creating custom overlay
+/// files that need the area metadata from the bundled source).
+/// If `area` is None, the existing [area] header is preserved from the file on disk.
+pub fn save_bosses_to_file_with_area(
+    bosses: &[BossEncounterDefinition],
+    path: &Path,
+    area: Option<AreaConfig>,
+) -> Result<(), String> {
+    let resolved_area = area.or_else(|| {
+        if path.exists() {
+            fs::read_to_string(path)
+                .ok()
+                .and_then(|content| toml::from_str::<BossConfig>(&content).ok())
+                .and_then(|config| config.area)
+        } else {
+            None
+        }
+    });
 
     let config = BossConfig {
-        area: existing_area,
+        area: resolved_area,
         bosses: bosses.to_vec(),
     };
 
@@ -370,6 +383,11 @@ pub fn merge_boss_definition(base: &mut BossEncounterDefinition, custom: BossEnc
 
     // Merge entities by name (entities use name as ID)
     merge_by_id(&mut base.entities, custom.entities, |e| &e.name);
+
+    // Merge boss-level fields: custom notes override bundled
+    if custom.notes.is_some() {
+        base.notes = custom.notes;
+    }
 }
 
 /// Generic merge helper: replace matching IDs, append new ones

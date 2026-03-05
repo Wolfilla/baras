@@ -736,7 +736,7 @@ fn TimerEditForm(
                             if !draft().is_alert {
                                 div { class: "form-row-hz",
                                     label { class: "flex items-center",
-                                        "Display Target"
+                                        "Display Overlay"
                                         span {
                                             class: "help-icon",
                                             title: "Sets which overlay displays this timer when triggered",
