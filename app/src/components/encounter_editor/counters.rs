@@ -393,89 +393,91 @@ fn CounterEditForm(
                             }
                         }
 
-                        // ─── Options subsection ────────────────────────────────
-                        span { class: "text-sm font-bold text-secondary mt-sm", "Options" }
+                        // ─── Options subsection (hidden for effect stack counters) ─
+                        if draft().track_effect_stacks.is_none() {
+                            span { class: "text-sm font-bold text-secondary mt-sm", "Options" }
 
-                        div { class: "form-row-hz mt-xs",
-                            label { class: "flex items-center",
-                                "Initial Value"
-                                span {
-                                    class: "help-icon",
-                                    title: "Starting value for this counter when reset",
-                                    "?"
-                                }
-                            }
-                            input {
-                                r#type: "number",
-                                min: "0",
-                                class: "input-inline",
-                                style: "width: 70px;",
-                                value: "{draft().initial_value}",
-                                oninput: move |e| {
-                                    if let Ok(val) = e.value().parse::<u32>() {
-                                        let mut d = draft();
-                                        d.initial_value = val;
-                                        draft.set(d);
+                            div { class: "form-row-hz mt-xs",
+                                label { class: "flex items-center",
+                                    "Initial Value"
+                                    span {
+                                        class: "help-icon",
+                                        title: "Starting value for this counter when reset",
+                                        "?"
                                     }
                                 }
-                            }
-                        }
-
-                        div { class: "form-row-hz",
-                            label { class: "flex items-center",
-                                "Set Value"
-                                span {
-                                    class: "help-icon",
-                                    title: "Set to a specific value on trigger instead of incrementing by 1",
-                                    "?"
-                                }
-                            }
-                            div { class: "flex items-center gap-xs",
                                 input {
-                                    r#type: "checkbox",
-                                    checked: draft().set_value.is_some(),
-                                    onchange: move |_| {
-                                        let mut d = draft();
-                                        d.set_value = if d.set_value.is_some() { None } else { Some(1) };
-                                        draft.set(d);
+                                    r#type: "number",
+                                    min: "0",
+                                    class: "input-inline",
+                                    style: "width: 70px;",
+                                    value: "{draft().initial_value}",
+                                    oninput: move |e| {
+                                        if let Ok(val) = e.value().parse::<u32>() {
+                                            let mut d = draft();
+                                            d.initial_value = val;
+                                            draft.set(d);
+                                        }
                                     }
                                 }
-                                if draft().set_value.is_some() {
+                            }
+
+                            div { class: "form-row-hz",
+                                label { class: "flex items-center",
+                                    "Set Value"
+                                    span {
+                                        class: "help-icon",
+                                        title: "Set to a specific value on trigger instead of incrementing by 1",
+                                        "?"
+                                    }
+                                }
+                                div { class: "flex items-center gap-xs",
                                     input {
-                                        r#type: "number",
-                                        min: "0",
-                                        class: "input-inline",
-                                        style: "width: 70px;",
-                                        value: "{draft().set_value.unwrap_or(1)}",
-                                        oninput: move |e| {
-                                            if let Ok(val) = e.value().parse::<u32>() {
-                                                let mut d = draft();
-                                                d.set_value = Some(val);
-                                                draft.set(d);
+                                        r#type: "checkbox",
+                                        checked: draft().set_value.is_some(),
+                                        onchange: move |_| {
+                                            let mut d = draft();
+                                            d.set_value = if d.set_value.is_some() { None } else { Some(1) };
+                                            draft.set(d);
+                                        }
+                                    }
+                                    if draft().set_value.is_some() {
+                                        input {
+                                            r#type: "number",
+                                            min: "0",
+                                            class: "input-inline",
+                                            style: "width: 70px;",
+                                            value: "{draft().set_value.unwrap_or(1)}",
+                                            oninput: move |e| {
+                                                if let Ok(val) = e.value().parse::<u32>() {
+                                                    let mut d = draft();
+                                                    d.set_value = Some(val);
+                                                    draft.set(d);
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        label {
-                            class: "flex items-center gap-xs text-sm",
-                            input {
-                                r#type: "checkbox",
-                                checked: draft().decrement,
-                                onchange: move |_| {
-                                    let mut d = draft();
-                                    d.decrement = !d.decrement;
-                                    draft.set(d);
+                            label {
+                                class: "flex items-center gap-xs text-sm",
+                                input {
+                                    r#type: "checkbox",
+                                    checked: draft().decrement,
+                                    onchange: move |_| {
+                                        let mut d = draft();
+                                        d.decrement = !d.decrement;
+                                        draft.set(d);
+                                    }
                                 }
-                            }
-                            span { class: "flex items-center",
-                                "Decrement"
-                                span {
-                                    class: "help-icon",
-                                    title: "Count down instead of up on each trigger",
-                                    "?"
+                                span { class: "flex items-center",
+                                    "Decrement"
+                                    span {
+                                        class: "help-icon",
+                                        title: "Count down instead of up on each trigger",
+                                        "?"
+                                    }
                                 }
                             }
                         }
@@ -519,7 +521,7 @@ fn CounterEditForm(
                                     }
                                     draft.set(d);
                                 },
-                                option { value: "manual", "Manual Triggers" }
+                                option { value: "manual", "Default" }
                                 option { value: "effect_stacks", "Track Effect Stacks" }
                             }
                         }
