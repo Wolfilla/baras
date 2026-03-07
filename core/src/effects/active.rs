@@ -19,6 +19,8 @@ use chrono::NaiveDateTime;
 use super::DisplayTarget;
 use crate::context::IStr;
 
+// Instant is still used for `removed_at` (a boolean-like flag for GC)
+
 /// An active effect instance on a specific entity
 ///
 /// Created when an `EffectDefinition` matches a game signal.
@@ -56,10 +58,6 @@ pub struct ActiveEffect {
     // ─── Timing (game time from combat log) ─────────────────────────────────
     /// When the effect was applied (game time)
     pub applied_at: NaiveDateTime,
-
-    /// When we processed the apply event (system time)
-    /// Used to calculate offset between game time and system time
-    pub applied_instant: Instant,
 
     /// When the effect will expire based on duration (game time)
     /// None = indefinite duration (no auto-expire)
@@ -170,18 +168,6 @@ impl ActiveEffect {
         alert_text: Option<String>,
         alert_on_expire: bool,
     ) -> Self {
-        // Calculate lag compensation: how far behind was the game event from system time?
-        // This accounts for file I/O delay, processing time, etc.
-        let now_system = chrono::Local::now().naive_local();
-        let lag = now_system.signed_duration_since(event_timestamp);
-        let lag_ms = lag.num_milliseconds().max(0) as u64;
-        let lag_duration = Duration::from_millis(lag_ms);
-
-        // Backdate applied_instant to when the event actually happened in game
-        // This ensures remaining_secs_realtime() reflects actual game time
-        let now = Instant::now();
-        let applied_instant = now.checked_sub(lag_duration).unwrap_or(now);
-
         let expires_at = duration
             .map(|d| event_timestamp + chrono::Duration::milliseconds(d.as_millis() as i64));
 
@@ -196,7 +182,6 @@ impl ActiveEffect {
             target_name,
             is_from_local_player,
             applied_at: event_timestamp,
-            applied_instant,
             expires_at,
             last_refreshed_at: event_timestamp,
             duration,
@@ -234,18 +219,6 @@ impl ActiveEffect {
             self.expires_at =
                 Some(event_timestamp + chrono::Duration::milliseconds(d.as_millis() as i64));
             self.duration = Some(d);
-
-            // Calculate lag between game event and system processing
-            let now_system = chrono::Local::now().naive_local();
-            let lag_ms = now_system
-                .signed_duration_since(event_timestamp)
-                .num_milliseconds()
-                .max(0) as u64;
-            let lag_duration = Duration::from_millis(lag_ms);
-
-            // Backdate applied_instant to account for processing lag
-            let now = Instant::now();
-            self.applied_instant = now.checked_sub(lag_duration).unwrap_or(now);
         }
 
         // Clear removed state if we were fading out (effect came back)
@@ -265,16 +238,6 @@ impl ActiveEffect {
         self.expires_at =
             Some(event_timestamp + chrono::Duration::milliseconds(duration.as_millis() as i64));
         self.duration = Some(duration);
-
-        let now_system = chrono::Local::now().naive_local();
-        let lag_ms = now_system
-            .signed_duration_since(event_timestamp)
-            .num_milliseconds()
-            .max(0) as u64;
-        let lag_duration = Duration::from_millis(lag_ms);
-
-        let now = Instant::now();
-        self.applied_instant = now.checked_sub(lag_duration).unwrap_or(now);
 
         self.removed_at = None;
         self.timer_expired = false;
@@ -351,28 +314,27 @@ impl ActiveEffect {
             .unwrap_or(false)
     }
 
-    // ─── Audio Methods ──────────────────────────────────────────────────────────
+    // ─── Audio/Display Methods ────────────────────────────────────────────────
+    //
+    // All methods that need remaining time now accept it as a parameter.
+    // The EffectTracker computes interpolated game time once per tick and
+    // passes the resulting remaining seconds to each effect. This avoids
+    // comparing SWTOR's clock with the system clock (which can drift).
 
-    /// Get remaining time in seconds using realtime (includes ready state time)
-    /// Uses system time (Instant) for smooth countdown independent of game log timing
-    /// Note: For audio/alerts, use `remaining_base_secs_realtime()` instead
-    pub fn remaining_secs_realtime(&self) -> f32 {
-        let Some(dur) = self.duration else { return 0.0 };
-        let elapsed = self.applied_instant.elapsed();
-        let remaining = dur.saturating_sub(elapsed);
-        remaining.as_secs_f32()
-    }
-
-    /// Get remaining time until BASE duration ends (excludes ready state time)
-    /// This is what audio countdowns and alerts should use
-    pub fn remaining_base_secs_realtime(&self) -> f32 {
-        (self.remaining_secs_realtime() - self.cooldown_ready_secs).max(0.0)
+    /// Get remaining BASE time (excludes ready state time)
+    ///
+    /// `remaining_total` is the total remaining seconds (from `remaining_secs(game_time)`)
+    /// computed by the tracker using interpolated game time.
+    pub fn remaining_base_secs(&self, remaining_total: f32) -> f32 {
+        (remaining_total - self.cooldown_ready_secs).max(0.0)
     }
 
     /// Check if base duration has ended (entered ready state or fully expired)
     /// Returns true when remaining <= cooldown_ready_secs (or <= 0 if no ready state)
-    pub fn has_base_duration_ended(&self) -> bool {
-        self.remaining_base_secs_realtime() <= 0.0
+    ///
+    /// `remaining_total` is the total remaining seconds from interpolated game time.
+    pub fn has_base_duration_ended(&self, remaining_total: f32) -> bool {
+        self.remaining_base_secs(remaining_total) <= 0.0
     }
 
     /// Check if effect should be visible based on show_at_secs threshold
@@ -385,14 +347,16 @@ impl ActiveEffect {
     /// so that show_at_secs represents seconds of BASE duration remaining.
     /// E.g., show_at_secs=30 with ready_secs=20 shows when total remaining <= 50,
     /// which is when base remaining = 30.
-    pub fn is_visible(&self) -> bool {
+    ///
+    /// `remaining_total` is the total remaining seconds from interpolated game time.
+    pub fn is_visible(&self, remaining_total: f32) -> bool {
         if self.show_at_secs <= 0.0 {
             return true; // 0 means always show
         }
         // Add ready_secs to threshold so comparison is against total remaining
         // but threshold represents base duration remaining
         let effective_threshold = self.show_at_secs + self.cooldown_ready_secs;
-        self.remaining_secs_realtime() <= effective_threshold
+        remaining_total <= effective_threshold
     }
 
     /// Check if countdown should be announced (matches timer logic exactly)
@@ -402,8 +366,9 @@ impl ActiveEffect {
     /// - remaining 3.2s → announces 3 (in window [3.0, 3.3))
     /// - remaining 2.2s → announces 2
     ///
-    /// Uses BASE duration (excludes ready state time)
-    pub fn check_countdown(&mut self) -> Option<u8> {
+    /// `remaining_base` is the BASE remaining seconds (excludes ready state time),
+    /// computed from interpolated game time.
+    pub fn check_countdown(&mut self, remaining_base: f32) -> Option<u8> {
         // Don't announce if effect was manually removed
         if self.removed_at.is_some() {
             return None;
@@ -413,16 +378,13 @@ impl ActiveEffect {
             return None;
         }
 
-        // Use base remaining (excludes ready state)
-        let remaining = self.remaining_base_secs_realtime();
-
         // Check each second from countdown_start down to 1
         for seconds in (1..=self.countdown_start.min(10)).rev() {
             let lower = seconds as f32;
             let upper = lower + 0.3;
 
             // Announce when remaining is in [N, N+0.3)
-            if remaining >= lower && remaining < upper {
+            if remaining_base >= lower && remaining_base < upper {
                 let index = (seconds - 1) as usize;
                 if !self.countdown_announced[index] {
                     self.countdown_announced[index] = true;
@@ -441,8 +403,9 @@ impl ActiveEffect {
     /// - remaining time crossed below the offset threshold
     /// - hasn't already fired
     ///
-    /// Uses BASE duration (excludes ready state time)
-    pub fn check_audio_offset(&mut self) -> bool {
+    /// `remaining_base` is the BASE remaining seconds (excludes ready state time),
+    /// computed from interpolated game time.
+    pub fn check_audio_offset(&mut self, remaining_base: f32) -> bool {
         // Don't play if effect was manually removed
         if self.removed_at.is_some() {
             return false;
@@ -463,11 +426,8 @@ impl ActiveEffect {
             return false;
         }
 
-        // Use base remaining (excludes ready state)
-        let remaining = self.remaining_base_secs_realtime();
-
         // Fire when we cross into the offset window
-        if remaining <= self.audio_offset as f32 && remaining > 0.0 {
+        if remaining_base <= self.audio_offset as f32 && remaining_base > 0.0 {
             self.audio_played = true;
             return true;
         }
@@ -483,8 +443,9 @@ impl ActiveEffect {
     /// - remaining time is in [0, 0.3) window (fires just as effect expires)
     /// - hasn't already fired
     ///
-    /// Uses BASE duration (excludes ready state time)
-    pub fn check_expiration_audio(&mut self) -> bool {
+    /// `remaining_base` is the BASE remaining seconds (excludes ready state time),
+    /// computed from interpolated game time.
+    pub fn check_expiration_audio(&mut self, remaining_base: f32) -> bool {
         // Audio must be enabled for this effect
         if !self.audio_enabled {
             return false;
@@ -511,11 +472,8 @@ impl ActiveEffect {
             return true;
         }
 
-        // Use base remaining (excludes ready state)
-        let remaining = self.remaining_base_secs_realtime();
-
         // Fire in window [0, 0.3) - catches base duration expiration
-        if (0.0..0.3).contains(&remaining) {
+        if (0.0..0.3).contains(&remaining_base) {
             self.audio_played = true;
             return true;
         }
@@ -526,7 +484,7 @@ impl ActiveEffect {
     // Note: On-end expiration alerts are fired exclusively by EffectTracker::tick(),
     // which checks on_end_alert_fired + has_base_duration_ended()/removed_at after
     // signals have been dispatched. This avoids false "effect ended" alerts when an
-    // effect is refreshed just before its realtime timer expires.
+    // effect is refreshed just before its timer expires.
 }
 
 /// Key for identifying unique effect instances

@@ -2415,7 +2415,9 @@ async fn calculate_combat_data(shared: &Arc<SharedState>) -> Option<CombatData> 
             .map(|e| e.id + 1)
             .max()
             .unwrap_or(0) as usize;
-        let encounter_time_secs = encounter.duration_seconds().unwrap_or(0) as u64;
+        let encounter_time_secs = encounter
+            .duration_seconds(session.interpolated_game_time())
+            .unwrap_or(0) as u64;
 
         // Classify the encounter to get phase type and boss info
         // Use encounter's stored area/difficulty info (falls back to cache if not set)
@@ -2487,9 +2489,12 @@ async fn calculate_combat_data(shared: &Arc<SharedState>) -> Option<CombatData> 
                     .map(|def| def.name.clone())
             });
             let overall_duration = encounter.combat_time_secs.max(1.0);
-            // Use exit time when in PostCombat (grace window) so duration doesn't keep ticking
+            // Use exit time when in PostCombat (grace window) so duration doesn't keep ticking.
+            // Fall back to last event time (game time) instead of system clock to avoid
+            // clock skew between SWTOR's timestamps and the system clock.
             let current_time = encounter
                 .exit_combat_time
+                .or(session.last_event_time)
                 .unwrap_or_else(|| chrono::Local::now().naive_local());
 
             let entries: Vec<ChallengeEntry> = encounter
@@ -2702,6 +2707,9 @@ async fn build_raid_frame_data(
         return None;
     }
 
+    // Compute interpolated game time once for all effects
+    let interp_time = tracker.interpolated_game_time();
+
     // Get local player ID for is_self flag
     let local_player_id = session
         .session_cache
@@ -2733,7 +2741,7 @@ async fn build_raid_frame_data(
             effects_by_target
                 .entry(target_id)
                 .or_default()
-                .push(convert_to_raid_effect(effect, icon_cache));
+                .push(convert_to_raid_effect(effect, icon_cache, interp_time));
         }
     }
 
@@ -2845,12 +2853,17 @@ async fn build_timer_data_with_audio(
     // Check for countdowns to announce (uses realtime internally)
     let countdowns = timer_mgr.check_all_countdowns();
 
+    // Compute interpolated game time once for all timers
+    let interp_time = timer_mgr.interpolated_game_time();
+
     // Convert active timers to TimerEntry format, routing to A or B based on display_target
     let mut entries_a = Vec::new();
     let mut entries_b = Vec::new();
 
     for timer in timer_mgr.active_timers() {
-        let remaining = timer.remaining_secs_realtime();
+        let remaining = interp_time
+            .map(|t| timer.remaining_secs(t))
+            .unwrap_or(0.0);
         if remaining <= 0.0 {
             continue;
         }
@@ -2861,7 +2874,7 @@ async fn build_timer_data_with_audio(
         }
 
         // Skip timers hidden by show_at_secs threshold
-        if !timer.is_visible() {
+        if !timer.is_visible(remaining) {
             continue;
         }
 
@@ -2940,8 +2953,11 @@ async fn process_effect_audio(shared: &std::sync::Arc<SharedState>) -> EffectAud
 
     // Note: On-end text alerts are handled by tick() -> fired_alerts -> take_fired_alerts(),
     // consumed in build_timer_data_with_audio(). We don't poll check_expiration_alert() here
-    // because the realtime-based window check races with signal-based refreshes, causing
+    // because the window check races with signal-based refreshes, causing
     // false "effect ended" alerts when an effect is refreshed just before its timer expires.
+
+    // Compute interpolated game time once for all effects
+    let interp_time = tracker.interpolated_game_time();
 
     for effect in tracker.active_effects_mut() {
         // Skip audio checks for effects without audio enabled
@@ -2949,10 +2965,16 @@ async fn process_effect_audio(shared: &std::sync::Arc<SharedState>) -> EffectAud
             continue;
         }
 
-        // Check for countdown (uses realtime internally, matches timer logic)
+        // Compute remaining times from interpolated game time
+        let remaining_total = interp_time
+            .and_then(|t| effect.remaining_secs(t))
+            .unwrap_or(0.0);
+        let remaining_base = effect.remaining_base_secs(remaining_total);
+
+        // Check for countdown (uses interpolated game time)
         // Only for non-removed effects
         if effect.removed_at.is_none()
-            && let Some(seconds) = effect.check_countdown()
+            && let Some(seconds) = effect.check_countdown(remaining_base)
         {
             countdowns.push((
                 effect.display_text.clone(),
@@ -2962,7 +2984,7 @@ async fn process_effect_audio(shared: &std::sync::Arc<SharedState>) -> EffectAud
         }
 
         // Check for audio offset trigger (early warning sound, offset > 0)
-        if effect.check_audio_offset() {
+        if effect.check_audio_offset(remaining_base) {
             alerts.push(EffectAlert {
                 name: effect.display_text.clone(),
                 file: effect.audio_file.clone(),
@@ -2970,7 +2992,7 @@ async fn process_effect_audio(shared: &std::sync::Arc<SharedState>) -> EffectAud
         }
 
         // Check for expiration audio (offset == 0, fire when effect expires)
-        if effect.check_expiration_audio() {
+        if effect.check_expiration_audio(remaining_base) {
             alerts.push(EffectAlert {
                 name: effect.display_text.clone(),
                 file: effect.audio_file.clone(),
@@ -2986,23 +3008,28 @@ async fn process_effect_audio(shared: &std::sync::Arc<SharedState>) -> EffectAud
 
 /// Convert an ActiveEffect (core) to RaidEffect (overlay)
 ///
-/// Uses the pre-computed lag compensation from ActiveEffect.
-/// The applied_instant is already backdated to game event time in ActiveEffect::new() and refresh(),
-/// so we just add the duration to get the expiry.
+/// Uses interpolated game time to compute remaining seconds, then derives
+/// a monotonic `Instant` expiry for the overlay's own countdown rendering.
 fn convert_to_raid_effect(
     effect: &ActiveEffect,
     icon_cache: Option<&Arc<baras_overlay::icons::IconCache>>,
+    interp_time: Option<chrono::NaiveDateTime>,
 ) -> RaidEffect {
     // Effects on raid frames are typically HoTs/shields (is_buff defaults to true in RaidEffect::new())
     let mut raid_effect = RaidEffect::new(effect.game_effect_id, effect.name.clone())
         .with_charges(effect.stacks)
         .with_color_rgba(effect.color);
 
-    // applied_instant is already lag-compensated (backdated to game event time)
-    // Just add duration to get the expiry instant
+    // Compute expiry Instant from game-time remaining
     if let Some(dur) = effect.duration {
-        let expires_at = effect.applied_instant + dur;
-        raid_effect = raid_effect.with_duration(dur).with_expiry(expires_at);
+        let remaining_secs = interp_time
+            .and_then(|t| effect.remaining_secs(t))
+            .unwrap_or(0.0);
+        if remaining_secs > 0.0 {
+            let remaining_dur = std::time::Duration::from_secs_f32(remaining_secs);
+            let expires_at = std::time::Instant::now() + remaining_dur;
+            raid_effect = raid_effect.with_duration(dur).with_expiry(expires_at);
+        }
     }
 
     // Load icon if cache available
@@ -3017,9 +3044,14 @@ fn convert_to_raid_effect(
 }
 
 /// Calculate remaining time for an effect in seconds
-/// Uses the pre-computed lag compensation in applied_instant
-fn calculate_remaining_secs(effect: &ActiveEffect) -> Option<f32> {
-    let remaining = effect.remaining_secs_realtime();
+/// Uses interpolated game time for accurate values without clock skew
+fn calculate_remaining_secs(
+    effect: &ActiveEffect,
+    interp_time: Option<chrono::NaiveDateTime>,
+) -> Option<f32> {
+    let remaining = interp_time
+        .and_then(|t| effect.remaining_secs(t))
+        .unwrap_or(0.0);
     if remaining <= 0.0 {
         None
     } else {
@@ -3045,18 +3077,23 @@ async fn build_effects_a_data(
         return None;
     }
 
+    let interp_time = tracker.interpolated_game_time();
+
     let mut effects: Vec<_> = tracker.effects_a().collect();
     effects.sort_by_key(|e| e.applied_at);
 
     let entries: Vec<EffectABEntry> = effects
         .into_iter()
         .filter_map(|effect| {
+            let remaining_total = interp_time
+                .and_then(|t| effect.remaining_secs(t))
+                .unwrap_or(0.0);
             // Skip effects hidden by show_at_secs threshold
-            if !effect.is_visible() {
+            if !effect.is_visible(remaining_total) {
                 return None;
             }
             let total_secs = effect.duration?.as_secs_f32();
-            let remaining_secs = calculate_remaining_secs(effect)?;
+            let remaining_secs = calculate_remaining_secs(effect, interp_time)?;
 
             // Load icon from cache
             let icon = icon_cache.and_then(|cache| {
@@ -3103,18 +3140,23 @@ async fn build_effects_b_data(
         return None;
     }
 
+    let interp_time = tracker.interpolated_game_time();
+
     let mut effects: Vec<_> = tracker.effects_b().collect();
     effects.sort_by_key(|e| e.applied_at);
 
     let entries: Vec<EffectABEntry> = effects
         .into_iter()
         .filter_map(|effect| {
+            let remaining_total = interp_time
+                .and_then(|t| effect.remaining_secs(t))
+                .unwrap_or(0.0);
             // Skip effects hidden by show_at_secs threshold
-            if !effect.is_visible() {
+            if !effect.is_visible(remaining_total) {
                 return None;
             }
             let total_secs = effect.duration?.as_secs_f32();
-            let remaining_secs = calculate_remaining_secs(effect)?;
+            let remaining_secs = calculate_remaining_secs(effect, interp_time)?;
 
             // Load icon from cache
             let icon = icon_cache.and_then(|cache| {
@@ -3161,12 +3203,14 @@ async fn build_cooldowns_data(
         return None;
     }
 
+    let interp_time = tracker.interpolated_game_time();
+
     let mut effects: Vec<_> = tracker.cooldown_effects().collect();
 
     // Sort by remaining time (shortest first)
     effects.sort_by(|a, b| {
-        let a_remaining = calculate_remaining_secs(a).unwrap_or(f32::MAX);
-        let b_remaining = calculate_remaining_secs(b).unwrap_or(f32::MAX);
+        let a_remaining = calculate_remaining_secs(a, interp_time).unwrap_or(f32::MAX);
+        let b_remaining = calculate_remaining_secs(b, interp_time).unwrap_or(f32::MAX);
         a_remaining
             .partial_cmp(&b_remaining)
             .unwrap_or(std::cmp::Ordering::Equal)
@@ -3175,8 +3219,11 @@ async fn build_cooldowns_data(
     let entries: Vec<CooldownEntry> = effects
         .into_iter()
         .filter_map(|effect| {
+            let remaining_total = interp_time
+                .and_then(|t| effect.remaining_secs(t))
+                .unwrap_or(0.0);
             // Skip effects hidden by show_at_secs threshold
-            if !effect.is_visible() {
+            if !effect.is_visible(remaining_total) {
                 return None;
             }
             // Duration includes ready_secs for tracker lifetime, subtract for display
@@ -3184,7 +3231,7 @@ async fn build_cooldowns_data(
             let total_secs = tracker_total - effect.cooldown_ready_secs;
 
             // Remaining time until tracker expires
-            let tracker_remaining = calculate_remaining_secs(effect)?;
+            let tracker_remaining = calculate_remaining_secs(effect, interp_time)?;
 
             // Display remaining = tracker remaining minus ready period (clamped to 0)
             // So display hits 0 when entering ready state, not when effect disappears
@@ -3242,6 +3289,8 @@ async fn build_dot_tracker_data(
         return None;
     }
 
+    let interp_time = tracker.interpolated_game_time();
+
     // Get DOTs grouped by target
     let dots_by_target = tracker.dot_tracker_effects();
     if dots_by_target.is_empty() {
@@ -3256,12 +3305,15 @@ async fn build_dot_tracker_data(
             let dots: Vec<DotEntry> = effects
                 .into_iter()
                 .filter_map(|effect| {
+                    let remaining_total = interp_time
+                        .and_then(|t| effect.remaining_secs(t))
+                        .unwrap_or(0.0);
                     // Skip effects hidden by show_at_secs threshold
-                    if !effect.is_visible() {
+                    if !effect.is_visible(remaining_total) {
                         return None;
                     }
                     let total_secs = effect.duration?.as_secs_f32();
-                    let remaining_secs = calculate_remaining_secs(effect)?;
+                    let remaining_secs = calculate_remaining_secs(effect, interp_time)?;
 
                     // Load icon from cache
                     let icon = icon_cache.and_then(|cache| {

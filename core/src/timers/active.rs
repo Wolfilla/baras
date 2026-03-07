@@ -10,7 +10,7 @@
 //! 2. Timer counts down, optionally showing alert near end
 //! 3. Timer expires → triggers chained timer (if any) → removed
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use chrono::NaiveDateTime;
 
@@ -35,9 +35,6 @@ pub struct ActiveTimer {
     // ─── Timing (game time from combat log) ─────────────────────────────────
     /// When the timer was started (game time)
     pub started_at: NaiveDateTime,
-
-    /// When we processed the start event (system time)
-    pub started_instant: Instant,
 
     /// When the timer will expire (game time)
     pub expires_at: NaiveDateTime,
@@ -128,18 +125,6 @@ impl ActiveTimer {
         alert_text: Option<String>,
         role_hidden: bool,
     ) -> Self {
-        // Calculate lag compensation: how far behind was the game event from system time?
-        // This accounts for file I/O delay, processing time, etc.
-        let now_system = chrono::Local::now().naive_local();
-        let lag = now_system.signed_duration_since(event_timestamp);
-        let lag_ms = lag.num_milliseconds().max(0) as u64;
-        let lag_duration = Duration::from_millis(lag_ms);
-
-        // Backdate started_instant to when the event actually happened in game
-        // This ensures remaining_secs_realtime() reflects actual game time
-        let now = Instant::now();
-        let started_instant = now.checked_sub(lag_duration).unwrap_or(now);
-
         let expires_at =
             event_timestamp + chrono::Duration::milliseconds(duration.as_millis() as i64);
 
@@ -148,7 +133,6 @@ impl ActiveTimer {
             name,
             target_entity_id,
             started_at: event_timestamp,
-            started_instant,
             expires_at,
             duration,
             repeat_count: 0,
@@ -176,17 +160,9 @@ impl ActiveTimer {
         }
     }
 
-    /// Refresh the timer (restart from now)
+    /// Refresh the timer (restart from event timestamp)
     pub fn refresh(&mut self, event_timestamp: NaiveDateTime) {
-        // Apply same lag compensation as new() for consistent timing
-        let now_system = chrono::Local::now().naive_local();
-        let lag = now_system.signed_duration_since(event_timestamp);
-        let lag_ms = lag.num_milliseconds().max(0) as u64;
-        let lag_duration = Duration::from_millis(lag_ms);
-        let now = Instant::now();
-
         self.started_at = event_timestamp;
-        self.started_instant = now.checked_sub(lag_duration).unwrap_or(now);
         self.expires_at =
             event_timestamp + chrono::Duration::milliseconds(self.duration.as_millis() as i64);
         self.alert_fired = false;
@@ -230,26 +206,19 @@ impl ActiveTimer {
         (remaining.num_milliseconds().max(0) as f32) / 1000.0
     }
 
-    /// Get remaining time in seconds (realtime - for display and audio)
-    ///
-    /// Uses system time (`Instant`) instead of game time to avoid
-    /// drift between combat log timestamps and current time.
-    pub fn remaining_secs_realtime(&self) -> f32 {
-        let elapsed = self.started_instant.elapsed();
-        let remaining = self.duration.saturating_sub(elapsed);
-        remaining.as_secs_f32()
-    }
-
     /// Check if timer should be visible based on show_at_secs threshold
     ///
     /// Returns true if:
     /// - show_at_secs is 0 (always show), OR
     /// - remaining time is at or below show_at_secs threshold
-    pub fn is_visible(&self) -> bool {
+    ///
+    /// `remaining` is the pre-computed remaining seconds from the manager's
+    /// interpolated game time (computed once per tick for all timers).
+    pub fn is_visible(&self, remaining: f32) -> bool {
         if self.show_at_secs <= 0.0 {
             return true; // 0 means always show
         }
-        self.remaining_secs_realtime() <= self.show_at_secs
+        remaining <= self.show_at_secs
     }
 
     /// Check if timer is within alert threshold and alert hasn't fired yet
@@ -277,18 +246,18 @@ impl ActiveTimer {
     /// Returns Some(seconds) if we've crossed into the announcement window
     /// for that second and it hasn't been announced yet.
     ///
-    /// Uses realtime (system Instant) for accurate audio sync.
+    /// `remaining` is the pre-computed remaining seconds from the manager's
+    /// interpolated game time (computed once per tick for all timers).
+    ///
     /// Announces N when remaining is in [N, N+0.3) to sync with visual display:
     /// - remaining 3.8s → no announcement (too early)
     /// - remaining 3.2s → announces 3 (in window [3.0, 3.3))
     /// - remaining 2.2s → announces 2
-    pub fn check_countdown(&mut self) -> Option<u8> {
+    pub fn check_countdown(&mut self, remaining: f32) -> Option<u8> {
         // 0 means countdown disabled for this timer
         if self.countdown_start == 0 {
             return None;
         }
-
-        let remaining = self.remaining_secs_realtime();
 
         // Check each second from countdown_start down to 1
         for seconds in (1..=self.countdown_start).rev() {
@@ -316,8 +285,9 @@ impl ActiveTimer {
     /// - remaining time just crossed below the offset threshold
     /// - hasn't already fired
     ///
-    /// Uses realtime for accurate audio sync.
-    pub fn check_audio_offset(&mut self) -> bool {
+    /// `remaining` is the pre-computed remaining seconds from the manager's
+    /// interpolated game time (computed once per tick for all timers).
+    pub fn check_audio_offset(&mut self, remaining: f32) -> bool {
         // No audio file configured
         if self.audio_file.is_none() {
             return false;
@@ -332,8 +302,6 @@ impl ActiveTimer {
         if self.audio_offset_fired {
             return false;
         }
-
-        let remaining = self.remaining_secs_realtime();
 
         // Fire when we cross into the offset window
         if remaining <= self.audio_offset as f32 && remaining > 0.0 {

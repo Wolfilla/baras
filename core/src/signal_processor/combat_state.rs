@@ -162,7 +162,7 @@ fn handle_in_combat(
                 enc.state = EncounterState::PostCombat {
                     exit_time: last_activity,
                 };
-                let duration = enc.duration_seconds().unwrap_or(0) as f32;
+                let duration = enc.duration_seconds(None).unwrap_or(0) as f32;
                 enc.challenge_tracker.finalize(last_activity, duration);
             }
 
@@ -220,7 +220,7 @@ fn handle_in_combat(
                         enc.state = EncounterState::PostCombat {
                             exit_time: revive_time,
                         };
-                        let duration = enc.duration_seconds().unwrap_or(0) as f32;
+                        let duration = enc.duration_seconds(None).unwrap_or(0) as f32;
                         enc.challenge_tracker.finalize(revive_time, duration);
                     }
 
@@ -366,7 +366,7 @@ fn handle_in_combat(
                 enc.state = EncounterState::PostCombat {
                     exit_time: timestamp,
                 };
-                let duration = enc.duration_seconds().unwrap_or(0) as f32;
+                let duration = enc.duration_seconds(None).unwrap_or(0) as f32;
                 enc.challenge_tracker.finalize(timestamp, duration);
             }
 
@@ -417,7 +417,7 @@ fn handle_in_combat(
             enc.state = EncounterState::PostCombat {
                 exit_time: timestamp,
             };
-            let duration = enc.duration_seconds().unwrap_or(0) as f32;
+            let duration = enc.duration_seconds(None).unwrap_or(0) as f32;
             enc.challenge_tracker.finalize(timestamp, duration);
         }
 
@@ -458,7 +458,7 @@ fn handle_in_combat(
             if let Some(enc) = cache.current_encounter_mut() {
                 enc.exit_combat_time = Some(exit_time);
                 enc.state = EncounterState::PostCombat { exit_time };
-                let duration = enc.duration_seconds().unwrap_or(0) as f32;
+                let duration = enc.duration_seconds(None).unwrap_or(0) as f32;
                 enc.challenge_tracker.finalize(exit_time, duration);
             }
 
@@ -489,7 +489,7 @@ fn handle_in_combat(
                 enc.state = EncounterState::PostCombat {
                     exit_time: timestamp,
                 };
-                let duration = enc.duration_seconds().unwrap_or(0) as f32;
+                let duration = enc.duration_seconds(None).unwrap_or(0) as f32;
                 enc.challenge_tracker.finalize(timestamp, duration);
             }
             // Note: Don't emit CombatEnded or push_new_encounter yet
@@ -598,9 +598,13 @@ fn finalize_pending_combat_exit(cache: &mut SessionCache, signals: &mut Vec<Game
 ///
 /// Returns CombatEnded signal if combat times out due to inactivity.
 /// Also handles grace window expiration for combat exit.
-pub fn tick_combat_state(cache: &mut SessionCache) -> Vec<GameSignal> {
+///
+/// `now` should be the interpolated game time (game-clock anchored to
+/// monotonic `Instant`). This avoids comparing the system clock against
+/// SWTOR's game timestamps, which can differ by tens of seconds on
+/// machines with clock skew.
+pub fn tick_combat_state(cache: &mut SessionCache, now: NaiveDateTime) -> Vec<GameSignal> {
     let mut signals = Vec::new();
-    let now = chrono::Local::now().naive_local();
 
     let current_state = cache
         .current_encounter()
@@ -625,7 +629,7 @@ pub fn tick_combat_state(cache: &mut SessionCache) -> Vec<GameSignal> {
             enc.state = EncounterState::PostCombat {
                 exit_time: revive_time,
             };
-            let duration = enc.duration_seconds().unwrap_or(0) as f32;
+            let duration = enc.duration_seconds(None).unwrap_or(0) as f32;
             enc.challenge_tracker.finalize(revive_time, duration);
         }
 
@@ -670,7 +674,7 @@ pub fn tick_combat_state(cache: &mut SessionCache) -> Vec<GameSignal> {
                     enc.state = EncounterState::PostCombat {
                         exit_time: revive_time,
                     };
-                    let duration = enc.duration_seconds().unwrap_or(0) as f32;
+                    let duration = enc.duration_seconds(None).unwrap_or(0) as f32;
                     enc.challenge_tracker.finalize(revive_time, duration);
                 }
 
@@ -749,7 +753,7 @@ pub fn tick_combat_state(cache: &mut SessionCache) -> Vec<GameSignal> {
                 enc.state = EncounterState::PostCombat {
                     exit_time: last_activity,
                 };
-                let duration = enc.duration_seconds().unwrap_or(0) as f32;
+                let duration = enc.duration_seconds(None).unwrap_or(0) as f32;
                 enc.challenge_tracker.finalize(last_activity, duration);
             }
 

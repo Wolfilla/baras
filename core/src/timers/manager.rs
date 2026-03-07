@@ -7,9 +7,9 @@ use tracing;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use chrono::{Local, NaiveDateTime};
+use chrono::NaiveDateTime;
 
 use crate::combat_log::EntityType;
 use crate::context::{IStr, resolve};
@@ -88,8 +88,14 @@ pub struct TimerManager {
     /// Combat start timestamp (for calculating elapsed time in alerts)
     pub(super) combat_start_time: Option<NaiveDateTime>,
 
-    /// Last known game timestamp
+    /// Game-time anchor: the highest game time we've seen (monotonic).
+    /// Updated via `advance_game_time_anchor()` which ensures this never
+    /// moves backward.
     last_timestamp: Option<NaiveDateTime>,
+
+    /// Monotonic instant when `last_timestamp` was last anchored.
+    /// Together with `last_timestamp`, forms a game-time anchor for interpolation.
+    last_timestamp_instant: Option<Instant>,
 
     // ─── Entity Filter State ─────────────────────────────────────────────────
     /// Local player's entity ID (for LocalPlayer filter)
@@ -147,6 +153,7 @@ impl TimerManager {
             in_combat: false,
             combat_start_time: None,
             last_timestamp: None,
+            last_timestamp_instant: None,
             local_player_id: None,
             current_target_id: None,
             current_role: None,
@@ -415,9 +422,12 @@ impl TimerManager {
         self.trigger_index.get(&kind).map_or(EMPTY, |v| v.as_slice())
     }
 
-    /// Tick to process timer expirations and time-elapsed triggers based on real time.
+    /// Tick to process timer expirations and time-elapsed triggers.
     /// Call periodically to update timers even without new signals.
     /// Pass the current encounter context to allow timer restarts.
+    ///
+    /// Uses interpolated game time (game clock + monotonic elapsed) to determine
+    /// which timers have expired, avoiding cross-clock comparison with the system clock.
     pub fn tick(&mut self, encounter: Option<&crate::encounter::CombatEncounter>) {
         if let Some(ts) = self.last_timestamp {
             // Clear per-signal and batch vectors (tick is a standalone entry point)
@@ -432,15 +442,9 @@ impl TimerManager {
             // fire even during idle periods (no combat events arriving).
             signal_handlers::handle_combat_time_triggers(self, encounter);
 
-            let effective_time = self
-                .active_timers
-                .values()
-                .filter(|t| t.remaining_secs_realtime() <= 0.0)
-                .map(|t| t.expires_at)
-                .max()
-                .map_or(ts, |max_expires| max_expires.max(ts));
-
-            self.process_expirations(effective_time, encounter);
+            // Use interpolated game time to check expirations
+            let interp_time = self.interpolated_game_time().unwrap_or(ts);
+            self.process_expirations(interp_time, encounter);
 
             // Process cancellation chains (timer_canceled triggers)
             for timer_id in self.canceled_this_tick.clone() {
@@ -464,29 +468,68 @@ impl TimerManager {
         self.definitions.get(id).map(|def| def.name.as_str())
     }
 
+    /// Compute an interpolated game time for smooth display between log events.
+    ///
+    /// Takes the last game timestamp we received and advances it by the wall time
+    /// elapsed since we received it. This stays in SWTOR's clock domain (no cross-clock
+    /// comparison) and provides smooth countdown between log events.
+    ///
+    /// Returns `None` if no game timestamp has been received yet.
+    pub fn interpolated_game_time(&self) -> Option<NaiveDateTime> {
+        let game_time = self.last_timestamp?;
+        let received_at = self.last_timestamp_instant?;
+        let elapsed = received_at.elapsed();
+        Some(game_time + chrono::Duration::milliseconds(elapsed.as_millis() as i64))
+    }
+
+    /// Advance the game-time anchor to at least `event_timestamp`.
+    ///
+    /// Uses a monotonic high-water-mark: the new anchor is
+    /// `max(event_timestamp, current_interpolated_time)`. This prevents
+    /// interpolated game time from jumping backward when a batch of events
+    /// arrives, and naturally absorbs processing latency.
+    fn advance_game_time_anchor(&mut self, event_timestamp: NaiveDateTime) {
+        let now = Instant::now();
+        let anchor_time = match (self.last_timestamp, self.last_timestamp_instant) {
+            (Some(gt), Some(inst)) => {
+                let interp = gt + chrono::Duration::milliseconds(inst.elapsed().as_millis() as i64);
+                if event_timestamp > interp { event_timestamp } else { interp }
+            }
+            _ => event_timestamp,
+        };
+        self.last_timestamp = Some(anchor_time);
+        self.last_timestamp_instant = Some(now);
+    }
+
     /// Build a snapshot of timer remaining seconds keyed by definition_id.
     /// For per-target timers with multiple instances, uses the maximum remaining time
     /// (any instance active = most time remaining wins).
     /// Used to populate CombatEncounter.timer_remaining for condition evaluation.
     /// Returns a hashbrown::HashMap to match CombatEncounter's field type.
+    ///
+    /// Uses interpolated game time for accurate remaining values that account for
+    /// processing delay without comparing SWTOR's clock to the system clock.
     pub fn timer_remaining_snapshot(&self) -> hashbrown::HashMap<String, f32> {
+        let game_time = self.interpolated_game_time();
         let mut snapshot = hashbrown::HashMap::new();
-        for timer in self.active_timers.values() {
-            let remaining = timer.remaining_secs_realtime();
-            if remaining > 0.0 {
-                let entry = snapshot
-                    .entry(timer.definition_id.clone())
-                    .or_insert(0.0f32);
-                if remaining > *entry {
-                    *entry = remaining;
+        if let Some(game_time) = game_time {
+            for timer in self.active_timers.values() {
+                let remaining = timer.remaining_secs(game_time);
+                if remaining > 0.0 {
+                    let entry = snapshot
+                        .entry(timer.definition_id.clone())
+                        .or_insert(0.0f32);
+                    if remaining > *entry {
+                        *entry = remaining;
+                    }
                 }
             }
         }
         snapshot
     }
 
-    /// Build a timer remaining snapshot using game time instead of wall clock.
-    /// Use this for replay/validation where wall clock doesn't match game time.
+    /// Build a timer remaining snapshot using an explicit game time.
+    /// Use this for replay/validation where the caller controls the clock.
     pub fn timer_remaining_snapshot_at(
         &self,
         game_time: NaiveDateTime,
@@ -519,15 +562,19 @@ impl TimerManager {
     ///
     /// Returns a list of (timer_name, seconds, voice_pack) for each countdown that should be announced.
     /// This mutates the timers to mark countdowns as announced so they won't repeat.
-    /// Uses realtime (system Instant) for accurate audio synchronization.
+    /// Uses interpolated game time for accurate audio synchronization without clock skew.
     /// Skips timers with audio_enabled=false.
     pub fn check_all_countdowns(&mut self) -> Vec<(String, u8, String)> {
+        let Some(interp_time) = self.interpolated_game_time() else {
+            return Vec::new();
+        };
         self.active_timers
             .values_mut()
             .filter(|timer| !timer.role_hidden && timer.audio_enabled)
             .filter_map(|timer| {
+                let remaining = timer.remaining_secs(interp_time);
                 timer
-                    .check_countdown()
+                    .check_countdown(remaining)
                     .map(|secs| (timer.name.clone(), secs, timer.countdown_voice.clone()))
             })
             .collect()
@@ -537,16 +584,20 @@ impl TimerManager {
     ///
     /// Returns FiredAlerts for timers where remaining time crossed below audio_offset.
     /// This is for "early warning" sounds that play before the timer expires.
+    /// Uses interpolated game time for accurate timing without clock skew.
     /// Skips timers with audio_enabled=false.
     pub fn check_audio_offsets(&mut self) -> Vec<FiredAlert> {
-        let now = Local::now().naive_local();
+        let Some(interp_time) = self.interpolated_game_time() else {
+            return Vec::new();
+        };
 
         // Collect timer data first (can't call format_alert_text while iterating mutably)
         let triggered: Vec<_> = self
             .active_timers
             .values_mut()
             .filter_map(|timer| {
-                if !timer.role_hidden && timer.audio_enabled && timer.check_audio_offset() {
+                let remaining = timer.remaining_secs(interp_time);
+                if !timer.role_hidden && timer.audio_enabled && timer.check_audio_offset(remaining) {
                     Some((
                         timer.definition_id.clone(),
                         timer.name.clone(),
@@ -563,13 +614,13 @@ impl TimerManager {
         triggered
             .into_iter()
             .map(|(id, name, color, audio_file)| {
-                let text = self.format_alert_text(&name, now);
+                let text = self.format_alert_text(&name, interp_time);
                 FiredAlert {
                     id,
                     name,
                     text,
                     color: Some(color),
-                    timestamp: now,
+                    timestamp: interp_time,
                     alert_text_enabled: false,
                     audio_enabled: true,
                     audio_file,
@@ -1069,7 +1120,7 @@ impl SignalHandler for TimerManager {
         }
 
         let ts = signal.timestamp();
-        self.last_timestamp = Some(ts);
+        self.advance_game_time_anchor(ts);
 
         // ─── Encounter change detection ────────────────────────────────────────
         // If the encounter ID changed, reset timer state. Combat-time triggers

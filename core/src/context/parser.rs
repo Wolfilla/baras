@@ -58,10 +58,46 @@ pub struct ParsingSession {
     definition_loader: Option<Arc<DefinitionLoader>>,
     /// Last loaded area ID (to avoid reloading on duplicate events)
     loaded_area_id: i64,
-    /// Timestamp of the last event processed during tailing.
-    /// Updated on every `process_event()` call. Used to freeze the
-    /// session duration display at the last known activity time.
+    /// Game-time anchor: the highest game time we've seen (monotonic).
+    /// Updated via `advance_game_time_anchor()` which ensures this never
+    /// moves backward.
     pub last_event_time: Option<NaiveDateTime>,
+
+    /// Monotonic instant when `last_event_time` was last anchored.
+    /// Together with `last_event_time`, forms a game-time anchor for interpolation.
+    pub last_event_instant: Option<std::time::Instant>,
+}
+
+impl ParsingSession {
+    /// Compute interpolated game time for smooth timing between log events.
+    ///
+    /// Takes the last game timestamp and advances it by monotonic wall time
+    /// elapsed since we received it. Stays in SWTOR's clock domain.
+    pub fn interpolated_game_time(&self) -> Option<NaiveDateTime> {
+        let game_time = self.last_event_time?;
+        let received_at = self.last_event_instant?;
+        let elapsed = received_at.elapsed();
+        Some(game_time + chrono::Duration::milliseconds(elapsed.as_millis() as i64))
+    }
+
+    /// Advance the game-time anchor to at least `event_timestamp`.
+    ///
+    /// Uses a monotonic high-water-mark: the new anchor is
+    /// `max(event_timestamp, current_interpolated_time)`. This prevents
+    /// interpolated game time from jumping backward when a batch of events
+    /// arrives, and naturally absorbs processing latency.
+    fn advance_game_time_anchor(&mut self, event_timestamp: NaiveDateTime) {
+        let now = std::time::Instant::now();
+        let anchor_time = match (self.last_event_time, self.last_event_instant) {
+            (Some(gt), Some(inst)) => {
+                let interp = gt + chrono::Duration::milliseconds(inst.elapsed().as_millis() as i64);
+                if event_timestamp > interp { event_timestamp } else { interp }
+            }
+            _ => event_timestamp,
+        };
+        self.last_event_time = Some(anchor_time);
+        self.last_event_instant = Some(now);
+    }
 }
 
 impl Default for ParsingSession {
@@ -90,6 +126,7 @@ impl ParsingSession {
             definition_loader: None,
             loaded_area_id: 0,
             last_event_time: None,
+            last_event_instant: None,
         }
     }
 
@@ -112,6 +149,7 @@ impl ParsingSession {
             definition_loader: None,
             loaded_area_id: 0,
             last_event_time: None,
+            last_event_instant: None,
         }
     }
 
@@ -141,6 +179,7 @@ impl ParsingSession {
             definition_loader: None,
             loaded_area_id: 0,
             last_event_time: None,
+            last_event_instant: None,
         }
     }
 
@@ -157,10 +196,9 @@ impl ParsingSession {
 
     /// Process a single event through the processor and dispatch signals
     pub fn process_event(&mut self, event: CombatEvent) {
-        // Track the latest event timestamp for stale session detection.
-        // This is read by is_session_stale() to know when the last real
-        // log activity occurred, avoiding false stale flags during live play.
-        self.last_event_time = Some(event.timestamp);
+        // Advance the game-time anchor (monotonic: never goes backward).
+        // This is read by is_session_stale() and interpolated_game_time().
+        self.advance_game_time_anchor(event.timestamp);
 
         // Sync load definitions on AreaEntered BEFORE processing
         // This ensures boss definitions are available when combat events arrive
@@ -177,11 +215,13 @@ impl ParsingSession {
             }
         }
 
-        // Tick combat state FIRST to check wall-clock timeouts (grace windows, combat timeout).
-        // This ensures pending encounters are closed even when events flow continuously,
-        // fixing the bug where live mode would show very long fight times.
+        // Tick combat state FIRST to check timeouts (grace windows, combat timeout).
+        // Uses interpolated game time so clock skew between the OS and SWTOR
+        // doesn't cause false timeouts.
+        let interp_now = self.interpolated_game_time()
+            .unwrap_or(event.timestamp);
         let tick_signals = self.session_cache.as_mut().map(|cache| {
-            crate::signal_processor::tick_combat_state(cache)
+            crate::signal_processor::tick_combat_state(cache, interp_now)
         }).unwrap_or_default();
 
         if !tick_signals.is_empty() {
@@ -481,9 +521,12 @@ impl ParsingSession {
     ///
     /// No-op in Historical mode for effects/timers.
     pub fn tick(&mut self) {
-        // Tick combat state for wall-clock timeout (fallback when event stream stops)
+        // Tick combat state for timeout detection (grace windows, combat timeout).
+        // Uses interpolated game time to avoid clock skew issues.
+        let tick_now = self.interpolated_game_time()
+            .unwrap_or_else(|| chrono::Local::now().naive_local());
         if let Some(cache) = &mut self.session_cache {
-            let signals = crate::signal_processor::tick_combat_state(cache);
+            let signals = crate::signal_processor::tick_combat_state(cache, tick_now);
             if !signals.is_empty() {
                 // Check if combat ended - need to flush parquet
                 let should_flush = signals
@@ -504,13 +547,17 @@ impl ParsingSession {
             tracker.lock().unwrap_or_else(|p| p.into_inner()).tick();
         }
 
-        // Update combat time so TimeElapsed triggers fire promptly during idle periods
-        if let Some(cache) = &mut self.session_cache {
-            if let Some(enc) = cache.current_encounter_mut() {
-                if enc.enter_combat_time.is_some()
-                    && matches!(enc.state, crate::encounter::EncounterState::InCombat)
-                {
-                    enc.update_combat_time(chrono::Local::now().naive_local());
+        // Update combat time so TimeElapsed triggers fire promptly during idle periods.
+        // Uses interpolated game time (game clock + monotonic elapsed) instead of
+        // system clock to avoid clock skew between SWTOR and the OS.
+        if let Some(interp_time) = self.interpolated_game_time() {
+            if let Some(cache) = &mut self.session_cache {
+                if let Some(enc) = cache.current_encounter_mut() {
+                    if enc.enter_combat_time.is_some()
+                        && matches!(enc.state, crate::encounter::EncounterState::InCombat)
+                    {
+                        enc.update_combat_time(interp_time);
+                    }
                 }
             }
         }
@@ -526,8 +573,10 @@ impl ParsingSession {
 
         // Run timer feedback loop so timer expirations during tick() can
         // cascade into counter/phase changes and back into timers.
-        let now = chrono::Local::now().naive_local();
-        self.process_timer_feedback_loop(now);
+        let feedback_time = self.interpolated_game_time()
+            .or(self.last_event_time)
+            .unwrap_or_else(|| chrono::Local::now().naive_local());
+        self.process_timer_feedback_loop(feedback_time);
     }
 
     /// Update effect definitions (e.g., after config reload). No-op in Historical mode.

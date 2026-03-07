@@ -685,8 +685,8 @@ impl CombatEncounter {
     }
 
     /// Get combat duration in seconds (truncated)
-    pub fn duration_seconds(&self) -> Option<i64> {
-        Some(self.duration_ms()? / 1000)
+    pub fn duration_seconds(&self, current_time: Option<chrono::NaiveDateTime>) -> Option<i64> {
+        Some(self.duration_ms(current_time)? / 1000)
     }
 
     /// Get the effective end time of the encounter.
@@ -698,12 +698,18 @@ impl CombatEncounter {
     }
 
     /// Get combat duration in milliseconds
-    pub fn duration_ms(&self) -> Option<i64> {
+    ///
+    /// For completed encounters, uses the effective end time.
+    /// For in-progress encounters, uses the provided `current_time`
+    /// (interpolated game time) instead of the system clock to avoid
+    /// clock skew between SWTOR's timestamps and the OS clock.
+    pub fn duration_ms(&self, current_time: Option<chrono::NaiveDateTime>) -> Option<i64> {
         use chrono::TimeDelta;
 
         let enter = self.enter_combat_time?;
         let terminal = self
             .effective_end_time()
+            .or(current_time)
             .unwrap_or_else(|| chrono::offset::Local::now().naive_local());
 
         let mut duration = terminal.signed_duration_since(enter);
@@ -1163,7 +1169,7 @@ impl CombatEncounter {
     ) -> Option<Vec<super::metrics::EntityMetrics>> {
         use super::metrics::EntityMetrics;
 
-        let duration_ms = self.duration_ms()?;
+        let duration_ms = self.duration_ms(None)?;
         if duration_ms <= 0 {
             return None;
         }

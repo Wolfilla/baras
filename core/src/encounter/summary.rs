@@ -523,7 +523,7 @@ pub fn create_encounter_summary(
         end_time: encounter
             .effective_end_time()
             .map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string()),
-        duration_seconds: encounter.duration_seconds().unwrap_or(0),
+        duration_seconds: encounter.duration_seconds(None).unwrap_or(0),
         success: determine_success(encounter),
         area_name: encounter_area_name,
         difficulty,

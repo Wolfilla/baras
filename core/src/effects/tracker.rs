@@ -5,7 +5,7 @@
 //! that can be fed to overlay renderers.
 
 use std::collections::{HashMap, HashSet};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use chrono::NaiveDateTime;
 
@@ -391,8 +391,15 @@ pub struct EffectTracker {
     /// Currently active effects
     active_effects: HashMap<EffectKey, ActiveEffect>,
 
-    /// Current game time (latest timestamp from signals)
+    /// Game-time anchor: the highest game time we've seen (monotonic).
+    /// Updated via `advance_game_time_anchor()` which ensures this never
+    /// moves backward — it takes the max of the new event timestamp and
+    /// the current interpolated time.
     current_game_time: Option<NaiveDateTime>,
+
+    /// Monotonic instant when `current_game_time` was last anchored.
+    /// Together with `current_game_time`, forms a game-time anchor for interpolation.
+    current_game_time_instant: Option<Instant>,
 
     /// Local player ID (set from session cache during signal dispatch)
     local_player_id: Option<i64>,
@@ -449,6 +456,7 @@ impl EffectTracker {
             definitions,
             active_effects: HashMap::new(),
             current_game_time: None,
+            current_game_time_instant: None,
             local_player_id: None,
             local_player_discipline: None,
             alacrity_percent: 0.0,
@@ -656,6 +664,43 @@ impl EffectTracker {
         self.current_game_time
     }
 
+    /// Compute an interpolated game time for smooth display between log events.
+    ///
+    /// Takes the last game timestamp we received and advances it by the wall time
+    /// elapsed since we received it. This stays in SWTOR's clock domain (no cross-clock
+    /// comparison) and provides smooth countdown between log events.
+    ///
+    /// Returns `None` if no game timestamp has been received yet.
+    pub fn interpolated_game_time(&self) -> Option<NaiveDateTime> {
+        let game_time = self.current_game_time?;
+        let received_at = self.current_game_time_instant?;
+        let elapsed = received_at.elapsed();
+        Some(game_time + chrono::Duration::milliseconds(elapsed.as_millis() as i64))
+    }
+
+    /// Advance the game-time anchor to at least `event_timestamp`.
+    ///
+    /// Uses a monotonic high-water-mark: the new anchor is
+    /// `max(event_timestamp, current_interpolated_time)`. This ensures:
+    /// - Interpolated game time never jumps backward (no visible "jump" in
+    ///   remaining time when a batch of events arrives).
+    /// - Processing latency is naturally absorbed: between events the
+    ///   interpolation advances past event timestamps by roughly the I/O
+    ///   delay, and the `max()` preserves that advancement.
+    fn advance_game_time_anchor(&mut self, event_timestamp: NaiveDateTime) {
+        let now = Instant::now();
+        let anchor_time = match (self.current_game_time, self.current_game_time_instant) {
+            (Some(gt), Some(inst)) => {
+                let interp = gt + chrono::Duration::milliseconds(inst.elapsed().as_millis() as i64);
+                // Never move the anchor backward
+                if event_timestamp > interp { event_timestamp } else { interp }
+            }
+            _ => event_timestamp,
+        };
+        self.current_game_time = Some(anchor_time);
+        self.current_game_time_instant = Some(now);
+    }
+
     /// Get all active effects for rendering
     pub fn active_effects(&self) -> impl Iterator<Item = &ActiveEffect> {
         self.active_effects.values()
@@ -736,10 +781,16 @@ impl EffectTracker {
     }
 
     /// Tick the tracker - removes expired effects and updates state
+    ///
+    /// Uses interpolated game time for accurate remaining time calculations
+    /// without comparing SWTOR's clock to the system clock.
     pub fn tick(&mut self) {
         let Some(current_time) = self.current_game_time else {
             return;
         };
+
+        // Compute interpolated game time once for all effects this tick
+        let interp_time = self.interpolated_game_time().unwrap_or(current_time);
 
         // Collect effects that just ended (duration expired or removed by signal).
         // Include audio info so alerts fire reliably before GC.
@@ -751,7 +802,7 @@ impl EffectTracker {
             // Instead of immediately removing, mark as timer_expired so the effect stays
             // in active_effects and can be revived by refresh_abilities.
             // After the grace period, hard-remove for GC.
-            if effect.removed_at.is_none() && effect.has_duration_expired(current_time) {
+            if effect.removed_at.is_none() && effect.has_duration_expired(interp_time) {
                 if !effect.timer_expired {
                     // First tick after timer expiry — mark as timer-expired
                     effect.timer_expired = true;
@@ -760,7 +811,7 @@ impl EffectTracker {
 
                 // After grace period, hard-remove (GC on next retain pass)
                 if let Some(expires_at) = effect.expires_at {
-                    let since_expiry_ms = current_time
+                    let since_expiry_ms = interp_time
                         .signed_duration_since(expires_at)
                         .num_milliseconds();
                     if since_expiry_ms > TIMER_EXPIRY_GRACE_MS {
@@ -770,8 +821,9 @@ impl EffectTracker {
             }
 
             // Collect alert info for effects that just ended (any reason)
+            let remaining_total = effect.remaining_secs(interp_time).unwrap_or(0.0);
             if !effect.on_end_alert_fired
-                && (effect.has_base_duration_ended() || effect.removed_at.is_some())
+                && (effect.has_base_duration_ended(remaining_total) || effect.removed_at.is_some())
             {
                 effect.on_end_alert_fired = true;
                 let should_play_audio = effect.audio_enabled
@@ -836,7 +888,7 @@ impl EffectTracker {
         charges: Option<u8>,
         encounter: Option<&crate::encounter::CombatEncounter>,
     ) {
-        self.current_game_time = Some(timestamp);
+        self.advance_game_time_anchor(timestamp);
 
         // Note: GC is handled by tick() - don't duplicate here to reduce work per signal
 
@@ -1531,7 +1583,7 @@ impl EffectTracker {
         encounter: Option<&crate::encounter::CombatEncounter>,
         trigger_check: fn(&EffectDefinition) -> bool,
     ) {
-        self.current_game_time = Some(timestamp);
+        self.advance_game_time_anchor(timestamp);
         let ability_name_str = crate::context::resolve(ability_name);
 
         let matching_defs: Vec<_> = self
@@ -1658,7 +1710,7 @@ impl EffectTracker {
         timestamp: NaiveDateTime,
         encounter: Option<&crate::encounter::CombatEncounter>,
     ) {
-        self.current_game_time = Some(timestamp);
+        self.advance_game_time_anchor(timestamp);
         let local_player_id = self.local_player_id;
 
         // Build entity info for filter matching
@@ -1783,7 +1835,7 @@ impl EffectTracker {
         timestamp: NaiveDateTime,
         charges: u8,
     ) {
-        self.current_game_time = Some(timestamp);
+        self.advance_game_time_anchor(timestamp);
 
         // Find matching definitions (by ID or name)
         let effect_name_str = crate::context::resolve(effect_name);
@@ -2061,7 +2113,7 @@ impl SignalHandler for EffectTracker {
                 timestamp,
                 ..
             } => {
-                self.current_game_time = Some(*timestamp);
+                self.advance_game_time_anchor(*timestamp);
 
                 // Handle AbilityCast-triggered effects (procs, cooldowns)
                 // This works for any source, not just local player
