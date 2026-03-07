@@ -29,3 +29,6 @@
 - `AbilityCast` triggers now respect the target filter
 - Non-local player effects should now properly track and refresh
 - Users are no longer restricted from navigating away from the parsely upload file modal
+- CounterReaches triggers now recognize decrements
+- Conditions relying on timer time remaining now evaluate based on latest signal state
+- DOT refreshes are now calculated from the first damage event after the ability cast instead of the cast event
