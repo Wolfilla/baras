@@ -607,6 +607,13 @@ fn test_phase_ended_triggers_timer() {
 
     // Transition to phase_2 - phase_1 ended, should trigger
     manager.handle_signal(
+        &GameSignal::PhaseEndTriggered {
+            phase_id: "phase_1".to_string(),
+            timestamp: now(),
+        },
+        None,
+    );
+    manager.handle_signal(
         &GameSignal::PhaseChanged {
             boss_id: "test_boss".to_string(),
             old_phase: Some("phase_1".to_string()),
@@ -652,6 +659,13 @@ fn test_phase_entered_and_ended_both_trigger() {
     manager.load_definitions(vec![enter_timer, end_timer]);
 
     // Transition from phase_1 to phase_2 - both should trigger
+    manager.handle_signal(
+        &GameSignal::PhaseEndTriggered {
+            phase_id: "phase_1".to_string(),
+            timestamp: now(),
+        },
+        None,
+    );
     manager.handle_signal(
         &GameSignal::PhaseChanged {
             boss_id: "test_boss".to_string(),

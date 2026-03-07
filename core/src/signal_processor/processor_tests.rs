@@ -1568,3 +1568,241 @@ fn test_counter_reaches_enables_phase() {
     assert_eq!(enc.phase(), Some("p2"), "Final phase should be p2");
     assert_eq!(enc.get_counter("kill_count"), 3, "kill_count should be 3");
 }
+
+/// Regression test: counter with `increment_on = phase_ended("X")` should only
+/// increment once when phase X has an `end_trigger` and another phase starts on
+/// `phase_ended("X")`.
+///
+/// Previously, both `PhaseEndTriggered` and `PhaseChanged { old_phase }` would
+/// match the `PhaseEnded` trigger, causing a double-increment.
+#[test]
+fn test_phase_ended_counter_no_double_increment() {
+    use crate::combat_log::{Action, CombatEvent, Details, Effect, Entity, EntityType};
+    use crate::context::intern;
+    use crate::dsl::{
+        BossEncounterDefinition, CounterDefinition, EntityDefinition, PhaseDefinition, Trigger,
+    };
+    use crate::dsl::triggers::EffectSelector;
+    use crate::encounter::EncounterState;
+    use crate::encounter::entity_info::NpcInfo;
+    use crate::game_data::effect_type_id;
+
+    let ts = chrono::NaiveDate::from_ymd_opt(2026, 1, 1)
+        .unwrap()
+        .and_hms_opt(12, 0, 0)
+        .unwrap();
+
+    // Setup: mimics the fs_shield → fs_tanks cycle from Explosive Conflict.
+    //
+    // - "shield" phase: starts when a specific effect is applied, ends when it's removed
+    // - "tanks" phase: starts on phase_ended("shield")
+    // - counter: increments on phase_ended("shield")
+    //
+    // When the shield effect is removed:
+    //   1. shield's end_trigger fires → PhaseEndTriggered { "shield" }
+    //   2. tanks' start_trigger matches phase_ended("shield") → PhaseChanged { old: "shield", new: "tanks" }
+    //   3. Counter should increment exactly ONCE (not twice)
+
+    const BOSS_NPC_CLASS_ID: i64 = 100001;
+    const BOSS_NPC_LOG_ID: i64 = 200001;
+    const SHIELD_EFFECT_ID: i64 = 9999;
+
+    let mut boss_def = BossEncounterDefinition {
+        id: "test_dedup".to_string(),
+        name: "Test PhaseEnded Dedup".to_string(),
+        entities: vec![EntityDefinition {
+            name: "Boss".to_string(),
+            ids: vec![BOSS_NPC_CLASS_ID],
+            is_boss: true,
+            is_kill_target: true,
+            triggers_encounter: None,
+            show_on_hp_overlay: None,
+            hp_markers: vec![],
+            shields: vec![],
+        }],
+        phases: vec![
+            PhaseDefinition {
+                id: "tanks".to_string(),
+                name: "Tanks".to_string(),
+                enabled: true,
+                display_text: None,
+                start_trigger: Trigger::PhaseEnded {
+                    phase_id: "shield".to_string(),
+                },
+                end_trigger: None,
+                preceded_by: None,
+                conditions: vec![],
+                counter_condition: None,
+                resets_counters: vec![],
+            },
+            PhaseDefinition {
+                id: "shield".to_string(),
+                name: "Shield".to_string(),
+                enabled: true,
+                display_text: None,
+                start_trigger: Trigger::EffectApplied {
+                    effects: vec![EffectSelector::Id(SHIELD_EFFECT_ID as u64)],
+                    source: baras_types::EntityFilter::Any,
+                    target: baras_types::EntityFilter::Any,
+                },
+                end_trigger: Some(Trigger::EffectRemoved {
+                    effects: vec![EffectSelector::Id(SHIELD_EFFECT_ID as u64)],
+                    source: baras_types::EntityFilter::Any,
+                    target: baras_types::EntityFilter::Any,
+                }),
+                preceded_by: None,
+                conditions: vec![],
+                counter_condition: None,
+                resets_counters: vec![],
+            },
+        ],
+        counters: vec![CounterDefinition {
+            id: "shield_count".to_string(),
+            name: "Shield Count".to_string(),
+            enabled: true,
+            display_text: None,
+            increment_on: Trigger::PhaseEnded {
+                phase_id: "shield".to_string(),
+            },
+            decrement_on: None,
+            reset_on: Trigger::CombatEnd,
+            initial_value: 0,
+            decrement: false,
+            set_value: None,
+            track_effect_stacks: None,
+        }],
+        ..Default::default()
+    };
+    boss_def.build_indexes();
+
+    let mut cache = SessionCache::default();
+    cache.load_boss_definitions(vec![boss_def], true);
+
+    if let Some(enc) = cache.current_encounter_mut() {
+        enc.state = EncounterState::InCombat;
+        enc.enter_combat_time = Some(ts);
+        enc.set_active_boss_idx(Some(0));
+        enc.set_phase("shield", ts);
+        enc.npcs.insert(
+            BOSS_NPC_LOG_ID,
+            NpcInfo {
+                name: intern("Boss"),
+                log_id: BOSS_NPC_LOG_ID,
+                class_id: BOSS_NPC_CLASS_ID,
+                current_hp: 100_000,
+                max_hp: 100_000,
+                ..Default::default()
+            },
+        );
+    }
+
+    let mut processor = EventProcessor::new();
+
+    // Register NPC
+    let npc_event = CombatEvent {
+        line_number: 1,
+        timestamp: ts,
+        source_entity: Entity {
+            name: intern("Boss"),
+            class_id: BOSS_NPC_CLASS_ID,
+            log_id: BOSS_NPC_LOG_ID,
+            entity_type: EntityType::Npc,
+            health: (100_000, 100_000),
+        },
+        target_entity: Entity::default(),
+        action: Action::default(),
+        effect: Effect::default(),
+        details: Details::default(),
+    };
+    let _ = processor.process_event(npc_event, &mut cache);
+
+    // Shield effect removed → should trigger shield's end_trigger → tanks starts
+    let shield_removed = CombatEvent {
+        line_number: 2,
+        timestamp: ts + chrono::Duration::seconds(25),
+        source_entity: Entity::default(),
+        target_entity: Entity {
+            name: intern("Boss"),
+            class_id: BOSS_NPC_CLASS_ID,
+            log_id: BOSS_NPC_LOG_ID,
+            entity_type: EntityType::Npc,
+            health: (100_000, 100_000),
+        },
+        action: Action::default(),
+        effect: Effect {
+            type_id: effect_type_id::REMOVEEFFECT,
+            effect_id: SHIELD_EFFECT_ID,
+            ..Default::default()
+        },
+        details: Details::default(),
+    };
+    let (signals, _, _) = processor.process_event(shield_removed, &mut cache);
+
+    // Debug output
+    for s in &signals {
+        match s {
+            GameSignal::PhaseChanged {
+                old_phase,
+                new_phase,
+                ..
+            } => {
+                eprintln!("PhaseChanged: {:?} -> {}", old_phase, new_phase);
+            }
+            GameSignal::CounterChanged {
+                counter_id,
+                old_value,
+                new_value,
+                ..
+            } => {
+                eprintln!("CounterChanged: {} {} -> {}", counter_id, old_value, new_value);
+            }
+            GameSignal::PhaseEndTriggered { phase_id, .. } => {
+                eprintln!("PhaseEndTriggered: {}", phase_id);
+            }
+            _ => {}
+        }
+    }
+
+    // Verify phase transitioned to tanks
+    let has_tanks = signals.iter().any(
+        |s| matches!(s, GameSignal::PhaseChanged { new_phase, .. } if new_phase == "tanks"),
+    );
+    assert!(has_tanks, "Expected PhaseChanged to tanks");
+
+    // KEY ASSERTION: counter should have incremented exactly once
+    let counter_changes: Vec<_> = signals
+        .iter()
+        .filter_map(|s| match s {
+            GameSignal::CounterChanged {
+                counter_id,
+                old_value,
+                new_value,
+                ..
+            } if counter_id == "shield_count" => Some((*old_value, *new_value)),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        counter_changes.len(),
+        1,
+        "shield_count should increment exactly once, got {} changes: {:?}",
+        counter_changes.len(),
+        counter_changes
+    );
+    assert_eq!(
+        counter_changes[0],
+        (0, 1),
+        "shield_count should go from 0 to 1, got {:?}",
+        counter_changes[0]
+    );
+
+    // Verify final state
+    let enc = cache.current_encounter().unwrap();
+    assert_eq!(enc.phase(), Some("tanks"), "Final phase should be tanks");
+    assert_eq!(
+        enc.get_counter("shield_count"),
+        1,
+        "shield_count should be 1 (not 2)"
+    );
+}

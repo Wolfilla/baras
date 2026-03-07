@@ -240,7 +240,8 @@ pub enum GameSignal {
         timestamp: NaiveDateTime,
     },
 
-    /// Phase's end_trigger fired (allows other phases to start via PhaseEnded trigger)
+    /// A phase has ended — either via its explicit end_trigger or by being replaced
+    /// by another phase. This is the canonical signal for PhaseEnded trigger matching.
     PhaseEndTriggered {
         phase_id: String,
         timestamp: NaiveDateTime,

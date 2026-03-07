@@ -97,12 +97,20 @@ pub fn check_hp_phase_transitions(
         enc.reset_counters_to_initial(&resets, &counter_defs);
         enc.challenge_tracker.set_phase(&new_phase_id, timestamp);
 
-        return vec![GameSignal::PhaseChanged {
+        let mut signals = Vec::new();
+        if let Some(ref ended) = old_phase {
+            signals.push(GameSignal::PhaseEndTriggered {
+                phase_id: ended.clone(),
+                timestamp,
+            });
+        }
+        signals.push(GameSignal::PhaseChanged {
             boss_id,
             old_phase,
             new_phase: new_phase_id,
             timestamp,
-        }];
+        });
+        return signals;
     }
 
     Vec::new()
@@ -197,12 +205,25 @@ pub fn check_ability_phase_transitions(
         enc.challenge_tracker
             .set_phase(&new_phase_id, event.timestamp);
 
-        return vec![GameSignal::PhaseChanged {
+        let mut signals = Vec::new();
+        if let Some(ref ended) = old_phase {
+            let already_emitted = current_signals.iter().any(|s| {
+                matches!(s, GameSignal::PhaseEndTriggered { phase_id, .. } if phase_id == ended)
+            });
+            if !already_emitted {
+                signals.push(GameSignal::PhaseEndTriggered {
+                    phase_id: ended.clone(),
+                    timestamp: event.timestamp,
+                });
+            }
+        }
+        signals.push(GameSignal::PhaseChanged {
             boss_id,
             old_phase,
             new_phase: new_phase_id,
             timestamp: event.timestamp,
-        }];
+        });
+        return signals;
     }
 
     Vec::new()
@@ -292,12 +313,25 @@ pub fn check_entity_phase_transitions(
         enc.reset_counters_to_initial(&resets, &counter_defs);
         enc.challenge_tracker.set_phase(&new_phase_id, timestamp);
 
-        return vec![GameSignal::PhaseChanged {
+        let mut signals = Vec::new();
+        if let Some(ref ended) = old_phase {
+            let already_emitted = current_signals.iter().any(|s| {
+                matches!(s, GameSignal::PhaseEndTriggered { phase_id, .. } if phase_id == ended)
+            });
+            if !already_emitted {
+                signals.push(GameSignal::PhaseEndTriggered {
+                    phase_id: ended.clone(),
+                    timestamp,
+                });
+            }
+        }
+        signals.push(GameSignal::PhaseChanged {
             boss_id,
             old_phase,
             new_phase: new_phase_id,
             timestamp,
-        }];
+        });
+        return signals;
     }
 
     Vec::new()
@@ -393,12 +427,20 @@ pub fn check_time_phase_transitions(
         enc.reset_counters_to_initial(&resets, &counter_defs);
         enc.challenge_tracker.set_phase(&new_phase_id, timestamp);
 
-        return vec![GameSignal::PhaseChanged {
+        let mut signals = Vec::new();
+        if let Some(ref ended) = old_phase {
+            signals.push(GameSignal::PhaseEndTriggered {
+                phase_id: ended.clone(),
+                timestamp,
+            });
+        }
+        signals.push(GameSignal::PhaseChanged {
             boss_id,
             old_phase,
             new_phase: new_phase_id,
             timestamp,
-        }];
+        });
+        return signals;
     }
 
     Vec::new()
@@ -488,6 +530,12 @@ pub fn check_timer_phase_transitions(
         enc.reset_counters_to_initial(&resets, &counter_defs);
         enc.challenge_tracker.set_phase(&new_phase_id, timestamp);
 
+        if let Some(ref ended) = old_phase {
+            all_signals.push(GameSignal::PhaseEndTriggered {
+                phase_id: ended.clone(),
+                timestamp,
+            });
+        }
         all_signals.push(GameSignal::PhaseChanged {
             boss_id,
             old_phase,

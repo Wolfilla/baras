@@ -1442,15 +1442,10 @@ impl SignalHandler for TimerManager {
             }
 
             GameSignal::PhaseChanged {
-                old_phase,
                 new_phase,
                 timestamp,
                 ..
             } => {
-                // Handle the old phase ending first (if any)
-                if let Some(ended_phase) = old_phase {
-                    signal_handlers::handle_phase_ended(self, encounter, ended_phase, *timestamp);
-                }
                 // Trigger phase-entered timers
                 signal_handlers::handle_phase_change(self, encounter, new_phase, *timestamp);
                 // Trigger any-phase-change timers (start + cancel)

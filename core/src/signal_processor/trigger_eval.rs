@@ -139,13 +139,9 @@ pub fn check_signal_trigger(
             }
         }),
 
-        Trigger::PhaseEnded { .. } => signals.iter().any(|s| match s {
-            GameSignal::PhaseChanged {
-                old_phase: Some(old),
-                ..
-            } => trigger.matches_phase_ended(old),
-            GameSignal::PhaseEndTriggered { phase_id, .. } => trigger.matches_phase_ended(phase_id),
-            _ => false,
+        Trigger::PhaseEnded { .. } => signals.iter().any(|s| {
+            matches!(s, GameSignal::PhaseEndTriggered { phase_id, .. }
+                if trigger.matches_phase_ended(phase_id))
         }),
 
         Trigger::AnyPhaseChange => signals

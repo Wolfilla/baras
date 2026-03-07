@@ -99,7 +99,12 @@ fn build_area_index_recursive(dir: &Path, index: &mut AreaIndex) -> Result<(), S
 
         if path.is_dir() {
             build_area_index_recursive(&path, index)?;
-        } else if path.extension().is_some_and(|ext| ext == "toml") {
+        } else if path.extension().is_some_and(|ext| ext == "toml")
+            && !path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .is_some_and(|s| s.ends_with("_custom"))
+        {
             match load_area_config(&path) {
                 Ok(Some(area)) if area.area_id != 0 => {
                     index.insert(
@@ -658,5 +663,63 @@ conditions = [
             "Successfully loaded Bestia fixture with {} timers",
             bestia.timers.len()
         );
+    }
+
+    #[test]
+    fn test_area_index_skips_custom_overlay_files() {
+        // Custom overlay files (e.g., r4_anomaly_custom.toml) should NOT be indexed.
+        // If they are, they overwrite the bundled entry for the same area_id,
+        // causing load_bosses_with_custom to load from the (nearly empty) custom file
+        // instead of the bundled file — losing all bosses and phases.
+        let dir = std::env::temp_dir().join("baras_test_area_index_skip_custom");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        // Bundled-style file with a boss that has phases
+        let bundled = dir.join("r4_anomaly.toml");
+        fs::write(
+            &bundled,
+            r#"
+[area]
+name = "R-4 Anomaly"
+area_id = 833571547775799
+area_type = "operation"
+
+[[boss]]
+id = "ip_cpt"
+name = "IP-CPT"
+
+[[boss.phase]]
+id = "p1"
+name = "Phase 1"
+trigger = { type = "combat_start" }
+"#,
+        )
+        .unwrap();
+
+        // Custom overlay file with just [area] header (no bosses)
+        let custom = dir.join("r4_anomaly_custom.toml");
+        fs::write(
+            &custom,
+            r#"
+[area]
+name = "R-4 Anomaly"
+area_id = 833571547775799
+area_type = "operation"
+"#,
+        )
+        .unwrap();
+
+        let index = build_area_index(&dir).unwrap();
+
+        // Should have one entry for the area
+        assert_eq!(index.len(), 1);
+        let entry = index.get(&833571547775799).unwrap();
+
+        // The entry should point to the bundled file, NOT the custom overlay
+        assert_eq!(entry.file_path, bundled);
+
+        // Cleanup
+        let _ = fs::remove_dir_all(&dir);
     }
 }
