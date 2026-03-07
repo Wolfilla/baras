@@ -17,7 +17,7 @@ use crate::dsl::{BossEncounterDefinition, EntityDefinition};
 use crate::game_data::{Discipline, Role};
 use crate::signal_processor::{GameSignal, SignalHandler};
 
-use super::matching::{is_definition_active, matches_source_target_filters};
+use super::matching::{is_definition_active, is_definition_active_with_snapshot, matches_source_target_filters};
 use super::signal_handlers;
 use super::{ActiveTimer, TimerDefinition, TimerKey, TimerPreferences, TimerTrigger};
 
@@ -687,6 +687,24 @@ impl TimerManager {
         is_definition_active(def, encounter)
     }
 
+    /// Check if a timer definition is active, using a fresh timer_remaining
+    /// snapshot instead of the encounter's cached one.
+    ///
+    /// Used during `process_expirations` so that `TimerTimeRemaining` conditions
+    /// see up-to-date timer state (expired timers already removed from
+    /// `active_timers`) rather than the stale snapshot from before signal dispatch.
+    fn is_definition_active_with_snapshot(
+        &self,
+        def: &TimerDefinition,
+        encounter: Option<&crate::encounter::CombatEncounter>,
+        timer_snapshot: &hashbrown::HashMap<String, f32>,
+    ) -> bool {
+        if !self.preferences.is_enabled(def) {
+            return false;
+        }
+        is_definition_active_with_snapshot(def, encounter, timer_snapshot)
+    }
+
     /// Start a timer from a definition
     pub(super) fn start_timer(
         &mut self,
@@ -945,10 +963,18 @@ impl TimerManager {
             }
         }
 
+        // Build a fresh timer_remaining snapshot from current active_timers.
+        // Expired timers have already been removed above, so this snapshot
+        // reflects the post-expiration state. Using this instead of the
+        // encounter's cached snapshot prevents a stale-state race condition
+        // where TimerTimeRemaining conditions still see just-expired timers
+        // as active (the encounter's snapshot was set before signal dispatch).
+        let fresh_snapshot = self.timer_remaining_snapshot_at(current_time);
+
         // Start chained timers (outside the borrow)
         for (next_timer_id, target_id) in chains_to_start {
             if let Some(next_def) = self.definitions.get(&next_timer_id).cloned()
-                && self.is_definition_active(&next_def, encounter)
+                && self.is_definition_active_with_snapshot(&next_def, encounter, &fresh_snapshot)
             {
                 self.start_timer(&next_def, current_time, target_id);
             }
@@ -961,7 +987,8 @@ impl TimerManager {
                 .definitions_for_kind(TriggerKind::TimerExpires)
                 .iter()
                 .filter(|d| {
-                    d.matches_timer_expires(expired_id) && self.is_definition_active(d, encounter)
+                    d.matches_timer_expires(expired_id)
+                        && self.is_definition_active_with_snapshot(d, encounter, &fresh_snapshot)
                 })
                 .cloned()
                 .collect();

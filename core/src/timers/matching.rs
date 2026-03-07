@@ -105,3 +105,47 @@ pub(super) fn is_definition_active(
 
     true
 }
+
+/// Check if a timer definition is active, using a fresh timer_remaining snapshot.
+///
+/// Identical to `is_definition_active` except `TimerTimeRemaining` conditions
+/// are evaluated against the provided `timer_snapshot` instead of the encounter's
+/// cached `timer_remaining`. This prevents stale-snapshot race conditions when
+/// timers expire mid-processing and trigger other timers whose conditions
+/// depend on the just-expired timer's state.
+pub(super) fn is_definition_active_with_snapshot(
+    def: &TimerDefinition,
+    encounter: Option<&CombatEncounter>,
+    timer_snapshot: &hashbrown::HashMap<String, f32>,
+) -> bool {
+    let (area_id, area_name, boss_name, difficulty) = match encounter {
+        Some(enc) => (
+            enc.area_id,
+            enc.area_name.as_deref(),
+            enc.active_boss.as_ref().map(|b| b.name.as_str()),
+            enc.difficulty,
+        ),
+        None => (None, None, None, None),
+    };
+
+    if !def.enabled || !def.is_active_for_context(area_id, area_name, boss_name, difficulty) {
+        return false;
+    }
+
+    if let Some(enc) = encounter {
+        if !enc.evaluate_merged_conditions_with_timer_snapshot(
+            &def.conditions,
+            &def.phases,
+            def.counter_condition.as_ref(),
+            timer_snapshot,
+        ) {
+            return false;
+        }
+    } else {
+        if !def.conditions.is_empty() || !def.phases.is_empty() || def.counter_condition.is_some() {
+            return false;
+        }
+    }
+
+    true
+}

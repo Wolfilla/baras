@@ -153,6 +153,9 @@ pub struct CombatEncounter {
 
     // ─── Timer Snapshot (for timer_time_remaining conditions) ──────────────
     /// Snapshot of active timer remaining seconds, keyed by definition_id.
+    /// Updated by TimerManager before each signal dispatch cycle and refreshed
+    /// internally during process_expirations so that TimerExpires-triggered
+    /// conditions see up-to-date timer state.
     /// Updated by TimerManager before each signal dispatch cycle.
     /// Absent entries mean the timer is not active (treated as 0.0).
     pub timer_remaining: HashMap<String, f32>,
@@ -628,6 +631,9 @@ impl CombatEncounter {
 
     /// Replace the timer remaining snapshot with a fresh one.
     /// Called by the parser before dispatching signals so conditions see current timer state.
+    /// Takes `&self` (not `&mut self`) because this uses interior mutability via RefCell,
+    /// allowing the timer manager to refresh the snapshot mid-processing through the
+    /// immutable `&CombatEncounter` reference provided by the SignalHandler trait.
     pub fn update_timer_snapshot(&mut self, snapshot: HashMap<String, f32>) {
         self.timer_remaining = snapshot;
     }
@@ -685,6 +691,65 @@ impl CombatEncounter {
         }
     }
 
+    /// Evaluate a single condition using an overridden timer_remaining snapshot.
+    ///
+    /// This is used by the timer manager during `process_expirations` to evaluate
+    /// conditions against fresh timer state rather than the potentially stale
+    /// snapshot cached on the encounter from before signal dispatch.
+    fn evaluate_condition_with_timer_snapshot(
+        &self,
+        condition: &crate::dsl::Condition,
+        timer_snapshot: &hashbrown::HashMap<String, f32>,
+    ) -> bool {
+        use crate::dsl::Condition;
+        match condition {
+            Condition::PhaseActive { phase_ids } => self.is_in_any_phase(phase_ids),
+
+            Condition::CounterCompare {
+                counter_id,
+                operator,
+                value,
+            } => {
+                let current = self.get_counter(counter_id);
+                operator.evaluate(current, *value)
+            }
+
+            Condition::CounterCompareCounter {
+                counter_id,
+                operator,
+                other_counter_id,
+            } => {
+                let left = self.get_counter(counter_id);
+                let right = self.get_counter(other_counter_id);
+                operator.evaluate(left, right)
+            }
+
+            Condition::TimerTimeRemaining {
+                timer_id,
+                operator,
+                value,
+            } => {
+                // Use the overridden snapshot instead of self.timer_remaining
+                match timer_snapshot.get(timer_id) {
+                    Some(&remaining) => operator.evaluate_f32(remaining, *value),
+                    None => false,
+                }
+            }
+
+            Condition::AllOf { conditions } => conditions
+                .iter()
+                .all(|c| self.evaluate_condition_with_timer_snapshot(c, timer_snapshot)),
+
+            Condition::AnyOf { conditions } => conditions
+                .iter()
+                .any(|c| self.evaluate_condition_with_timer_snapshot(c, timer_snapshot)),
+
+            Condition::Not { condition } => {
+                !self.evaluate_condition_with_timer_snapshot(condition, timer_snapshot)
+            }
+        }
+    }
+
     /// Evaluate all conditions (implicitly AND'd). Returns true if all are met.
     /// An empty conditions list always returns true.
     pub fn evaluate_conditions(&self, conditions: &[crate::dsl::Condition]) -> bool {
@@ -701,6 +766,41 @@ impl CombatEncounter {
     ) -> bool {
         // Check new-style conditions
         if !conditions.iter().all(|c| self.evaluate_condition(c)) {
+            return false;
+        }
+
+        // Check legacy phases
+        if !phases.is_empty() && !self.is_in_any_phase(phases) {
+            return false;
+        }
+
+        // Check legacy counter condition
+        if let Some(cond) = counter_condition {
+            if !self.check_counter_condition(cond) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Evaluate merged conditions with an overridden timer_remaining snapshot.
+    ///
+    /// Used by the timer manager during `process_expirations` so that
+    /// `TimerTimeRemaining` conditions see up-to-date timer state rather than
+    /// the potentially stale snapshot cached before signal dispatch.
+    pub fn evaluate_merged_conditions_with_timer_snapshot(
+        &self,
+        conditions: &[crate::dsl::Condition],
+        phases: &[String],
+        counter_condition: Option<&CounterCondition>,
+        timer_snapshot: &hashbrown::HashMap<String, f32>,
+    ) -> bool {
+        // Check new-style conditions using overridden timer snapshot
+        if !conditions
+            .iter()
+            .all(|c| self.evaluate_condition_with_timer_snapshot(c, timer_snapshot))
+        {
             return false;
         }
 
