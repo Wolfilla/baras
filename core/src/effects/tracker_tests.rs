@@ -695,3 +695,203 @@ fn test_charges_from_local_player_do_update_local_effect() {
         "Charges from local player should update normally"
     );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Source-agnostic refresh: other players' effects refresh via AbilityActivated
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_kolto_shell_others_refreshes_via_ability_activated() {
+    // When another player recasts Kolto Shell, the existing kolto_shell_others
+    // effect should get its timer refreshed via the AbilityActivated signal.
+    let effect_id: u64 = 985226842996736;
+    let local_player_id: i64 = 1;
+    let other_player_id: i64 = 99;
+    let target_id: i64 = 2;
+
+    let kolto_shell = make_effect(
+        "kolto_shell",
+        "Kolto Shell",
+        Trigger::EffectApplied {
+            effects: vec![EffectSelector::Id(effect_id)],
+            source: EntityFilter::LocalPlayer,
+            target: EntityFilter::AnyPlayer,
+        },
+        Some(180.0),
+    );
+
+    let mut kolto_shell_others = make_effect(
+        "kolto_shell_others",
+        "Other's Kolto Shell",
+        Trigger::EffectApplied {
+            effects: vec![EffectSelector::Id(effect_id)],
+            source: EntityFilter::OtherPlayers,
+            target: EntityFilter::AnyPlayer,
+        },
+        Some(180.0),
+    );
+    kolto_shell_others.display_target = super::definition::DisplayTarget::RaidFrames;
+    kolto_shell_others.refresh_abilities = vec![RefreshAbility::Simple(
+        baras_types::AbilitySelector::Id(effect_id),
+    )];
+
+    let mut tracker = make_tracker(vec![kolto_shell, kolto_shell_others]);
+    tracker.set_player_context(local_player_id, 0);
+
+    let ts = now();
+
+    // Other player applies Kolto Shell on target (creates kolto_shell_others)
+    tracker.handle_signal(
+        &effect_applied_signal_with_source(effect_id as i64, other_player_id, target_id, ts),
+        None,
+    );
+
+    assert_eq!(tracker.active_effects().count(), 1);
+    let effect = tracker.active_effects().next().unwrap();
+    assert_eq!(effect.definition_id, "kolto_shell_others");
+    let original_expires = effect.expires_at;
+
+    // 60 seconds later, other player recasts (AbilityActivated signal)
+    let ts2 = ts + chrono::Duration::seconds(60);
+    tracker.handle_signal(
+        &ability_activated_signal_with_source(effect_id as i64, other_player_id, target_id, ts2),
+        None,
+    );
+
+    // The effect should still exist and its timer should be refreshed
+    assert_eq!(tracker.active_effects().count(), 1);
+    let effect = tracker.active_effects().next().unwrap();
+    assert_eq!(effect.definition_id, "kolto_shell_others");
+    assert!(
+        effect.expires_at > original_expires,
+        "Timer should be refreshed — expires_at should be later than original"
+    );
+    assert_eq!(
+        effect.last_refreshed_at, ts2,
+        "last_refreshed_at should match the recast timestamp"
+    );
+}
+
+#[test]
+fn test_other_player_effect_late_registration_not_marked_local() {
+    // When an effect is late-registered via refresh for another player,
+    // it should NOT be marked as is_from_local_player.
+    let effect_id: u64 = 985226842996736;
+    let local_player_id: i64 = 1;
+    let other_player_id: i64 = 99;
+    let target_id: i64 = 2;
+
+    let mut kolto_shell_others = make_effect(
+        "kolto_shell_others",
+        "Other's Kolto Shell",
+        Trigger::EffectApplied {
+            effects: vec![EffectSelector::Id(effect_id)],
+            source: EntityFilter::OtherPlayers,
+            target: EntityFilter::AnyPlayer,
+        },
+        Some(180.0),
+    );
+    kolto_shell_others.display_target = super::definition::DisplayTarget::RaidFrames;
+    kolto_shell_others.refresh_abilities = vec![RefreshAbility::Simple(
+        baras_types::AbilitySelector::Id(effect_id),
+    )];
+
+    let mut tracker = make_tracker(vec![kolto_shell_others]);
+    tracker.set_player_context(local_player_id, 0);
+
+    // No EffectApplied — go straight to AbilityActivated (late registration)
+    let ts = now();
+    tracker.handle_signal(
+        &ability_activated_signal_with_source(effect_id as i64, other_player_id, target_id, ts),
+        None,
+    );
+
+    assert_eq!(tracker.active_effects().count(), 1);
+    let effect = tracker.active_effects().next().unwrap();
+    assert_eq!(effect.definition_id, "kolto_shell_others");
+    assert!(
+        !effect.is_from_local_player,
+        "Late-registered effect from other player should NOT be marked as local"
+    );
+}
+
+#[test]
+fn test_local_player_cast_does_not_create_phantom_others_via_refresh() {
+    // When the LOCAL player casts Kolto Shell, the AbilityActivated signal should
+    // NOT create a phantom kolto_shell_others via late registration in the refresh path.
+    // The source filter (source = "other_players") must reject the local player.
+    let effect_id: u64 = 985226842996736;
+    let local_player_id: i64 = 1;
+    let target_id: i64 = 2;
+
+    let mut kolto_shell = make_effect(
+        "kolto_shell",
+        "Kolto Shell",
+        Trigger::EffectApplied {
+            effects: vec![EffectSelector::Id(effect_id)],
+            source: EntityFilter::LocalPlayer,
+            target: EntityFilter::AnyPlayer,
+        },
+        Some(180.0),
+    );
+    kolto_shell.display_target = super::definition::DisplayTarget::RaidFrames;
+    kolto_shell.refresh_abilities = vec![RefreshAbility::Simple(baras_types::AbilitySelector::Id(
+        effect_id,
+    ))];
+
+    let mut kolto_shell_others = make_effect(
+        "kolto_shell_others",
+        "Other's Kolto Shell",
+        Trigger::EffectApplied {
+            effects: vec![EffectSelector::Id(effect_id)],
+            source: EntityFilter::OtherPlayers,
+            target: EntityFilter::AnyPlayer,
+        },
+        Some(180.0),
+    );
+    kolto_shell_others.display_target = super::definition::DisplayTarget::RaidFrames;
+    kolto_shell_others.refresh_abilities = vec![RefreshAbility::Simple(
+        baras_types::AbilitySelector::Id(effect_id),
+    )];
+
+    let mut tracker = make_tracker(vec![kolto_shell, kolto_shell_others]);
+    tracker.set_player_context(local_player_id, 0);
+
+    let ts = now();
+
+    // Local player applies Kolto Shell (EffectApplied creates kolto_shell)
+    tracker.handle_signal(
+        &effect_applied_signal_with_source(effect_id as i64, local_player_id, target_id, ts),
+        None,
+    );
+
+    assert_eq!(
+        tracker.active_effects().count(),
+        1,
+        "Should have exactly 1 effect (kolto_shell)"
+    );
+    assert_eq!(
+        tracker.active_effects().next().unwrap().definition_id,
+        "kolto_shell"
+    );
+
+    // Local player recasts (AbilityActivated) — should refresh kolto_shell,
+    // NOT create a phantom kolto_shell_others
+    let ts2 = ts + chrono::Duration::seconds(30);
+    tracker.handle_signal(
+        &ability_activated_signal_with_source(effect_id as i64, local_player_id, target_id, ts2),
+        None,
+    );
+
+    assert_eq!(
+        tracker.active_effects().count(),
+        1,
+        "Should still have exactly 1 effect — no phantom kolto_shell_others"
+    );
+    let effect = tracker.active_effects().next().unwrap();
+    assert_eq!(effect.definition_id, "kolto_shell");
+    assert_eq!(
+        effect.last_refreshed_at, ts2,
+        "kolto_shell should be refreshed"
+    );
+}

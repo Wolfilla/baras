@@ -88,7 +88,7 @@ impl EventProcessor {
         // ═══════════════════════════════════════════════════════════════════════
 
         self.emit_effect_signals(&event, &mut signals);
-        self.emit_action_signals(&event, &mut signals);
+        self.emit_action_signals(&event, cache, &mut signals);
         self.emit_damage_signals(&event, &mut signals);
         self.emit_healing_signals(&event, &mut signals);
 
@@ -1129,23 +1129,73 @@ impl EventProcessor {
     }
 
     /// Emit signals for ability activations and target changes.
-    /// Pure transformation - no encounter state modification.
-    fn emit_action_signals(&self, event: &CombatEvent, out: &mut Vec<GameSignal>) {
-        let effect_id = event.effect.effect_id;
+    /// Resolves the actual target from encounter state when the combat log
+    /// reports self-targeting (which SWTOR does for most AbilityActivate events).
+    fn emit_action_signals(
+        &self,
+        event: &CombatEvent,
+        cache: &SessionCache,
+        out: &mut Vec<GameSignal>,
+    ) {
+        let eid = event.effect.effect_id;
 
         // Ability activation
-        if effect_id == effect_id::ABILITYACTIVATE {
+        if eid == effect_id::ABILITYACTIVATE {
+            let source_id = event.source_entity.log_id;
+            let raw_target_id = event.target_entity.log_id;
+
+            // Resolve actual target: SWTOR reports self as target for most abilities.
+            // When target == source or target == 0, look up the caster's real target
+            // from the encounter's tracked target state.
+            let is_self_or_empty = raw_target_id == 0 || raw_target_id == source_id;
+            let (target_id, target_entity_type, target_name, target_npc_id) = if is_self_or_empty {
+                if let Some(resolved_id) = cache
+                    .current_encounter()
+                    .and_then(|e| e.get_current_target(source_id))
+                {
+                    let enc = cache.current_encounter().unwrap();
+                    if let Some(player) = enc.players.get(&resolved_id) {
+                        (resolved_id, EntityType::Player, player.name, 0)
+                    } else if let Some(npc) = enc.npcs.get(&resolved_id) {
+                        (resolved_id, npc.entity_type, npc.name, npc.class_id)
+                    } else {
+                        // Target exists but not in our roster — use source info as fallback
+                        (
+                            source_id,
+                            event.source_entity.entity_type,
+                            event.source_entity.name,
+                            event.source_entity.class_id,
+                        )
+                    }
+                } else {
+                    // No encounter or no target tracked — default to self
+                    (
+                        source_id,
+                        event.source_entity.entity_type,
+                        event.source_entity.name,
+                        event.source_entity.class_id,
+                    )
+                }
+            } else {
+                (
+                    raw_target_id,
+                    event.target_entity.entity_type,
+                    event.target_entity.name,
+                    event.target_entity.class_id,
+                )
+            };
+
             out.push(GameSignal::AbilityActivated {
                 ability_id: event.action.action_id,
                 ability_name: event.action.name,
-                source_id: event.source_entity.log_id,
+                source_id,
                 source_entity_type: event.source_entity.entity_type,
                 source_name: event.source_entity.name,
                 source_npc_id: event.source_entity.class_id,
-                target_id: event.target_entity.log_id,
-                target_entity_type: event.target_entity.entity_type,
-                target_name: event.target_entity.name,
-                target_npc_id: event.target_entity.class_id,
+                target_id,
+                target_entity_type,
+                target_name,
+                target_npc_id,
                 timestamp: event.timestamp,
             });
         }

@@ -14,7 +14,7 @@ use std::collections::HashSet;
 use crate::combat_log::CombatEvent;
 use crate::dsl::EntityDefinition;
 use crate::dsl::Trigger;
-use crate::game_data::{effect_id, effect_type_id};
+use crate::game_data::effect_type_id;
 use crate::timers::matches_source_target_filters;
 
 use super::GameSignal;
@@ -258,15 +258,55 @@ pub fn check_signal_trigger(
             }
         }),
 
+        // ─── Ability Cast (signal-based with resolved target) ──────────────
+        Trigger::AbilityCast { .. } => signals.iter().any(|s| {
+            if let GameSignal::AbilityActivated {
+                ability_id,
+                ability_name,
+                source_id,
+                source_entity_type,
+                source_name,
+                source_npc_id,
+                target_id,
+                target_entity_type,
+                target_name,
+                target_npc_id,
+                ..
+            } = s
+            {
+                let ability_name_str = crate::context::resolve(*ability_name);
+
+                if !trigger.matches_ability(*ability_id as u64, Some(ability_name_str)) {
+                    return false;
+                }
+
+                matches_source_target_filters(
+                    trigger,
+                    filter_ctx.entities,
+                    *source_id,
+                    *source_entity_type,
+                    *source_name,
+                    *source_npc_id,
+                    *target_id,
+                    *target_entity_type,
+                    *target_name,
+                    *target_npc_id,
+                    filter_ctx.local_player_id,
+                    filter_ctx.current_target_id,
+                    filter_ctx.boss_entity_ids,
+                )
+            } else {
+                false
+            }
+        }),
+
         // ─── Timer triggers (handled by check_timer_trigger, not signals) ──
         Trigger::TimerExpires { .. }
         | Trigger::TimerStarted { .. }
         | Trigger::TimerCanceled { .. } => false,
 
         // ─── Event-based triggers (handled by check_event_trigger, not signals)
-        Trigger::AbilityCast { .. }
-        | Trigger::EffectApplied { .. }
-        | Trigger::EffectRemoved { .. } => false,
+        Trigger::EffectApplied { .. } | Trigger::EffectRemoved { .. } => false,
 
         // ─── Not signal-based ──────────────────────────────────────────────
         Trigger::TimeElapsed { .. }
@@ -310,16 +350,9 @@ pub fn check_event_trigger(
             .any(|c| check_event_trigger(c, event, filter_ctx));
     }
 
-    // Check AbilityCast triggers
-    if event.effect.effect_id == effect_id::ABILITYACTIVATE {
-        let ability_id = event.action.action_id as u64;
-        let ability_name = crate::context::resolve(event.action.name);
-        if trigger.matches_ability(ability_id, Some(ability_name))
-            && check_event_filters(trigger, event, filter_ctx)
-        {
-            return true;
-        }
-    }
+    // NOTE: AbilityCast triggers are handled in check_signal_trigger (signal-based),
+    // not here. The signal path has properly resolved targets from encounter state,
+    // whereas the raw CombatEvent has unreliable self-targeting for AbilityActivate.
 
     // Check EffectApplied triggers
     if event.effect.type_id == effect_type_id::APPLYEFFECT {
