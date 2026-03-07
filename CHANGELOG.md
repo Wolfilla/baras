@@ -1,85 +1,31 @@
-# v2026.3.4
-
-Can't stop won't stop. I literally can't stop updating help me.
-
-## Challenges
-
-Challenge system has been debugged and revamped.
-
-- Challenge overlays no longer disappear on combat end
-- Challenges have been revamped so condition scoping and duration calculation works properly
-- Added "Damage Absorbed" challenge type
-- Added effect stacks challenge type
-- Challenge results now display in the data explorer with their selected bar color
-- Duration scoping should now work on counter conditions
-- Challenge editor UI updated
-
-## Boss HP Thresholds and Shields
-
-In the encounter builder entity roster, you can now add HP thresholds and shields to entities. HP thresholds will display on the boss bar with a line and a small label below.
-Shields will display above the health bar when the effect for the shield is applied, and disappear when the HP threshold is met or the shield is removed.
-
-**Current Target has been moved above the boss HP bar to prevent clipping issues with new labels**
-
-## Encounter Definitions
-
-- Added Voltinator shield to Apex
-- Added Voltinator DPS challenge to Apex
-- Updated TFB (the boss) timers and phases (Credit to Keetsune)
-
-## Other
-
-- Added option to toggle background bars in metrics/challenges overlays. Default to false so your background bars are gone unless you want to toggle them back on.
-- Timer bars now render based on the `Show at` value instead of absolute value if a `Show at` value is present.
-- Added link to Github for those who want to view the source code
-
-# v2026.3.3
-
-## Role-Based Profile Switching
-
-You can now select a default profile for Tank/Healer/DPS roles. Upon role changes being recorded in the game, your active profile will automatically update to the default. You can still manually swap to non default profiles (e.g. 16 man healer).
-
-## Role-Based Timer Visibility
-
-The visibility of timers can now be toggled on/off for specific roles in the encounter editor. There are small buttons for toggling a timer for each role. This will disable the timer's appearance, alert text, and audio, however the timer will still run and fire any chains or timer logic it's based on.
+#v 2026.3.7
 
 ## General
 
-- Boss HP overlay now has option to continue displaying it after encounter end
-- Users are now assigned a "Default" profile
-- Streamlined header UI formatting, moved customization menu to controls section
-- Global metrics settings now auto-collapse when selecting a new overlay in settings
+- The application is no longer susceptible to time drift or clock skew relative to the SWTOR server time
+- Replaced timer enable/disable on card header with visibility toggle.
+- Separated the ability to enable/disable timers, phases and counters into a separate section with warning
+- Added support for NOT keyword in the combat log filter
 
-## Bug fixes
+## Timer System
 
-- Fixed issue with effect window in charts tab not counting effects applied before the start of the selected time range
-- Corrected DPS/EHPS values in character selector sidebar of ability usage and rotation view
-- Overlays will now re-render data on profile switch
-- Fixed several visual errors in the data explorer
-
-# v2026.3.1
-
-## General
-
-- Timers/Phases/Counters and Effects have improved UI handling to discriminate between built-in, modified, and user created elements
-- New option to hide disabled elements in editor tabs
-- Notification now appears if overlays have been moved without being saved
-
-## Data Explorer
-
-- Removed donut charts from the data explorer
-- Reformatted NPC health table to a more compact design
-- Charts now properly resize when sidebars are collapsed/expanded or tab is set to fullscreen
-- Removed flashing visual artifact from ability usage tab
-- Effects on the charts tab are now consolidated into a single table
+- Enabled counter to counter comparison condition in timers
+- Added trigger type on any counter change
+- Added counter mode for tracking effect stacks
 
 ## Bugfixes
 
-- Overlays positioned at the edge of the screen are now properly assigned to the active monitor when saving
-- Text alerts and audio queues now properly sync with the timer's end time
-- Fixed Starparse timer import setting display target to non-existent overlay
-- The `Show at` field for encounter timers is now properly evaluated
-- Fixed issue where effects were not scoped to source, causing parallel applications of the same effect from multiple sources to affect tracking of each other
-- Fixed issue with Huntmaster success/wipe classification
-- Prevent dead NPCs from being registered in the next encounter in specific edge cases
-- Timer/Phase/Counter trigger chains are now evaluated recursively on each event
+- Players registered are now reset on area change to prevent them from leaking into the next encounter
+- Fixed issue with `Any Phase Entered` trigger not firing for timers
+- `Boss HP Below` trigger is now more consistent and sensitive to small HP movements
+- Removed duplicate time remaining from effects overlay when in vertical mode
+- Fixed issue with cooldown overlay source clipping into other entries
+- Removed unsupported target set and time elapsed triggers from phases in UI
+- Removed "Training Dummy" invalid area type from encounter builder area creation menu
+- Fixed issues causing SCYVA timers chains not to fire
+- Adding notes to built-in boss files or creating a new boss on a built-in file will no longer attempt to write to the built-in directory
+- Fixed issue causing save/duplicate buttons in the timer editor to shift if a built-in timer is modified
+- Fixed issue with overlapping Boss Name and target text on the HP overlay
+- `AbilityCast` triggers now respect the target filter
+- Non-local player effects should now properly track and refresh
+- Users are no longer restricted from navigating away from the parsely upload file modal
