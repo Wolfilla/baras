@@ -1143,6 +1143,35 @@ pub async fn query_ehps_over_time(
     from_js(result)
 }
 
+/// Query EHT (effective healing taken) over time with specified bucket size.
+pub async fn query_eht_over_time(
+    encounter_idx: Option<u32>,
+    bucket_ms: i64,
+    target_name: Option<&str>,
+    time_range: Option<&TimeRange>,
+) -> Option<Vec<TimeSeriesPoint>> {
+    let obj = js_sys::Object::new();
+    if let Some(idx) = encounter_idx {
+        js_set(&obj, "encounterIdx", &JsValue::from_f64(idx as f64));
+    } else {
+        js_set(&obj, "encounterIdx", &JsValue::NULL);
+    }
+    js_set(&obj, "bucketMs", &JsValue::from_f64(bucket_ms as f64));
+    if let Some(name) = target_name {
+        js_set(&obj, "targetName", &JsValue::from_str(name));
+    } else {
+        js_set(&obj, "targetName", &JsValue::NULL);
+    }
+    if let Some(tr) = time_range {
+        let tr_js = serde_wasm_bindgen::to_value(tr).unwrap_or(JsValue::NULL);
+        js_set(&obj, "timeRange", &tr_js);
+    } else {
+        js_set(&obj, "timeRange", &JsValue::NULL);
+    }
+    let result = invoke("query_eht_over_time", obj.into()).await;
+    from_js(result)
+}
+
 /// Query DTPS over time with specified bucket size.
 pub async fn query_dtps_over_time(
     encounter_idx: Option<u32>,

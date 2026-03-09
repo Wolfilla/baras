@@ -425,10 +425,12 @@ fn build_time_series_option(
     obj.into()
 }
 
-/// Build a simplified HP% chart option — single y-axis (0–100%), gold line, gradient fill.
+/// Build HP% chart option — dual y-axis: left = HP% (0–100%), right = EHT (effective healing taken).
+/// HP% is a gold line with gradient fill. EHT is a green burst line with area fill on the right axis.
 /// Data points carry [time_secs, hp_pct, current_hp, max_hp] for rich tooltips.
 fn build_hp_chart_option(
     data: &[HpPoint],
+    eht_data: Option<&[TimeSeriesPoint]>,
     effect_windows: &[(i64, EffectWindow, &str)],
     animate: bool,
 ) -> JsValue {
@@ -444,10 +446,10 @@ fn build_hp_chart_option(
     js_set(&title_obj, "textStyle", &title_style);
     js_set(&obj, "title", &title_obj);
 
-    // Grid
+    // Grid (right margin matches other dual-axis charts for alignment)
     let grid = js_sys::Object::new();
     js_set(&grid, "left", &JsValue::from_str("60"));
-    js_set(&grid, "right", &JsValue::from_str("20"));
+    js_set(&grid, "right", &JsValue::from_str("60"));
     js_set(&grid, "top", &JsValue::from_str("35"));
     js_set(&grid, "bottom", &JsValue::from_str("25"));
     js_set(&obj, "grid", &grid);
@@ -475,28 +477,47 @@ fn build_hp_chart_option(
     js_set(&x_axis, "splitLine", &x_split);
     js_set(&obj, "xAxis", &x_axis);
 
-    // Single Y-Axis (0–100%)
-    let y_axis = js_sys::Object::new();
-    js_set(&y_axis, "type", &JsValue::from_str("value"));
-    js_set(&y_axis, "name", &JsValue::from_str("HP%"));
-    js_set(&y_axis, "min", &JsValue::from_f64(0.0));
-    js_set(&y_axis, "max", &JsValue::from_f64(100.0));
-    let y_label = js_sys::Object::new();
-    js_set(&y_label, "color", &JsValue::from_str("#f1c40f"));
-    js_set(&y_axis, "axisLabel", &y_label);
-    let y_split = js_sys::Object::new();
-    js_set(&y_split, "show", &JsValue::FALSE);
-    js_set(&y_axis, "splitLine", &y_split);
-    js_set(&obj, "yAxis", &y_axis);
+    // Dual Y-Axes: Left = HP% (0–100%), Right = EHT (auto-scaled)
+    let y_axis_arr = js_sys::Array::new();
 
-    // Tooltip — shows HP% and absolute HP (e.g. "1:38  58.8%  (145,234 / 247,000)")
+    // Left Y-Axis: HP%
+    let y_axis_left = js_sys::Object::new();
+    js_set(&y_axis_left, "type", &JsValue::from_str("value"));
+    js_set(&y_axis_left, "name", &JsValue::from_str("HP%"));
+    js_set(&y_axis_left, "position", &JsValue::from_str("left"));
+    js_set(&y_axis_left, "min", &JsValue::from_f64(0.0));
+    js_set(&y_axis_left, "max", &JsValue::from_f64(100.0));
+    let y_label_left = js_sys::Object::new();
+    js_set(&y_label_left, "color", &JsValue::from_str("#f1c40f"));
+    js_set(&y_axis_left, "axisLabel", &y_label_left);
+    let y_split_left = js_sys::Object::new();
+    js_set(&y_split_left, "show", &JsValue::FALSE);
+    js_set(&y_axis_left, "splitLine", &y_split_left);
+    y_axis_arr.push(&y_axis_left);
+
+    // Right Y-Axis: EHT (effective healing taken)
+    let y_axis_right = js_sys::Object::new();
+    js_set(&y_axis_right, "type", &JsValue::from_str("value"));
+    js_set(&y_axis_right, "name", &JsValue::from_str("EHT"));
+    js_set(&y_axis_right, "position", &JsValue::from_str("right"));
+    let y_label_right = js_sys::Object::new();
+    js_set(&y_label_right, "color", &JsValue::from_str("#2ecc71"));
+    js_set(&y_axis_right, "axisLabel", &y_label_right);
+    let y_split_right = js_sys::Object::new();
+    js_set(&y_split_right, "show", &JsValue::FALSE);
+    js_set(&y_axis_right, "splitLine", &y_split_right);
+    y_axis_arr.push(&y_axis_right);
+
+    js_set(&obj, "yAxis", &y_axis_arr);
+
+    // Tooltip — shows HP%, absolute HP, and EHT value when available
     let tooltip = js_sys::Object::new();
     js_set(&tooltip, "trigger", &JsValue::from_str("axis"));
     let tip_formatter = js_sys::Function::new_with_args(
         "params",
         concat!(
-            "var p = Array.isArray(params) ? params[0] : params;",
-            "if (!p) return '';",
+            "if (!params || !params.length) return '';",
+            "var p = params[0];",
             "var v = p.value;",
             "var t = v[0];",
             "var m = Math.floor(t / 60);",
@@ -505,7 +526,14 @@ fn build_hp_chart_option(
             "var pct = v[1].toFixed(1) + '%';",
             "var hp = Math.round(v[2]).toLocaleString();",
             "var max = Math.round(v[3]).toLocaleString();",
-            "return time + '  ' + pct + '  (' + hp + ' / ' + max + ')';",
+            "var result = time + '  ' + pct + '  (' + hp + ' / ' + max + ')';",
+            "for (var i = 1; i < params.length; i++) {",
+            "  if (params[i].seriesName === 'EHT') {",
+            "    var eht = Math.round(params[i].value[1]).toLocaleString();",
+            "    result += '<br/><span style=\"color:#2ecc71\">EHT: ' + eht + '</span>';",
+            "  }",
+            "}",
+            "return result;",
         ),
     );
     js_set(&tooltip, "formatter", &tip_formatter);
@@ -518,6 +546,8 @@ fn build_hp_chart_option(
     js_set(&series, "name", &JsValue::from_str("HP%"));
     js_set(&series, "smooth", &JsValue::TRUE);
     js_set(&series, "symbol", &JsValue::from_str("none"));
+    // Use left Y-axis (index 0) for HP%
+    js_set(&series, "yAxisIndex", &JsValue::from_f64(0.0));
     // Tell ECharts to encode y from dimension 1 (hp_pct)
     let encode = js_sys::Object::new();
     js_set(&encode, "x", &JsValue::from_f64(0.0));
@@ -597,6 +627,62 @@ fn build_hp_chart_option(
     js_set(&series, "markArea", &mark_area);
 
     series_arr.push(&series);
+
+    // Secondary series: EHT (effective healing taken) burst values on right y-axis
+    if let Some(eht) = eht_data {
+        let bucket_ms: i64 = 1000;
+        let num_buckets = ((max_time_ms - min_time_ms) / bucket_ms + 1) as usize;
+
+        // Build sparse lookup from EHT data
+        let eht_sparse: std::collections::HashMap<i64, f64> = eht
+            .iter()
+            .map(|p| (p.bucket_start_ms, p.total_value))
+            .collect();
+
+        // Generate dense time series with 0s for missing buckets
+        let mut eht_dense: Vec<(f64, f64)> = Vec::with_capacity(num_buckets);
+        for i in 0..num_buckets {
+            let time_ms = min_time_ms + (i as i64) * bucket_ms;
+            let time_secs = time_ms as f64 / 1000.0;
+            let value = eht_sparse.get(&time_ms).copied().unwrap_or(0.0);
+            eht_dense.push((time_secs, value));
+        }
+
+        let eht_series = js_sys::Object::new();
+        js_set(&eht_series, "type", &JsValue::from_str("line"));
+        js_set(&eht_series, "name", &JsValue::from_str("EHT"));
+        js_set(&eht_series, "smooth", &JsValue::FALSE);
+        js_set(&eht_series, "symbol", &JsValue::from_str("none"));
+        // Use right Y-axis (index 1) for EHT burst data
+        js_set(&eht_series, "yAxisIndex", &JsValue::from_f64(1.0));
+
+        // Thin green line
+        let eht_line_style = js_sys::Object::new();
+        js_set(&eht_line_style, "color", &JsValue::from_str("#2ecc71"));
+        js_set(&eht_line_style, "width", &JsValue::from_f64(1.0));
+        js_set(&eht_series, "lineStyle", &eht_line_style);
+
+        // Subtle green area fill
+        let eht_area_style = js_sys::Object::new();
+        js_set(
+            &eht_area_style,
+            "color",
+            &JsValue::from_str("rgba(46, 204, 113, 0.15)"),
+        );
+        js_set(&eht_series, "areaStyle", &eht_area_style);
+
+        let eht_arr = js_sys::Array::new();
+        for (x, y) in &eht_dense {
+            let pair = js_sys::Array::new();
+            pair.push(&JsValue::from_f64(*x));
+            pair.push(&JsValue::from_f64(*y));
+            eht_arr.push(&pair);
+        }
+        js_set(&eht_series, "data", &eht_arr);
+
+        series_arr.push(&eht_series);
+    }
+
     js_set(&obj, "series", &series_arr);
     js_set(&obj, "animation", &JsValue::from_bool(animate));
     if animate {
@@ -776,6 +862,7 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
     let mut ehps_data = use_signal(Vec::<TimeSeriesPoint>::new);
     let mut dtps_data = use_signal(Vec::<TimeSeriesPoint>::new);
     let mut hp_data = use_signal(Vec::<HpPoint>::new);
+    let mut eht_data = use_signal(Vec::<TimeSeriesPoint>::new);
 
     // Effect data
     let mut active_effects = use_signal(Vec::<EffectChartData>::new);
@@ -858,6 +945,7 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
             let new_hps = api::query_hps_over_time(idx, bucket_ms, Some(&entity), tr_opt).await;
             let new_ehps = api::query_ehps_over_time(idx, bucket_ms, Some(&entity), tr_opt).await;
             let new_dtps = api::query_dtps_over_time(idx, bucket_ms, Some(&entity), tr_opt).await;
+            let new_eht = api::query_eht_over_time(idx, bucket_ms, Some(&entity), tr_opt).await;
             let new_hp = api::query_hp_over_time(idx, bucket_ms, Some(&entity), tr_opt).await;
 
             // Check epoch once after all fetches — discard if stale
@@ -869,6 +957,7 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
             if let Some(data) = new_hps { hps_data.set(data); }
             if let Some(data) = new_ehps { ehps_data.set(data); }
             if let Some(data) = new_dtps { dtps_data.set(data); }
+            if let Some(data) = new_eht { eht_data.set(data); }
             if let Some(data) = new_hp { hp_data.set(data); }
 
             loading.set(false);
@@ -956,6 +1045,7 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
         let hps = hps_data.read().clone();
         let ehps = ehps_data.read().clone();
         let dtps = dtps_data.read().clone();
+        let eht = eht_data.read().clone();
         let hp = hp_data.read().clone();
         let windows = effect_windows.read().clone();
 
@@ -1011,7 +1101,8 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
             }
             if show_hp_val && !hp.is_empty() {
                 if let Some(chart) = init_chart("chart-hp") {
-                    let option = build_hp_chart_option(&hp, &windows, false);
+                    let eht_ref = if !eht.is_empty() { Some(eht.as_slice()) } else { None };
+                    let option = build_hp_chart_option(&hp, eht_ref, &windows, false);
                     set_chart_option(&chart, &option);
                 }
             }
@@ -1056,7 +1147,8 @@ pub fn ChartsPanel(props: ChartsPanelProps) -> Element {
                 }
                 if show_hp_val && !hp.is_empty() {
                     if let Some(chart) = init_chart("chart-hp") {
-                        let option = build_hp_chart_option(&hp, &windows, false);
+                        let eht_ref = if !eht.is_empty() { Some(eht.as_slice()) } else { None };
+                        let option = build_hp_chart_option(&hp, eht_ref, &windows, false);
                         set_chart_option(&chart, &option);
                         register_brush_handler(&chart, brush_selection);
                         activate_brush(&chart);
