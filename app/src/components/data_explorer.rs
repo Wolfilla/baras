@@ -1706,7 +1706,11 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                             }
                                                             div { class: "encounter-meta",
                                                                 if let Some(time) = &enc.start_time {
-                                                                    span { class: "encounter-time", "{time}" }
+                                                                    {
+                                                                        // Format ISO timestamp "2026-03-07T21:30:31" → "21:30:31"
+                                                                        let display_time = time.split('T').nth(1).unwrap_or(time);
+                                                                        rsx! { span { class: "encounter-time", "{display_time}" } }
+                                                                    }
                                                                 }
                                                                 span { class: "encounter-duration", "({formatting::format_duration(enc.duration_seconds)})" }
                                                             }
