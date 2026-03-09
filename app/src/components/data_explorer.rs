@@ -2500,7 +2500,8 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                 if current_tab == DataTab::DamageTaken {
                                     if let Some(ref summary) = *dt_summary.read() {
                                         div { class: "damage-taken-summary",
-                                            div { class: "dt-summary-col",
+                                            // Left section: damage type breakdown
+                                            div { class: "dt-summary-left",
                                                 div { class: "dt-summary-row",
                                                     span { class: "dt-summary-label", "Internal/Elemental" }
                                                     span { class: "dt-summary-pct", "{format_pct(summary.internal_elemental_pct)}" }
@@ -2522,7 +2523,8 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                     span { class: "dt-summary-val", "{format_number(summary.melee_ranged_total)}" }
                                                 }
                                             }
-                                            div { class: "dt-summary-col",
+                                            // Right section: mitigation breakdown
+                                            div { class: "dt-summary-right",
                                                 div { class: "dt-summary-row",
                                                     span { class: "dt-summary-label", "Avoided" }
                                                     span { class: "dt-summary-pct", "{format_pct(summary.avoided_pct)}" }

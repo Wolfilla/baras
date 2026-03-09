@@ -1848,33 +1848,66 @@
 
 .damage-taken-summary {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-md);
-  padding: var(--space-sm) var(--space-md);
+  grid-template-columns: 1fr auto auto 1fr auto auto;
+  grid-template-rows: repeat(4, auto);
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   margin-bottom: var(--space-sm);
   font-size: 0.85em;
+  overflow: hidden;
+}
+
+/* Both halves use display:contents so their children land in the grid */
+.dt-summary-left,
+.dt-summary-right {
+  display: contents;
 }
 
 .dt-summary-row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-sm);
-  padding: 1px 0;
+  display: contents;
 }
 
+/* All cells: consistent vertical padding */
+.dt-summary-row > span {
+  padding: 4px 0;
+}
+
+/* Horizontal midline between row 2 and 3 (splits each half into two pairs) */
+.dt-summary-left .dt-summary-row:nth-child(3) > span,
+.dt-summary-right .dt-summary-row:nth-child(3) > span {
+  border-top: 2px solid var(--border-light);
+}
+
+/* Vertical divider: right border on the val cell of the left section */
+.dt-summary-left .dt-summary-val {
+  border-right: 2px solid var(--border-light);
+}
+
+/* Right section: place cells in columns 4-6 */
+.dt-summary-right .dt-summary-label { grid-column: 4; }
+.dt-summary-right .dt-summary-pct   { grid-column: 5; }
+.dt-summary-right .dt-summary-val   { grid-column: 6; }
+
+/* Row placement for right section rows */
+.dt-summary-right .dt-summary-row:nth-child(1) > span { grid-row: 1; }
+.dt-summary-right .dt-summary-row:nth-child(2) > span { grid-row: 2; }
+.dt-summary-right .dt-summary-row:nth-child(3) > span { grid-row: 3; }
+.dt-summary-right .dt-summary-row:nth-child(4) > span { grid-row: 4; }
+
 .dt-summary-label {
-  flex: 1;
   color: var(--text-secondary);
+  padding-left: var(--space-md) !important;
+  padding-right: var(--space-sm) !important;
 }
 
 .dt-summary-pct {
-  min-width: 48px;
   text-align: right;
   font-family: var(--font-mono);
   color: var(--text-primary);
+  white-space: nowrap;
+  padding-left: var(--space-sm) !important;
+  padding-right: var(--space-md) !important;
 }
 
 .dt-summary-val {
@@ -1882,6 +1915,8 @@
   text-align: right;
   font-family: var(--font-mono);
   color: var(--text-muted);
+  padding-right: var(--space-md) !important;
+  white-space: nowrap;
 }
 
 /* DT (damage type) column in ability table */
