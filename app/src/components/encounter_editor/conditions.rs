@@ -765,12 +765,7 @@ fn TimerTimeRemainingEditor(
     encounter_data: EncounterData,
     on_change: EventHandler<Condition>,
 ) -> Element {
-    // Coerce unsupported operators (from hand-edited TOML) into gte/lte
-    let effective_op = match operator {
-        ComparisonOp::Lte | ComparisonOp::Lt => ComparisonOp::Lte,
-        _ => ComparisonOp::Gte,
-    };
-    let op_value = effective_op.as_str();
+    let op_value = operator.as_str();
 
     let selected_timer = if timer_id.is_empty() {
         "__none__".to_string()
@@ -822,7 +817,7 @@ fn TimerTimeRemainingEditor(
                             });
                         }
                     },
-                    for op in [ComparisonOp::Gte, ComparisonOp::Lte] {
+                    for op in [ComparisonOp::Gt, ComparisonOp::Gte, ComparisonOp::Lt, ComparisonOp::Lte] {
                         option { value: "{op.as_str()}", selected: op_value == op.as_str(), "{op.label()}" }
                     }
                 }
