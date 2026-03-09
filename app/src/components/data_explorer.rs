@@ -2418,16 +2418,11 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                     if let Some(tl) = timeline.read().as_ref() {
                                         {
                                             let tr = time_range();
-                                            let duration = if tr.start != 0.0 || tr.end != 0.0 {
-                                                tr.end - tr.start
-                                            } else {
-                                                tl.duration_secs
-                                            };
                                             rsx! {
                                                 ChartsPanel {
                                                     key: "{selected_encounter():?}",
                                                     encounter_idx: *selected_encounter.read(),
-                                                    duration_secs: duration,
+                                                    duration_secs: tl.duration_secs,
                                                     time_range: tr,
                                                     selected_source: selected_source,
                                                     european: eu,
