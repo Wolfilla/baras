@@ -151,6 +151,7 @@ mod tests {
             show_on_hp_overlay: None,
             hp_markers: vec![],
             shields: vec![],
+            pushes_at: None,
         }];
 
         // "Boss" should match via roster (ID 1001)

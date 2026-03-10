@@ -763,18 +763,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Log new/restarted timers
-        for timer in timer_manager.active_timers() {
-            if started_timer_ids.contains(&timer.definition_id) {
+        // Look up from active timers first, fall back to definitions for timers
+        // that started and expired/canceled within the same signal batch.
+        for started_id in &started_timer_ids {
+            if let Some(timer) = timer_manager.active_timers().iter().find(|t| &t.definition_id == started_id) {
                 cli.timer_start(
                     event.timestamp,
                     &timer.name,
                     timer.duration.as_secs_f32(),
                     &timer.definition_id,
                 );
+            } else if let Some(name) = timer_manager.definition_name(started_id) {
+                // Timer already expired/canceled in the same batch — use definition
+                let duration = timer_manager.definition_duration(started_id).unwrap_or(0.0);
+                cli.timer_start(event.timestamp, name, duration, started_id);
+            }
 
-                if let Some(ref mut v) = verifier {
-                    v.record_timer_start(&timer.definition_id, combat_time_secs);
-                }
+            if let Some(ref mut v) = verifier {
+                v.record_timer_start(started_id, combat_time_secs);
             }
         }
 
@@ -952,8 +958,21 @@ fn parse_time_arg(s: &str) -> Result<f32, Box<dyn std::error::Error>> {
     }
 }
 
-fn extract_session_date(_first_line: &str) -> Result<NaiveDateTime, Box<dyn std::error::Error>> {
+fn extract_session_date(first_line: &str) -> Result<NaiveDateTime, Box<dyn std::error::Error>> {
     let today = chrono::Local::now().naive_local().date();
+
+    // Extract the timestamp from the first log line (format: [HH:MM:SS.mmm])
+    // and use it as the session start time so the parser's midnight wraparound
+    // detection works correctly for logs that span midnight.
+    if let Some(start) = first_line.find('[') {
+        if let Some(end) = first_line.find(']') {
+            let time_str = &first_line[start + 1..end];
+            if let Ok(time) = chrono::NaiveTime::parse_from_str(time_str, "%H:%M:%S%.3f") {
+                return Ok(today.and_time(time));
+            }
+        }
+    }
+
     Ok(today.and_hms_opt(0, 0, 0).unwrap())
 }
 

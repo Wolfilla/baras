@@ -919,6 +919,7 @@ fn test_counter_phase_entered_trigger() {
                 show_on_hp_overlay: None,
                 hp_markers: vec![],
                 shields: vec![],
+                pushes_at: None,
             },
             EntityDefinition {
                 name: "Add".to_string(),
@@ -929,6 +930,7 @@ fn test_counter_phase_entered_trigger() {
                 show_on_hp_overlay: None,
                 hp_markers: vec![],
                 shields: vec![],
+                pushes_at: None,
             },
         ],
         phases: vec![
@@ -1180,6 +1182,7 @@ fn test_phase_cascade_in_single_event() {
                 show_on_hp_overlay: None,
                 hp_markers: vec![],
                 shields: vec![],
+                pushes_at: None,
             },
             EntityDefinition {
                 name: "Add".to_string(),
@@ -1190,6 +1193,7 @@ fn test_phase_cascade_in_single_event() {
                 show_on_hp_overlay: None,
                 hp_markers: vec![],
                 shields: vec![],
+                pushes_at: None,
             },
         ],
         phases: vec![
@@ -1404,6 +1408,7 @@ fn test_counter_reaches_enables_phase() {
                 show_on_hp_overlay: None,
                 hp_markers: vec![],
                 shields: vec![],
+                pushes_at: None,
             },
             EntityDefinition {
                 name: "Add".to_string(),
@@ -1414,6 +1419,7 @@ fn test_counter_reaches_enables_phase() {
                 show_on_hp_overlay: None,
                 hp_markers: vec![],
                 shields: vec![],
+                pushes_at: None,
             },
         ],
         phases: vec![
@@ -1620,6 +1626,7 @@ fn test_phase_ended_counter_no_double_increment() {
             show_on_hp_overlay: None,
             hp_markers: vec![],
             shields: vec![],
+                pushes_at: None,
         }],
         phases: vec![
             PhaseDefinition {

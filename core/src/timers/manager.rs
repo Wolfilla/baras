@@ -475,6 +475,11 @@ impl TimerManager {
         self.definitions.get(id).map(|def| def.name.as_str())
     }
 
+    /// Look up a timer definition's duration in seconds by its ID.
+    pub fn definition_duration(&self, id: &str) -> Option<f32> {
+        self.definitions.get(id).map(|def| def.duration_secs)
+    }
+
     /// Compute an interpolated game time for smooth display between log events.
     ///
     /// Takes the last game timestamp we received and advances it by the wall time
