@@ -987,362 +987,1045 @@ target = "local_player"
 id = "scyva"
 name = "SCYVA"
 difficulties = ["story", "veteran", "master"]
+area_name = "Gods from the Machine"
+area_id = 833571547775765
+area_type = "operation"
 
 [[boss.entities]]
 name = "SCYVA"
-ids = [4081335622696960, 4108140513591296]
+ids = [4108140513591296]
 is_boss = true
 is_kill_target = true
+
+[[boss.entities.hp_markers]]
+hp_percent = 30.0
+label = "Extinction"
+
+[[boss.entities.shields]]
+label = "Ignite (8m MM)"
+trigger_effect = 4127300362698752
+total = 2489887
+end_trigger_effect = 4127300362698752
 
 [[boss.entities]]
 name = "Omega Protocol Droid"
 ids = [4126527268585472]
 is_boss = true
-triggers_encounter = true
 is_kill_target = false
-show_on_hp_overlay = true
 
 [[boss.phases]]
-id = "scyva_omega"
-name = "Omega"
+id = "scyva_p1"
+name = "Phase 1"
+enabled = true
 
 [boss.phases.start_trigger]
 type = "combat_start"
 
-[boss.phases.end_trigger]
-type = "entity_death"
-selector = [4126527268585472]
-
 [[boss.phases]]
-id = "scyva_catalyst"
-name = "Catalyst"
+id = "scyva_p2"
+name = "Phase 2"
+enabled = true
 
 [boss.phases.start_trigger]
-type = "npc_appears"
-selector = [4126553038389248]
-
-[boss.phases.end_trigger]
-type = "effect_applied"
-effects = [4131775718621461]
-source = "any"
-target = "any"
-
-[[boss.phases]]
-id = "scyva_scyva"
-name = "SCYVA 1"
-
-[boss.phases.start_trigger]
-type = "phase_ended"
-phase_id = "scyva_catalyst"
-
-[boss.phases.end_trigger]
-type = "phase_entered"
-phase_id = "scyva_burn"
-
-[[boss.phases]]
-id = "scyva_ignite_core"
-name = "Ignite Core"
-display_text = "Ignite Core"
-
-[boss.phases.start_trigger]
-type = "any_of"
-
-[[boss.phases.start_trigger.conditions]]
-type = "ability_cast"
-abilities = [4131981877051392]
-source = "boss"
-target = "any"
-
-[boss.phases.end_trigger]
 type = "effect_removed"
-effects = [4127300362698752]
-source = "boss"
+effects = [4127098499236141]
+source = "any"
 target = "any"
 
 [[boss.phases]]
-id = "scyva_burn"
-name = "Burn"
-display_text = "Burn"
+id = "scyva_p3"
+name = "Phase 3"
+enabled = true
 
 [boss.phases.start_trigger]
-type = "boss_hp_below"
-hp_percent = 30.0
-selector = ["SCYVA"]
-
-[boss.phases.end_trigger]
-type = "combat_end"
+type = "timer_expires"
+timer_id = "scyva_p3_t"
 
 [[boss.phases]]
-id = "scyva_scyva_2"
-name = "SCYVA 2"
+id = "scyva_p4_i"
+name = "Phase 4 (intro)"
+enabled = true
 
 [boss.phases.start_trigger]
-type = "phase_entered"
-phase_id = "scyva_ignite_core"
+type = "effect_applied"
+effects = [4127248823091200]
+source = "any"
+target = "any"
 
-[boss.phases.end_trigger]
-type = "boss_hp_below"
-hp_percent = 30.0
-selector = ["SCYVA"]
+[[boss.phases.conditions]]
+type = "phase_active"
+phase_ids = ["scyva_p3"]
 
-[[boss.timer]]
-id = "scyva_p1_beams_1st"
-name = "P1 Beams 1st"
-duration_secs = 4.0
-alert_on = "none"
-color = [0, 255, 0, 255]
-difficulties = ["veteran", "master"]
+[[boss.phases]]
+id = "scyva_p4_e"
+name = "Phase 4 (Expansion)"
 enabled = true
-display_target = "timers_a"
 
-[boss.timer.trigger]
-type = "combat_start"
-
-[[boss.timer]]
-id = "scyva_beams"
-name = "Beams"
-display_text = "Beams"
-duration_secs = 15.0
-alert_on = "none"
-color = [255, 128, 0, 255]
-difficulties = ["veteran", "master"]
-enabled = true
-display_target = "timers_a"
-
-[boss.timer.trigger]
-type = "timer_expires"
-timer_id = "scyva_p1_beams_1st"
-
-[[boss.timer]]
-id = "scyva_p1_beams"
-name = "P1 Beams"
-duration_secs = 15.0
-alert_on = "none"
-color = [0, 255, 0, 255]
-difficulties = ["veteran", "master"]
-enabled = true
-display_target = "timers_a"
-
-[boss.timer.trigger]
-type = "timer_expires"
-timer_id = "scyva_beams"
-
-[[boss.timer]]
-id = "scyva_red_catalyst_1st"
-name = "Red Catalyst 1st"
-display_text = "Red Catalyst 1st"
-duration_secs = 12.0
-alert_on = "none"
-color = [255, 0, 0, 255]
-conditions = [{ type = "phase_active", phase_ids = ["scyva_catalyst"] }]
-difficulties = ["veteran", "master"]
-enabled = true
-display_target = "timers_a"
-
-[boss.timer.trigger]
-type = "timer_expires"
-timer_id = "scyva_1st_beam"
-
-[[boss.timer]]
-id = "scyva_1st_beam"
-name = "1st beam"
-duration_secs = 16.0
-alert_on = "none"
-color = [255, 0, 0, 255]
-conditions = [{ type = "phase_active", phase_ids = ["scyva_catalyst"] }]
-difficulties = ["story", "veteran", "master"]
-enabled = true
-display_target = "timers_a"
-
-[boss.timer.trigger]
-type = "npc_appears"
-selector = [4126553038389248]
-
-[[boss.timer]]
-id = "scyva_double_catalyst_1st"
-name = "Double Catalyst 1st"
-duration_secs = 12.0
-alert_on = "on_expire"
-alert_text = "Double Catalyst"
-color = [255, 0, 0, 255]
-conditions = [{ type = "phase_active", phase_ids = ["scyva_catalyst"] }]
-difficulties = ["story", "veteran", "master"]
-enabled = true
-display_target = "timers_a"
-
-[boss.timer.trigger]
-type = "timer_expires"
-timer_id = "scyva_red_catalyst_1st"
-
-[[boss.timer]]
-id = "scyva_red_catalyst_2nd"
-name = "Red Catalyst 2nd"
-duration_secs = 12.0
-alert_on = "none"
-color = [255, 0, 0, 255]
-conditions = [{ type = "phase_active", phase_ids = ["scyva_catalyst"] }]
-difficulties = ["veteran", "master"]
-enabled = true
-display_target = "timers_a"
-
-[boss.timer.trigger]
-type = "timer_expires"
-timer_id = "scyva_double_catalyst_1st"
-
-[[boss.timer]]
-id = "scyva_double_catalyst_2nd"
-name = "Double Catalyst 2nd"
-duration_secs = 12.0
-alert_on = "none"
-alert_text = "Double Catalyst"
-color = [255, 0, 0, 255]
-conditions = [{ type = "phase_active", phase_ids = ["scyva_catalyst"] }]
-difficulties = ["veteran", "master"]
-enabled = true
-display_target = "timers_a"
-
-[boss.timer.trigger]
-type = "timer_expires"
-timer_id = "scyva_5th_beam"
-
-[boss.timer.cancel_trigger]
-type = "timer_expires"
-timer_id = "scyva_double_catalyst_2nd"
-
-[[boss.timer]]
-id = "scyva_5th_beam"
-name = "5th Beam"
-duration_secs = 12.0
-alert_on = "on_expire"
-alert_text = "5th Beam"
-color = [255, 128, 0, 255]
-conditions = [{ type = "phase_active", phase_ids = ["scyva_catalyst"] }]
-difficulties = ["story", "veteran", "master"]
-enabled = true
-display_target = "timers_a"
-
-[boss.timer.trigger]
-type = "timer_expires"
-timer_id = "scyva_red_catalyst_2nd"
-
-[[boss.timer]]
-id = "scyva_7th_beam"
-name = "7th Beam"
-duration_secs = 12.0
-alert_on = "on_expire"
-alert_text = "7th Beam"
-color = [255, 128, 0, 255]
-conditions = [{ type = "phase_active", phase_ids = ["scyva_catalyst"] }]
-difficulties = ["veteran", "master"]
-enabled = true
-display_target = "timers_a"
-
-[boss.timer.trigger]
-type = "timer_expires"
-timer_id = "scyva_double_catalyst_2nd"
-
-[boss.timer.cancel_trigger]
-type = "timer_expires"
-timer_id = "scyva_7th_beam"
-
-[[boss.timer]]
-id = "scyva_scyva"
-name = "SCYVA"
-duration_secs = 68.0
-alert_on = "none"
-alert_text = "SCYVA"
-color = [0, 255, 85, 255]
-conditions = [
-  { type = "phase_active", phase_ids = [
-    "scyva_catalyst",
-    "scyva_scyva",
-  ] },
-]
-difficulties = ["veteran", "master"]
-enabled = true
-display_target = "timers_a"
-
-[boss.timer.trigger]
-type = "timer_expires"
-timer_id = "scyva_7th_beam"
-
-[[boss.timer]]
-id = "scyva_iginte_core"
-name = "Iginte Core"
-duration_secs = 50.0
-alert_on = "none"
-color = [255, 128, 0, 255]
-conditions = [
-  { type = "phase_active", phase_ids = [
-    "scyva_scyva",
-    "scyva_ignite_core",
-  ] },
-]
-difficulties = ["story", "veteran", "master"]
-enabled = true
-display_target = "timers_a"
-
-[boss.timer.trigger]
+[boss.phases.start_trigger]
 type = "effect_applied"
 effects = [4131775718621461]
 source = "any"
-target = "boss"
+target = "any"
 
-[boss.timer.cancel_trigger]
-type = "phase_entered"
-phase_id = "scyva_ignite_core"
-
-[[boss.timer]]
-id = "scyva_expansion"
-name = "Expansion"
-display_text = "Expansion"
-duration_secs = 13.0
-alert_on = "on_expire"
-alert_text = "Expansion"
-color = [255, 128, 0, 255]
-conditions = [{ type = "phase_active", phase_ids = ["scyva_scyva"] }]
-difficulties = ["veteran", "master"]
+[[boss.phases]]
+id = "scyva_p4_c"
+name = "Phase 4 (Contraction)"
 enabled = true
-display_target = "timers_a"
 
-[boss.timer.trigger]
+[boss.phases.start_trigger]
+type = "effect_applied"
+effects = [4131775718621476]
+source = "any"
+target = "any"
+
+[[boss.phases]]
+id = "scyva_p4_s"
+name = "Phase 4 (Ignition)"
+enabled = true
+
+[boss.phases.start_trigger]
+type = "effect_applied"
+effects = [4127300362698752]
+source = "any"
+target = "any"
+
+[[boss.phases]]
+id = "scyva_p5_i"
+name = "Phase 5 (intro)"
+enabled = true
+
+[boss.phases.start_trigger]
+type = "ability_cast"
+abilities = [4146653485334528]
+source = "any"
+target = "any"
+
+[[boss.phases]]
+id = "scyva_p5_e"
+name = "Phase 5 (Expansion)"
+enabled = true
+
+[boss.phases.start_trigger]
+type = "effect_applied"
+effects = [4132067776397607]
+source = "any"
+target = "any"
+
+[[boss.phases]]
+id = "scyva_p5_c"
+name = "Phase 5 (Contraction)"
+enabled = true
+
+[boss.phases.start_trigger]
 type = "effect_applied"
 effects = [4132067776397621]
-source = "boss"
-target = "boss"
+source = "any"
+target = "any"
+
+[[boss.counters]]
+id = "scyva_purge_counter"
+name = "Purge Counter"
+enabled = true
+initial_value = 0
+decrement = false
+
+[boss.counters.increment_on]
+type = "ability_cast"
+abilities = []
+source = "any"
+target = "any"
+
+[boss.counters.reset_on]
+type = "combat_end"
+
+[boss.counters.track_effect_stacks]
+effects = [4127201578450944]
+target = "any"
+aggregation = "max"
+
+[[boss.counters]]
+id = "scyva_purge_max"
+name = "Purge Max"
+enabled = true
+initial_value = 0
+decrement = false
+
+[boss.counters.increment_on]
+type = "timer_started"
+timer_id = "scyva_p_i"
+
+[boss.counters.reset_on]
+type = "combat_end"
+
+[[boss.counters]]
+id = "scyva_purge_counter2"
+name = "Purge Counter 2nd"
+enabled = true
+initial_value = 0
+decrement = false
+
+[boss.counters.reset_on]
+type = "combat_end"
+
+[boss.counters.increment_on]
+type = "ability_cast"
+abilities = []
+source = "any"
+target = "any"
+
+[boss.counters.track_effect_stacks]
+effects = [4127197283483648]
+target = "any"
+aggregation = "max"
+
+[[boss.counters]]
+id = "scyva_extinction_perm"
+name = "Extinction Permission"
+enabled = true
+initial_value = 0
+decrement = false
+
+[boss.counters.increment_on]
+type = "boss_hp_below"
+hp_percent = 30.0
+selector = ["SCYVA"]
+
+[boss.counters.reset_on]
+type = "combat_end"
+
+[[boss.counters]]
+id = "scva_low_grav_state"
+name = "Low Gravity State"
+enabled = true
+initial_value = 0
+decrement = false
+
+[boss.counters.increment_on]
+type = "effect_applied"
+effects = [4144656325541888]
+source = "any"
+target = "local_player"
+
+[boss.counters.decrement_on]
+type = "effect_removed"
+effects = [4144656325541888]
+source = "any"
+target = "local_player"
+
+[boss.counters.reset_on]
+type = "combat_end"
+
+[[boss.counters]]
+id = "scyva_strong_gravity"
+name = "Strong Gravity State"
+enabled = true
+initial_value = 0
+decrement = false
+
+[boss.counters.increment_on]
+type = "effect_applied"
+effects = [4144652030574592]
+source = "any"
+target = "local_player"
+
+[boss.counters.decrement_on]
+type = "effect_removed"
+effects = [4144652030574592]
+source = "any"
+target = "local_player"
+
+[boss.counters.reset_on]
+type = "combat_end"
+
+[[boss.counters]]
+id = "scyva_rad_s_s"
+name = "Radiance State"
+enabled = true
+initial_value = 0
+decrement = false
+
+[boss.counters.increment_on]
+type = "timer_started"
+timer_id = "scyva_rad_s"
+
+[boss.counters.decrement_on]
+type = "timer_expires"
+timer_id = "scyva_rad_s"
+
+[boss.counters.reset_on]
+type = "combat_end"
 
 [[boss.timer]]
-id = "scyva_contraction"
-name = "Contraction"
-display_text = "Contraction"
-duration_secs = 15.0
-alert_on = "on_expire"
-alert_text = "Contraction"
-color = [17, 0, 255, 255]
-conditions = [{ type = "phase_active", phase_ids = ["scyva_scyva"] }]
+id = "scyva_p_i"
+name = "Purge Increment"
+duration_secs = 30.0
+is_alert = true
+color = [255, 128, 0, 255]
 difficulties = ["veteran", "master"]
-enabled = true
-display_target = "timers_a"
+roles = []
+
+[boss.timer.trigger]
+type = "any_of"
+
+[[boss.timer.trigger.conditions]]
+type = "counter_changes"
+counter_id = "scyva_purge_counter"
+
+[[boss.timer.trigger.conditions]]
+type = "counter_changes"
+counter_id = "scyva_purge_counter2"
+
+[[boss.timer.conditions]]
+type = "phase_active"
+phase_ids = ["scyva_p2"]
+
+[[boss.timer]]
+id = "scyva_p3_t"
+name = "Phase 3"
+duration_secs = 98.5
+color = [255, 128, 0, 255]
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p2"
+
+[[boss.timer]]
+id = "scyva_p4_t"
+name = "Gravity Module - 7 Stacks"
+duration_secs = 48.0
+color = [50, 200, 50, 255]
+icon_ability_id = 4127248823091200
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p3"
+
+[[boss.timer.conditions]]
+type = "counter_compare"
+counter_id = "scyva_purge_max"
+operator = "eq"
+value = 7
+
+[[boss.timer]]
+id = "scyva_p4_t2"
+name = "Gravity Module - 6 Stacks"
+display_text = "Gravity Module"
+duration_secs = 42.0
+color = [50, 200, 50, 255]
+icon_ability_id = 4127248823091200
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p3"
+
+[[boss.timer.conditions]]
+type = "counter_compare"
+counter_id = "scyva_purge_max"
+operator = "eq"
+value = 6
+
+[[boss.timer]]
+id = "scyva_p4_t3"
+name = "Gravity Module - 5 Stacks"
+display_text = "Gravity Module"
+duration_secs = 36.0
+color = [50, 200, 50, 255]
+icon_ability_id = 4127248823091200
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p3"
+
+[[boss.timer.conditions]]
+type = "counter_compare"
+counter_id = "scyva_purge_max"
+operator = "eq"
+value = 5
+
+[[boss.timer]]
+id = "scyva_p4_t4"
+name = "Gravity Module - 4 Stacks"
+display_text = "Gravity Module"
+duration_secs = 30.0
+color = [50, 200, 50, 255]
+icon_ability_id = 4127248823091200
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p3"
+
+[[boss.timer.conditions]]
+type = "counter_compare"
+counter_id = "scyva_purge_max"
+operator = "eq"
+value = 4
+
+[[boss.timer]]
+id = "scyva_p4_t5"
+name = "Gravity Module - 3 Stacks"
+display_text = "Gravity Module"
+duration_secs = 24.0
+color = [50, 200, 50, 255]
+icon_ability_id = 4127248823091200
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p3"
+
+[[boss.timer.conditions]]
+type = "counter_compare"
+counter_id = "scyva_purge_max"
+operator = "eq"
+value = 3
+
+[[boss.timer]]
+id = "scyva_p4_t6"
+name = "Gravity Module - 2 Stacks"
+display_text = "Gravity Module"
+duration_secs = 18.0
+color = [50, 200, 50, 255]
+icon_ability_id = 4127248823091200
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p3"
+
+[[boss.timer.conditions]]
+type = "counter_compare"
+counter_id = "scyva_purge_max"
+operator = "eq"
+value = 2
+
+[[boss.timer]]
+id = "scyva_p4_t7"
+name = "Gravity Module - 1 Stack"
+display_text = "Gravity Module"
+duration_secs = 12.0
+color = [50, 200, 50, 255]
+icon_ability_id = 4127248823091200
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p3"
+
+[[boss.timer.conditions]]
+type = "counter_compare"
+counter_id = "scyva_purge_max"
+operator = "eq"
+value = 1
+
+[[boss.timer]]
+id = "scyva_p4_t8"
+name = "Gravity Module - 0 Stacks"
+display_text = "Gravity Module"
+duration_secs = 6.0
+color = [50, 200, 50, 255]
+icon_ability_id = 4127248823091200
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p3"
+
+[[boss.timer.conditions]]
+type = "counter_compare"
+counter_id = "scyva_purge_max"
+operator = "eq"
+value = 0
+
+[[boss.timer]]
+id = "scyva_ignite_shield"
+name = "Ignite Core (Shield)"
+duration_secs = 50.0
+color = [255, 0, 0, 255]
+icon_ability_id = 4127300362698752
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p4_e"
+
+[boss.timer.cancel_trigger]
+type = "timer_started"
+timer_id = "scyva_e_e"
+
+[[boss.timer]]
+id = "scyva_extinction_protocol_contraction"
+name = "Extinction Protocol (Contraction)"
+display_text = "Extinction Protocol"
+duration_secs = 30.0
+is_alert = true
+color = [255, 0, 0, 255]
+icon_ability_id = 4146653485334528
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "ability_cast"
+abilities = [4127287477796864]
+source = "any"
+target = "any"
+
+[[boss.timer.conditions]]
+type = "phase_active"
+phase_ids = ["scyva_p4_c"]
+
+[[boss.timer.conditions]]
+type = "counter_compare"
+counter_id = "scyva_extinction_perm"
+operator = "gte"
+value = 1
+
+[[boss.timer]]
+id = "scyva_extinction_expansion"
+name = "Extinction Protocol (Expansion)"
+display_text = "Extinction Protocol"
+duration_secs = 30.0
+is_alert = true
+color = [255, 0, 0, 255]
+icon_ability_id = 4146653485334528
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "counter_changes"
+counter_id = "scyva_extinction_perm"
+
+[[boss.timer.conditions]]
+type = "phase_active"
+phase_ids = ["scyva_p4_e"]
+
+[[boss.timer]]
+id = "scyva_p5_a_1st"
+name = "Atomic"
+duration_secs = 13.0
+color = [255, 0, 0, 255]
+icon_ability_id = 4127304657666048
+difficulties = ["veteran", "master"]
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p5_i"
+
+[[boss.timer]]
+id = "scyva_p5_a_e"
+name = "Atomic"
+duration_secs = 15.0
+color = [255, 0, 0, 255]
+icon_ability_id = 4127304657666048
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p5_e"
+
+[[boss.timer]]
+id = "scyva_p5_a_c"
+name = "Atomic"
+duration_secs = 15.0
+color = [255, 0, 0, 255]
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "ability_cast"
+abilities = [4127304657666048]
+source = "any"
+target = "any"
+
+[[boss.timer.conditions]]
+type = "phase_active"
+phase_ids = ["scyva_p5_e"]
+
+[[boss.timer]]
+id = "scyva_p1_beam"
+name = "Beam"
+duration_secs = 15.0
+color = [255, 0, 0, 255]
+icon_ability_id = 4127029779759104
+difficulties = ["veteran", "master"]
+can_be_refreshed = true
+roles = []
+
+[boss.timer.trigger]
+type = "any_of"
+
+[[boss.timer.trigger.conditions]]
+type = "effect_applied"
+effects = [4127029779759392]
+source = "any"
+target = "any"
+
+[[boss.timer.trigger.conditions]]
+type = "timer_expires"
+timer_id = "scyva_p1_beam"
+
+[[boss.timer.trigger.conditions]]
+type = "timer_expires"
+timer_id = "scyva_p1_beam_2nd"
+
+[boss.timer.cancel_trigger]
+type = "phase_entered"
+phase_id = "scyva_p2"
+
+[[boss.timer]]
+id = "scyva_p1_beam_2nd"
+name = "Beam"
+duration_secs = 18.0
+color = [255, 0, 0, 255]
+icon_ability_id = 4127029779759104
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p1"
+
+[boss.timer.cancel_trigger]
+type = "timer_started"
+timer_id = "scyva_p1_beam"
+
+[[boss.timer]]
+id = "scyva_strong_grav"
+name = "Strong Gravity"
+duration_secs = 30.0
+is_alert = true
+color = [255, 0, 0, 255]
+icon_ability_id = 4144652030574592
+difficulties = ["veteran", "master"]
+roles = []
 
 [boss.timer.trigger]
 type = "effect_applied"
-effects = ["Mass Synthesis"]
-source = "boss"
-target = "boss"
+effects = [4144652030574592]
+source = "any"
+target = "local_player"
 
-[[boss.challenges]]
-id = "scyva_ignite_core"
-name = "Ignite Core"
-display_text = "Ignite Core"
-metric = "damage"
-enabled = true
+[[boss.timer]]
+id = "scyva_low_grav"
+name = "Low Gravity"
+duration_secs = 30.0
+is_alert = true
+color = [50, 200, 50, 255]
+icon_ability_id = 4144656325541888
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "effect_applied"
+effects = [4144656325541888]
+source = "any"
+target = "local_player"
+
+[[boss.timer]]
+id = "scyva_normal_grav"
+name = "Normal Gravity"
+duration_secs = 30.0
+is_alert = true
+color = [255, 149, 0, 255]
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "any_of"
+
+[[boss.timer.trigger.conditions]]
+type = "counter_reaches"
+counter_id = "scva_low_grav_state"
+value = 0
+
+[[boss.timer.trigger.conditions]]
+type = "counter_reaches"
+counter_id = "scyva_strong_gravity"
+value = 0
+
+[[boss.timer.conditions]]
+type = "counter_compare"
+counter_id = "scva_low_grav_state"
+operator = "eq"
+value = 0
+
+[[boss.timer.conditions]]
+type = "counter_compare"
+counter_id = "scyva_strong_gravity"
+operator = "eq"
+value = 0
+
+[[boss.timer]]
+id = "scyva_p2_beam_1st"
+name = "Beam"
+duration_secs = 14.5
 color = [255, 0, 0, 255]
-columns = "total_percent"
+icon_ability_id = 4127107089170730
+difficulties = ["veteran", "master"]
+roles = []
 
-[[boss.challenges.conditions]]
-type = "phase"
-phase_ids = ["scyva_ignite_core"]
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "scyva_p2"
 
+[[boss.timer]]
+id = "scyva_p2_beam_2nd"
+name = "Beam (Red Catalyst)"
+duration_secs = 12.0
+color = [255, 0, 0, 255]
+icon_ability_id = 4127107089170730
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "timer_expires"
+timer_id = "scyva_p2_beam_1st"
+
+[[boss.timer]]
+id = "scyva_p2_beam_3rd"
+name = "Beam (Double Catalyst)"
+duration_secs = 12.0
+color = [255, 0, 0, 255]
+icon_ability_id = 4127107089170730
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "timer_expires"
+timer_id = "scyva_p2_beam_2nd"
+
+[[boss.timer]]
+id = "scyva_p2_beam_4th"
+name = "Beam (Red Catalyst)"
+duration_secs = 12.0
+color = [255, 0, 0, 255]
+icon_ability_id = 4127107089170730
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "timer_expires"
+timer_id = "scyva_p2_beam_3rd"
+
+[[boss.timer]]
+id = "scyva_p2_beam_5th"
+name = "Beam"
+duration_secs = 12.0
+color = [255, 0, 0, 255]
+icon_ability_id = 4127107089170730
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "timer_expires"
+timer_id = "scyva_p2_beam_4th"
+
+[[boss.timer]]
+id = "scyva_p2_beam_6th"
+name = "Beam (Double Catalyst)"
+duration_secs = 12.0
+color = [255, 0, 0, 255]
+icon_ability_id = 4127107089170730
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "timer_expires"
+timer_id = "scyva_p2_beam_5th"
+
+[[boss.timer]]
+id = "scyva_p2_beam_7th"
+name = "Beam"
+duration_secs = 12.0
+color = [255, 0, 0, 255]
+icon_ability_id = 4127107089170730
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "timer_expires"
+timer_id = "scyva_p2_beam_6th"
+
+[[boss.timer]]
+id = "scyva_p2_ds"
+name = "Destack"
+duration_secs = 12.0
+color = [255, 0, 0, 255]
+icon_ability_id = 4127107089170719
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "timer_expires"
+timer_id = "scyva_p2_beam_7th"
+
+[[boss.timer]]
+id = "scyva_df_m"
+name = "Deflection Module"
+duration_secs = 30.0
+is_alert = true
+color = [0, 255, 251, 255]
+icon_ability_id = 4129885933010944
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "effect_applied"
+effects = [4129885933010944]
+source = "any"
+target = "local_player"
+
+[[boss.timer]]
+id = "scyva_gr_m"
+name = "Gravity Module"
+duration_secs = 30.0
+is_alert = true
+color = [50, 200, 50, 255]
+icon_ability_id = 4127248823091200
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "effect_applied"
+effects = [4127248823091200]
+source = "any"
+target = "local_player"
+
+[[boss.timer]]
+id = "scyva_uph"
+name = "Upheaval"
+duration_secs = 15.0
+color = [255, 128, 0, 255]
+icon_ability_id = 4127296067731456
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "ability_cast"
+abilities = [4127296067731456]
+source = "any"
+target = "any"
+
+[boss.timer.cancel_trigger]
+type = "timer_started"
+timer_id = "scyva_e_e"
+
+[[boss.timer]]
+id = "scyva_rad_s"
+name = "Radiance Setup"
+duration_secs = 8.0
+color = [255, 255, 0, 255]
+icon_ability_id = 4144050735153152
+difficulties = ["veteran", "master"]
+display_target = "none"
+roles = []
+
+[boss.timer.trigger]
+type = "ability_cast"
+abilities = [4144050735153152]
+source = "any"
+target = "any"
+
+[[boss.timer]]
+id = "scyva_rad"
+name = "Radiance"
+duration_secs = 5.0
+color = [255, 255, 0, 255]
+icon_ability_id = 4144050735153152
+difficulties = ["veteran", "master"]
+can_be_refreshed = true
+roles = []
+
+[boss.timer.trigger]
+type = "any_of"
+
+[[boss.timer.trigger.conditions]]
+type = "counter_reaches"
+counter_id = "scyva_rad_s_s"
+value = 0
+
+[[boss.timer.trigger.conditions]]
+type = "ability_cast"
+abilities = [4127296067731456]
+source = "any"
+target = "any"
+
+[[boss.timer.conditions]]
+type = "counter_compare"
+counter_id = "scyva_rad_s_s"
+operator = "eq"
+value = 0
+
+[[boss.timer.conditions]]
+type = "phase_active"
+phase_ids = ["scyva_p4_e", "scyva_p4_c", "scyva_p5_e", "scyva_p5_c"]
+
+[boss.timer.cancel_trigger]
+type = "any_of"
+
+[[boss.timer.cancel_trigger.conditions]]
+type = "phase_entered"
+phase_id = "scyva_p4_s"
+
+[[boss.timer.cancel_trigger.conditions]]
+type = "phase_entered"
+phase_id = "scyva_p5_i"
+
+[[boss.timer]]
+id = "scyva_rad_c"
+name = "Radiance"
+duration_secs = 6.0
+color = [255, 255, 0, 255]
+icon_ability_id = 4144050735153152
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "ability_cast"
+abilities = [4127287477796864, 4127304657666048]
+source = "any"
+target = "any"
+
+[[boss.timer.conditions]]
+type = "phase_active"
+phase_ids = ["scyva_p4_s", "scyva_p5_i", "scyva_p5_c"]
+
+[[boss.timer]]
+id = "scyva_upg_e"
+name = "Upheaval"
+duration_secs = 6.0
+color = [255, 128, 0, 255]
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "ability_cast"
+abilities = [4127287477796864]
+source = "any"
+target = "any"
+
+[[boss.timer.conditions]]
+type = "phase_active"
+phase_ids = ["scyva_p4_c"]
+
+[[boss.timer.conditions]]
+type = "timer_time_remaining"
+timer_id = "scyva_rad_s"
+operator = "gte"
+value = 1.1
+
+[[boss.timer]]
+id = "scyva_red_t"
+name = "Red Turret Target"
+duration_secs = 30.0
+is_alert = true
+color = [255, 0, 0, 255]
+icon_ability_id = 4127210168385536
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "target_set"
+selector = [4126518678650880]
+target = "local_player"
+
+[[boss.timer]]
+id = "scyva_blue_t"
+name = "Blue Turret Target"
+duration_secs = 30.0
+is_alert = true
+color = [7, 84, 207, 255]
+icon_ability_id = 4127210168385536
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "target_set"
+selector = [4126522973618176]
+target = "local_player"
+
+[[boss.timer]]
+id = "scyva_r_t_a"
+name = "Red Turret Activation"
+duration_secs = 60.0
+color = [125, 43, 43, 255]
+difficulties = ["veteran", "master"]
+show_at_secs = 15.0
+roles = []
+
+[boss.timer.trigger]
+type = "effect_applied"
+effects = [4127111384138034, 4127111384138042]
+source = "any"
+target = "any"
+
+[[boss.timer]]
+id = "scyva_b_t_a"
+name = "Blue Turret Activation"
+duration_secs = 60.0
+color = [7, 84, 207, 255]
+difficulties = ["veteran", "master"]
+show_at_secs = 15.0
+roles = []
+
+[boss.timer.trigger]
+type = "effect_applied"
+effects = [4127115679105328, 4127115679105338]
+source = "any"
+target = "any"
+
+[[boss.timer]]
+id = "scyva_o_v"
+name = "Don't interrupt"
+duration_secs = 30.0
+is_alert = true
+color = [255, 0, 0, 255]
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "effect_applied"
+effects = [4176258694905856]
+source = "any"
+target = "any"
+
+[[boss.timer.conditions]]
+type = "phase_active"
+phase_ids = ["scyva_p1"]
+
+[[boss.timer]]
+id = "scyva_o_v_c"
+name = "Can interrupt"
+duration_secs = 30.0
+is_alert = true
+color = [50, 200, 50, 255]
+difficulties = ["veteran", "master"]
+roles = []
+
+[boss.timer.trigger]
+type = "effect_removed"
+effects = [4176258694905856]
+source = "any"
+target = "any"
+
+[[boss.timer.conditions]]
+type = "phase_active"
+phase_ids = ["scyva_p1"]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Boss 5: IZAX
