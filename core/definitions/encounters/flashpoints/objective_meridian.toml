@@ -38,7 +38,7 @@ difficulties = ["story", "veteran", "master"]
 
 [[boss.entities]]
 name = "R10-X6 Droid"
-ids = [4256467936538624]
+ids = [4363141311889408, 4257467936538624]
 is_boss = true
 is_kill_target = true
 
@@ -47,18 +47,18 @@ is_kill_target = true
 # ═══════════════════════════════════════════════════════════════════════════════
 [[boss]]
 id = "jakir_and_seldin"
-name = "Master Jakir Halcyon and Seldin"
+name = "Master Halcyon & Seldin"
 difficulties = ["story", "veteran", "master"]
 
 [[boss.entities]]
 name = "Master Jakir Halcyon"
-ids = [4257442166734848]
+ids = [4257442166734848, 4363167081693184]
 is_boss = true
 is_kill_target = true
 
 [[boss.entities]]
 name = "Seldin"
-ids = [4257455051636736]
+ids = [4257455051636736, 4363171376660480]
 is_boss = true
 is_kill_target = true
 
@@ -72,10 +72,22 @@ difficulties = ["story", "veteran", "master"]
 
 [[boss.entities]]
 name = "Tau Idair"
-ids = [4257463641571328]
+ids = [4257463641571328, 4363175671627776]
 is_boss = true
 is_kill_target = true
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Imperial Bonus Boss: Commander Rasha
 # ═══════════════════════════════════════════════════════════════════════════════
+
+[[boss]]
+id = "rasha"
+name = "Commander Rasha"
+difficulties = ["master"]
+
+[[boss.entities]]
+name = "Commander Rasha"
+ids = [4258185196077056]
+is_boss = true
+is_kill_target = true
+
