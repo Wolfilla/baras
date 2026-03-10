@@ -269,6 +269,15 @@ ids = [2017170045272064, 1783790112342016, 2289823159156736, 2290085152161792]
 is_boss = true
 is_kill_target = true
 
+[[boss.entities.hp_markers]]
+hp_percent = 75.0
+label = "Floor 1 Ends"
+
+[[boss.entities.hp_markers]]
+hp_percent = 30.0
+label = "Floor 2 Ends"
+
+
 # ─── Phases ───────────────────────────────────────────────────────────────────
 [[boss.phases]]
 id = "p1"
@@ -295,20 +304,37 @@ id = "p6"
 name = "Ground"
 start_trigger = { type = "ability_cast", abilities = [2482912003883008] }
 
+[[boss.timer]]
+id = "soa_transistion"
+name = "Platforms"
+duration_secs = 120.0
+trigger = { type = "any_of", conditions = [
+  { type = "phase_ended", phase_id = "p1" },
+  { type = "phase_ended", phase_id = "p4" },
+] }
+color = [33, 224, 223, 255]
+trigger = { type = "any_of", conditions = [
+  { type = "phase_ended", phase_id = "p2" },
+  { type = "phase_ended", phase_id = "p5" },
+] }
+
 # ─── P4 Timers (Middle Platform) ──────────────────────────────────────────────
 [[boss.timer]]
 id = "soa_mind_trap_p4"
-name = "Mind Trap"
+name = "Mind Trap (Mid)"
+display_text = "Mind Trap"
 trigger = { type = "ability_cast", abilities = [2025528051630080] }
 duration_secs = 38.0
 color = [33, 224, 223, 255]
+cancel_trigger = { type = "phase_ended", phase_id = "p4" }
 
 [[boss.timer]]
 id = "soa_ball_lightning_p4"
 name = "Ball Lightning"
 trigger = { type = "ability_cast", abilities = [2076298860036096] }
-duration_secs = 18.0
+duration_secs = 19.0
 color = [224, 176, 33, 255]
+cancel_trigger = { type = "phase_ended", phase_id = "p4" }
 
 [[boss.timer]]
 id = "soa_force_cyclone"
@@ -316,10 +342,10 @@ name = "Force Cyclone"
 trigger = { type = "ability_cast", abilities = [1790412951912448] }
 duration_secs = 38.0
 color = [158, 29, 224, 255]
+cancel_trigger = { type = "phase_ended", phase_id = "p4" }
 
 [[boss.timer]]
 id = "soa_ball_target"
-# orbs_id = "fff111f9-ed49-49b0-8526-b40dce7eaee7"
 name = "Ball Target"
 trigger = { type = "target_set", selector = [
   "Ball Lightning",
@@ -333,21 +359,24 @@ difficulties = ["veteran"]
 # ─── P6 Timers (Final Platform) ───────────────────────────────────────────────
 [[boss.timer]]
 id = "soa_mind_trap_p6"
-name = "Mind Trap"
+name = "Mind Trap (Ground)"
+display_text = "Mind Trap"
 trigger = { type = "ability_cast", abilities = [2482912003883008] }
-duration_secs = 18.0
+duration_secs = 23.0
+color = [33, 224, 220, 255]
+cancel_trigger = { type = "effect_applied", effects = [2480962088730880] }
+
+[[boss.timer]]
+id = "soa_mind_trap_p6"
+name = "Mind Trap Recovery (Ground)"
+display_text = "Mind Trap"
+trigger = { type = "effect_removed", effects = [2480962088730880] }
+duration_secs = 13.5
 color = [33, 224, 220, 255]
 
 [[boss.timer]]
-id = "soa_ball_lightning_p6"
-name = "Ball Lightning"
-trigger = { type = "ability_cast", abilities = [2482985018327040] }
-duration_secs = 16.5
-color = [224, 176, 33, 255]
-
-[[boss.timer]]
 id = "soa_pylon"
-name = "Pylon"
+name = "Pylon Drops"
 trigger = { type = "ability_cast", abilities = [1975835280015360] }
 duration_secs = 20.0
 color = [224, 29, 29, 255]
