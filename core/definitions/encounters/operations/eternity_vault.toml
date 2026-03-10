@@ -313,7 +313,7 @@ trigger = { type = "any_of", conditions = [
   { type = "phase_ended", phase_id = "p4" },
 ] }
 color = [33, 224, 223, 255]
-trigger = { type = "any_of", conditions = [
+cancel_trigger = { type = "any_of", conditions = [
   { type = "phase_ended", phase_id = "p2" },
   { type = "phase_ended", phase_id = "p5" },
 ] }
