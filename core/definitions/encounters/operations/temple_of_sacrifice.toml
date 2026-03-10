@@ -143,7 +143,6 @@ trigger = { type = "any_of", conditions = [{ type = "combat_start" }] }
 duration_secs = 40.0
 color = [33, 224, 218, 255]
 difficulties = ["veteran"]
-chains_to = "ss_gravity"
 
 [[boss.timer]]
 id = "ss_shield_down"

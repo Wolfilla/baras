@@ -115,7 +115,9 @@ trigger = { type = "ability_cast", abilities = [3308460552749056] }
 duration_secs = 10.0
 color = [33, 29, 224, 255]
 difficulties = ["master"]
-conditions = [{ type = "counter_compare", counter_id = "nefra_rng_add_gate", operator = "eq", value = 1 }]
+conditions = [
+  { type = "counter_compare", counter_id = "nefra_rng_add_gate", operator = "eq", value = 1 },
+]
 
 [[boss.timer]]
 id = "nefra_dps_add"
@@ -125,7 +127,9 @@ trigger = { type = "ability_cast", abilities = [3308164200005632] }
 duration_secs = 10.0
 color = [32, 219, 213, 255]
 difficulties = ["master"]
-conditions = [{ type = "counter_compare", counter_id = "nefra_rng_add_gate", operator = "eq", value = 1 }]
+conditions = [
+  { type = "counter_compare", counter_id = "nefra_rng_add_gate", operator = "eq", value = 1 },
+]
 
 [[boss.timer]]
 id = "nefra_rng_add"
@@ -134,7 +138,9 @@ trigger = { type = "ability_cast", abilities = [3342034312101888] }
 duration_secs = 30.0
 color = [33, 149, 224, 255]
 difficulties = ["master"]
-conditions = [{ type = "counter_compare", counter_id = "nefra_twin_attack_count", operator = "eq", value = 12 }]
+conditions = [
+  { type = "counter_compare", counter_id = "nefra_twin_attack_count", operator = "eq", value = 12 },
+]
 
 [[boss.timer]]
 id = "nefra_raid_cleave"
@@ -144,7 +150,9 @@ is_alert = true
 alert_text = "Raid Cleave"
 color = [219, 37, 41, 255]
 difficulties = ["master"]
-conditions = [{ type = "counter_compare", counter_id = "nefra_twin_attack_count", operator = "eq", value = 15 }]
+conditions = [
+  { type = "counter_compare", counter_id = "nefra_twin_attack_count", operator = "eq", value = 15 },
+]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -393,7 +401,7 @@ id = "grobthok_pipe_smash_cs"
 name = "Pipe Smash Combat Start"
 display_text = "Pipe Smash"
 trigger = { type = "combat_start" }
-duration_secs = 60.0
+duration_secs = 61.0
 color = [204, 182, 30, 255]
 difficulties = ["veteran", "master"]
 chains_to = "grobthok_pipe_smash"

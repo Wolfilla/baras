@@ -1515,7 +1515,8 @@ phase_ids = ["scyva_p4_e"]
 
 [[boss.timer]]
 id = "scyva_p5_a_1st"
-name = "Atomic"
+name = "Atomic 1st"
+display_text = "Atomic"
 duration_secs = 13.0
 color = [255, 0, 0, 255]
 icon_ability_id = 4127304657666048
@@ -1527,7 +1528,8 @@ phase_id = "scyva_p5_i"
 
 [[boss.timer]]
 id = "scyva_p5_a_e"
-name = "Atomic"
+name = "Atomic (Expansion)"
+display_text = "Atomic"
 duration_secs = 15.0
 color = [255, 0, 0, 255]
 icon_ability_id = 4127304657666048
@@ -1540,7 +1542,8 @@ phase_id = "scyva_p5_e"
 
 [[boss.timer]]
 id = "scyva_p5_a_c"
-name = "Atomic"
+name = "Atomic (Contraction)"
+display_text = "Atomic"
 duration_secs = 15.0
 color = [255, 0, 0, 255]
 difficulties = ["veteran", "master"]
@@ -1558,7 +1561,8 @@ phase_ids = ["scyva_p5_e"]
 
 [[boss.timer]]
 id = "scyva_p1_beam"
-name = "Beam"
+name = "Beam (P1)"
+display_text = "Beam"
 duration_secs = 15.0
 color = [255, 0, 0, 255]
 icon_ability_id = 4127029779759104
@@ -1672,7 +1676,8 @@ value = 0
 
 [[boss.timer]]
 id = "scyva_p2_beam_1st"
-name = "Beam"
+name = "Beam (P2) 1st"
+display_text = "Beam"
 duration_secs = 14.5
 color = [255, 0, 0, 255]
 icon_ability_id = 4127107089170730
@@ -1724,7 +1729,8 @@ timer_id = "scyva_p2_beam_3rd"
 
 [[boss.timer]]
 id = "scyva_p2_beam_5th"
-name = "Beam"
+name = "Beam (P2) 5th"
+display_text = "Beam"
 duration_secs = 12.0
 color = [255, 0, 0, 255]
 icon_ability_id = 4127107089170730
@@ -1750,7 +1756,8 @@ timer_id = "scyva_p2_beam_5th"
 
 [[boss.timer]]
 id = "scyva_p2_beam_7th"
-name = "Beam"
+name = "Beam (P2) 7th"
+display_text = "Beam"
 duration_secs = 12.0
 color = [255, 0, 0, 255]
 icon_ability_id = 4127107089170730
@@ -1775,7 +1782,7 @@ type = "timer_expires"
 timer_id = "scyva_p2_beam_7th"
 
 [[boss.timer]]
-id = "scyva_df_m"
+id = "scyva_deflection_mod"
 name = "Deflection Module"
 duration_secs = 30.0
 is_alert = true
