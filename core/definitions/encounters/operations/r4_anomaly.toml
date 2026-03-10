@@ -1480,6 +1480,7 @@ phase_id = "kanoth_p4"
 id = "dominique"
 name = "Lady Dominique"
 difficulties = ["story", "veteran"]
+is_final_boss = true
 
 [[boss.entities]]
 name = "Lady Dominique"
