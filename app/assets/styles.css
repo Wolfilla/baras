@@ -7236,8 +7236,8 @@ details[open] .collapsible-summary::before {
 .sidebar-encounter-item .encounter-main {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5em;
+  min-width: 0;
 }
 
 .sidebar-encounter-item .encounter-name {
@@ -7284,6 +7284,7 @@ details[open] .collapsible-summary::before {
   align-items: center;
   gap: 0.4em;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .sidebar-encounter-item .encounter-npcs {

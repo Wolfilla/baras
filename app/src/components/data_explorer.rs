@@ -1597,7 +1597,11 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                     let enc_id = enc.encounter_id;
                                                     let is_selected = *selected_encounter.read() == Some(enc_idx);
                                                     let success_class = if enc.success { "success" } else { "wipe" };
-                                                    let npc_list = enc.npc_names.join(", ");
+                                                    let npc_list = enc.npc_names.iter()
+                                                        .filter(|n| !n.trim().is_empty())
+                                                        .cloned()
+                                                        .collect::<Vec<_>>()
+                                                        .join(", ");
                                                     let persisted_link = enc.parsely_link.clone();
                                                     let current_upload_state = upload_states()
                                                         .get(&enc_id)
@@ -1617,6 +1621,16 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                             },
                                                             div { class: "encounter-main",
                                                                 span { class: "encounter-name", "{enc.display_name}" }
+                                                            }
+                                                            div { class: "encounter-meta",
+                                                                if let Some(time) = &enc.start_time {
+                                                                    {
+                                                                        // Format ISO timestamp "2026-03-07T21:30:31" → "21:30:31"
+                                                                        let display_time = time.split('T').nth(1).unwrap_or(time);
+                                                                        rsx! { span { class: "encounter-time", "{display_time}" } }
+                                                                    }
+                                                                }
+                                                                span { class: "encounter-duration", "({formatting::format_duration(enc.duration_seconds)})" }
                                                                 div { class: "encounter-main-right",
                                                                     // Parsely upload / link button
                                                                     {
@@ -1703,16 +1717,6 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                                         }
                                                                     }
                                                                 }
-                                                            }
-                                                            div { class: "encounter-meta",
-                                                                if let Some(time) = &enc.start_time {
-                                                                    {
-                                                                        // Format ISO timestamp "2026-03-07T21:30:31" → "21:30:31"
-                                                                        let display_time = time.split('T').nth(1).unwrap_or(time);
-                                                                        rsx! { span { class: "encounter-time", "{display_time}" } }
-                                                                    }
-                                                                }
-                                                                span { class: "encounter-duration", "({formatting::format_duration(enc.duration_seconds)})" }
                                                             }
                                                             // NPC names (if available)
                                                             if !npc_list.is_empty() {
