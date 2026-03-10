@@ -49,5 +49,14 @@ validate-revan:
 validate-xr:
   cargo run --bin baras-validate -- --boss propagator_core_xr53 --log test-log-files/operations/hm_propagator.txt
 
+# Sync encounter definitions to build output (for dev without full rebuild)
+sync-defs:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  DEST="target/debug/definitions/encounters"
+  mkdir -p "$DEST"
+  cp core/definitions/encounters/**/*.toml "$DEST/"
+  echo "✓ Synced $(ls "$DEST"/*.toml | wc -l) encounter definitions"
+
 build-validate-windows:
   cross build --release -p baras-validate --target x86_64-pc-windows-gnu
