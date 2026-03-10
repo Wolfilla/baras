@@ -22,9 +22,9 @@ mod examples {
         ChallengeColumns, ChallengeLayout, ChallengeOverlayConfig, OverlayAppearanceConfig,
         TimerOverlayConfig,
     };
-    use baras_core::OverlayHealthEntry;
     use baras_core::dsl::HpMarker;
     use baras_core::encounter::ActiveShield;
+    use baras_core::OverlayHealthEntry;
     use baras_overlay::{
         colors, BossHealthData, BossHealthOverlay, ChallengeData, ChallengeEntry, ChallengeOverlay,
         Color, InteractionMode, MetricEntry, MetricOverlay, Overlay, OverlayConfig,
@@ -1280,6 +1280,7 @@ mod examples {
                 target_name: Some("Tanky McTank".to_string()),
                 hp_markers: vec![],
                 active_shields: vec![],
+                pushes_at: None,
             },
             OverlayHealthEntry {
                 name: "Dread Master Styrak".to_string(),
@@ -1289,6 +1290,7 @@ mod examples {
                 target_name: Some("StabbySith".to_string()),
                 hp_markers: vec![],
                 active_shields: vec![],
+                pushes_at: None,
             },
             OverlayHealthEntry {
                 name: "Dread Master Calphayus".to_string(),
@@ -1298,6 +1300,7 @@ mod examples {
                 target_name: None,
                 hp_markers: vec![],
                 active_shields: vec![],
+                pushes_at: None,
             },
         ];
 
@@ -1309,6 +1312,7 @@ mod examples {
             target_name: Some("Tanky McTank".to_string()),
             hp_markers: vec![],
             active_shields: vec![],
+            pushes_at: None,
         }];
 
         let two_bosses = vec![
@@ -1320,6 +1324,7 @@ mod examples {
                 target_name: Some("Shield Wall".to_string()),
                 hp_markers: vec![],
                 active_shields: vec![],
+                pushes_at: None,
             },
             OverlayHealthEntry {
                 name: "Dread Master Bestia".to_string(),
@@ -1329,6 +1334,7 @@ mod examples {
                 target_name: Some("Tanky McTank".to_string()),
                 hp_markers: vec![],
                 active_shields: vec![],
+                pushes_at: None,
             },
         ];
 
@@ -1342,11 +1348,21 @@ mod examples {
                 first_seen_at: None,
                 target_name: Some("Tanky McTank".to_string()),
                 hp_markers: vec![
-                    HpMarker { hp_percent: 75.0, label: "Clones".to_string() },
-                    HpMarker { hp_percent: 50.0, label: "Burn".to_string() },
-                    HpMarker { hp_percent: 25.0, label: "Droid".to_string() },
+                    HpMarker {
+                        hp_percent: 75.0,
+                        label: "Clones".to_string(),
+                    },
+                    HpMarker {
+                        hp_percent: 50.0,
+                        label: "Burn".to_string(),
+                    },
+                    HpMarker {
+                        hp_percent: 25.0,
+                        label: "Droid".to_string(),
+                    },
                 ],
                 active_shields: vec![],
+                pushes_at: None,
             },
             // Boss with active shield
             OverlayHealthEntry {
@@ -1361,6 +1377,7 @@ mod examples {
                     remaining: 300_000,
                     total: 500_000,
                 }],
+                pushes_at: None,
             },
             // Boss with both markers and shield
             OverlayHealthEntry {
@@ -1370,14 +1387,21 @@ mod examples {
                 first_seen_at: None,
                 target_name: Some("HealBot".to_string()),
                 hp_markers: vec![
-                    HpMarker { hp_percent: 60.0, label: "Portal".to_string() },
-                    HpMarker { hp_percent: 30.0, label: "Enrage".to_string() },
+                    HpMarker {
+                        hp_percent: 60.0,
+                        label: "Portal".to_string(),
+                    },
+                    HpMarker {
+                        hp_percent: 30.0,
+                        label: "Enrage".to_string(),
+                    },
                 ],
                 active_shields: vec![ActiveShield {
                     label: "Shield".to_string(),
                     remaining: 150_000,
                     total: 400_000,
                 }],
+                pushes_at: None,
             },
         ];
 

@@ -398,6 +398,11 @@ pub fn merge_boss_definition(base: &mut BossEncounterDefinition, custom: BossEnc
     if !custom.enabled {
         base.enabled = false;
     }
+
+    // If custom marks boss as final, propagate that
+    if custom.is_final_boss {
+        base.is_final_boss = true;
+    }
 }
 
 /// Generic merge helper: replace matching IDs, append new ones

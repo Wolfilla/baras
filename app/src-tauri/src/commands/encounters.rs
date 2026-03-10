@@ -1294,6 +1294,65 @@ pub async fn update_boss_enabled(
     Ok(())
 }
 
+/// Update a boss definition's is_final_boss flag
+/// When the final boss of an operation is killed, the operations timer auto-stops.
+#[tauri::command]
+pub async fn update_boss_is_final_boss(
+    app_handle: AppHandle,
+    service: State<'_, ServiceHandle>,
+    boss_id: String,
+    file_path: String,
+    is_final_boss: bool,
+) -> Result<(), String> {
+    let file_path_buf = PathBuf::from(&file_path);
+
+    if !file_path_buf.exists() {
+        return Err(format!("Area file not found: {}", file_path));
+    }
+
+    if let Some(custom_path) = get_custom_path_if_bundled(&file_path_buf, &app_handle) {
+        // Bundled area: save to custom overlay with [area] header
+        let area_config = load_area_config(&file_path_buf).ok().flatten();
+
+        let mut custom_bosses = if custom_path.exists() {
+            load_bosses_from_file(&custom_path).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        // Find or create the boss entry in the custom file
+        if let Some(boss) = custom_bosses.iter_mut().find(|b| b.id == boss_id) {
+            boss.is_final_boss = is_final_boss;
+        } else {
+            let stub = BossEncounterDefinition {
+                id: boss_id.clone(),
+                is_final_boss,
+                ..Default::default()
+            };
+            custom_bosses.push(stub);
+        }
+
+        if let Some(parent) = custom_path.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        save_bosses_to_file_with_area(&custom_bosses, &custom_path, area_config)?;
+    } else {
+        // User file: load, update, save directly
+        let mut bosses = load_bosses_from_file(&file_path_buf)?;
+        let boss = bosses
+            .iter_mut()
+            .find(|b| b.id == boss_id)
+            .ok_or_else(|| format!("Boss '{}' not found", boss_id))?;
+        boss.is_final_boss = is_final_boss;
+        save_bosses_to_file(&bosses, &file_path_buf)?;
+    }
+
+    // Trigger definition reload
+    let _ = service.reload_timer_definitions().await;
+
+    Ok(())
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Boss Notes Selector (for Session tab)
 // ═══════════════════════════════════════════════════════════════════════════════

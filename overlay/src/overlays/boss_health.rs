@@ -222,12 +222,12 @@ impl BossHealthOverlay {
     pub fn render(&mut self) {
         let width = self.frame.width() as f32;
 
-        // Filter out dead bosses (0% health) and collect living ones
+        // Filter out dead bosses (0% health) and pushed bosses (HP at/below pushes_at threshold)
         let entries: Vec<_> = self
             .data
             .entries
             .iter()
-            .filter(|e| e.percent() > 0.0)
+            .filter(|e| e.percent() > 0.0 && !e.is_pushed())
             .take(MAX_SUPPORTED_BOSSES)
             .cloned()
             .collect();

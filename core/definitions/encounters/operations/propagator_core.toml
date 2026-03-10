@@ -10,6 +10,7 @@ area_id = 945872057669657
 id = "propagator_core_xr53"
 name = "Propagator Core XR-53"
 difficulties = ["story", "veteran", "master"]
+is_final_boss = true
 
 [[boss.entities]]
 name = "Propagator Core XR-53"

@@ -446,6 +446,7 @@ value = 2
 id = "dread_council"
 name = "The Dread Council"
 difficulties = ["story", "veteran", "master"]
+is_final_boss = true
 
 [[boss.entities]]
 name = "Dread Master Bestia"

@@ -627,6 +627,7 @@ difficulties = ["veteran", "master"]
 id = "brontes"
 name = "Dread Master Brontes"
 difficulties = ["story", "veteran", "master"]
+is_final_boss = true
 
 [[boss.entities]]
 name = "Dread Master Brontes"

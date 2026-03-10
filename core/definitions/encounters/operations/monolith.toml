@@ -7,6 +7,7 @@ id = 3541801830973440
 id = "monolith"
 name = "Colossal Monolith"
 difficulties = ["story", "veteran"]
+is_final_boss = true
 
 [[boss.entities]]
 name = "Colossal Monolith"

@@ -558,6 +558,7 @@ difficulties = ["veteran", "master"]
 id = "warlord_kephess"
 name = "Warlord Kephess"
 difficulties = ["veteran", "master"]
+is_final_boss = true
 
 [[boss.entities]]
 name = "Warlord Kephess"

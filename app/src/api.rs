@@ -687,6 +687,20 @@ pub async fn update_boss_enabled(
     Ok(())
 }
 
+/// Update a boss definition's is_final_boss flag
+pub async fn update_boss_is_final_boss(
+    boss_id: &str,
+    file_path: &str,
+    is_final_boss: bool,
+) -> Result<(), String> {
+    let obj = js_sys::Object::new();
+    js_set(&obj, "bossId", &JsValue::from_str(boss_id));
+    js_set(&obj, "filePath", &JsValue::from_str(file_path));
+    js_set(&obj, "isFinalBoss", &JsValue::from_bool(is_final_boss));
+    try_invoke("update_boss_is_final_boss", obj.into()).await?;
+    Ok(())
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Effect Editor Commands
 // ─────────────────────────────────────────────────────────────────────────────

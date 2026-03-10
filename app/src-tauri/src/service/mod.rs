@@ -346,6 +346,24 @@ impl SignalHandler for CombatSignalHandler {
                 let _ = self.session_event_tx.send(SessionEvent::CombatEnded);
                 // Clear boss health and timer overlays
                 let _ = self.overlay_tx.try_send(OverlayUpdate::CombatEnded);
+
+                // Auto-stop operation timer when final boss is killed
+                if let Some(enc) = _encounter {
+                    if let Some(def) = enc.active_boss_definition() {
+                        if def.is_final_boss {
+                            let area_id = self.shared.current_area_id.load(Ordering::SeqCst);
+                            if baras_core::game_data::is_operation(area_id) {
+                                let success = baras_core::encounter::summary::determine_success(enc);
+                                if success {
+                                    let mut timer = self.shared.operation_timer.lock().unwrap();
+                                    if timer.is_running() {
+                                        timer.stop();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             GameSignal::DisciplineChanged {
                 entity_id,

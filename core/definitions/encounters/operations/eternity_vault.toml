@@ -261,6 +261,7 @@ is_boss = true
 id = "soa"
 name = "Soa"
 difficulties = ["story", "veteran"]
+is_final_boss = true
 
 [[boss.entities]]
 name = "Soa"

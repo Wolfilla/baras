@@ -522,6 +522,40 @@ pub fn EncounterEditorPanel(mut props: EncounterEditorProps) -> Element {
                                             if entity_count > 0 {
                                                 span { class: "tag", "{entity_count} entities" }
                                             }
+                                            // Final boss flag toggle
+                                            {
+                                                let final_boss_id = bwp.boss.id.clone();
+                                                let final_file_path = bwp.file_path.clone();
+                                                let is_final = bwp.boss.is_final_boss;
+                                                rsx! {
+                                                    span {
+                                                        class: "row-toggle",
+                                                        style: "margin-left: auto;",
+                                                        title: if is_final { "Final boss (auto-stops ops timer) — click to unset" } else { "Mark as final boss (auto-stops ops timer on kill)" },
+                                                        onclick: move |e| {
+                                                            e.stop_propagation();
+                                                            let bid = final_boss_id.clone();
+                                                            let fp = final_file_path.clone();
+                                                            let new_final = !is_final;
+                                                            spawn(async move {
+                                                                match api::update_boss_is_final_boss(&bid, &fp, new_final).await {
+                                                                    Ok(()) => {
+                                                                        if let Some(b) = api::fetch_area_bosses(&fp).await {
+                                                                            bosses.set(b);
+                                                                        }
+                                                                    }
+                                                                    Err(e) => status_message.set(Some((e, true))),
+                                                                }
+                                                            });
+                                                        },
+                                                        span {
+                                                            class: if is_final { "text-warning" } else { "text-muted" },
+                                                            style: "font-size: 12px;",
+                                                            "⚑"
+                                                        }
+                                                    }
+                                                }
+                                            }
                                             // Enable/disable toggle
                                             {
                                                 let toggle_boss_id = bwp.boss.id.clone();
@@ -529,7 +563,6 @@ pub fn EncounterEditorPanel(mut props: EncounterEditorProps) -> Element {
                                                 rsx! {
                                                     span {
                                                         class: "row-toggle",
-                                                        style: "margin-left: auto;",
                                                         title: if boss_enabled { "Disable boss" } else { "Enable boss" },
                                                         onclick: move |e| {
                                                             e.stop_propagation();

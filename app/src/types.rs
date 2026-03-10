@@ -379,6 +379,9 @@ pub struct BossEncounterDefinition {
     /// User notes for this encounter (Markdown formatted)
     #[serde(default)]
     pub notes: Option<String>,
+    /// Whether this is the final boss of an operation (auto-stops ops timer on kill)
+    #[serde(default)]
+    pub is_final_boss: bool,
 }
 
 fn default_enabled() -> bool {
@@ -585,6 +588,9 @@ pub struct EntityDefinition {
     pub hp_markers: Vec<HpMarker>,
     #[serde(default)]
     pub shields: Vec<ShieldDefinition>,
+    /// HP% at which this entity is "pushed" out of combat (health bar removed)
+    #[serde(default)]
+    pub pushes_at: Option<f32>,
 }
 
 /// Unified encounter item enum for CRUD operations (mirrors backend EncounterItem)

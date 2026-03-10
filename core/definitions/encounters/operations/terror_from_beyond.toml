@@ -717,6 +717,7 @@ id = "the_terror_from_beyond"
 name = "The Terror From Beyond"
 difficulties = ["story", "veteran", "master"]
 has_victory_trigger = true
+is_final_boss = true
 victory_trigger = { type = "any_of", conditions = [
   { type = "ability_cast", abilities = [
     3019211685232640,

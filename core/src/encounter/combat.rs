@@ -465,6 +465,7 @@ impl CombatEncounter {
                             .collect()
                     })
                     .unwrap_or_default();
+                let pushes_at = entity_def.and_then(|e| e.pushes_at);
 
                 OverlayHealthEntry {
                     name: crate::context::resolve(npc.name).to_string(),
@@ -477,6 +478,7 @@ impl CombatEncounter {
                     first_seen_at: npc.first_seen_at,
                     hp_markers,
                     active_shields,
+                    pushes_at,
                 }
             })
             .collect();

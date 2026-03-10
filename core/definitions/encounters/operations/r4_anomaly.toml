@@ -461,6 +461,7 @@ target = "any"
 id = "dominique"
 name = "Lady Dominique"
 difficulties = ["story", "veteran", "master"]
+is_final_boss = true
 
 [[boss.entities]]
 name = "Lady Dominique"

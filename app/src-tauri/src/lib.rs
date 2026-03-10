@@ -274,6 +274,7 @@ pub fn run() {
             commands::delete_encounter_item,
             commands::update_boss_notes,
             commands::update_boss_enabled,
+            commands::update_boss_is_final_boss,
             commands::get_area_bosses_for_notes,
             commands::select_boss_notes,
             // Encounter export/import

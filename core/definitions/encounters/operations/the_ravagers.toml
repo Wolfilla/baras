@@ -603,6 +603,7 @@ id = "coratanni"
 name = "Coratanni"
 difficulties = ["story", "veteran", "master"]
 has_victory_trigger = true
+is_final_boss = true
 victory_trigger = { type = "ability_cast", abilities = [3502391211065344] }
 
 [[boss.entities]]

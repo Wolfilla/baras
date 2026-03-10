@@ -157,6 +157,12 @@ pub struct EntityDefinition {
     /// Shield mechanic definitions
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shields: Vec<ShieldDefinition>,
+
+    /// HP percentage at which this entity is "pushed" out of combat.
+    /// The entity doesn't die but is no longer participating — its health bar
+    /// is removed from the Boss HP overlay when HP drops to or below this %.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pushes_at: Option<f32>,
 }
 
 impl EntityDefinition {
@@ -271,6 +277,12 @@ pub struct BossEncounterDefinition {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub victory_conditions: Vec<Condition>,
 
+    // ─── Final Boss ──────────────────────────────────────────────────────────
+    /// Whether this is the final boss of an operation.
+    /// When the final boss is killed, the operations timer is automatically stopped.
+    #[serde(default, skip_serializing_if = "crate::serde_defaults::is_false")]
+    pub is_final_boss: bool,
+
     #[serde(skip)]
     pub all_npc_ids: HashSet<i64>,
 }
@@ -299,6 +311,7 @@ impl Default for BossEncounterDefinition {
             victory_trigger: None,
             victory_trigger_difficulties: Vec::new(),
             victory_conditions: Vec::new(),
+            is_final_boss: false,
             all_npc_ids: HashSet::new(),
         }
     }

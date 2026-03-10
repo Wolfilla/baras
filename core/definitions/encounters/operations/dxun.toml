@@ -852,6 +852,7 @@ target = "local_player"
 id = "apex_vanguard"
 name = "Apex Vanguard"
 difficulties = ["story", "veteran", "master"]
+is_final_boss = true
 
 [[boss.entities]]
 name = "Apex Vanguard"

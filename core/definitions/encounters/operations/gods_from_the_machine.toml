@@ -1353,6 +1353,7 @@ id = "izax"
 name = "IZAX"
 difficulties = ["story", "veteran", "master"]
 has_victory_trigger = true
+is_final_boss = true
 victory_trigger = { type = "entity_death", selector = [
   "IZAX",
   4163133274849280,

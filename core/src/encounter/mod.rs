@@ -60,6 +60,9 @@ pub struct OverlayHealthEntry {
     /// Active shields on this entity
     #[serde(skip)]
     pub active_shields: Vec<ActiveShield>,
+    /// HP% threshold at which this entity is "pushed" out of combat (from entity definition)
+    #[serde(skip)]
+    pub pushes_at: Option<f32>,
 }
 
 impl OverlayHealthEntry {
@@ -69,5 +72,11 @@ impl OverlayHealthEntry {
         } else {
             0.0
         }
+    }
+
+    /// Whether this entity has been pushed out of combat (HP% at or below pushes_at threshold)
+    pub fn is_pushed(&self) -> bool {
+        self.pushes_at
+            .map_or(false, |threshold| self.percent() <= threshold)
     }
 }

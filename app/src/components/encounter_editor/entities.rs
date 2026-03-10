@@ -26,6 +26,7 @@ fn default_entity(name: String) -> EntityDefinition {
         show_on_hp_overlay: None, // Uses is_boss default
         hp_markers: vec![],
         shields: vec![],
+        pushes_at: None,
     }
 }
 
@@ -168,6 +169,9 @@ fn EntityRow(
                     } else {
                         rsx! {}
                     }
+                }
+                if let Some(pct) = entity.pushes_at {
+                    span { class: "tag tag-warning", "Pushes {pct}%" }
                 }
             }
 
@@ -376,6 +380,42 @@ fn EntityEditForm(
                         }
                         span { "Show on HP Overlay" }
                         span { class: "text-xs text-muted", "(display this entity on Boss HP bar)" }
+                    }
+
+                    // ─── Pushes At ─────────────────────────────────────────────
+                    div { class: "flex items-center gap-xs",
+                        label { class: "flex items-center gap-xs cursor-pointer",
+                            input {
+                                r#type: "checkbox",
+                                checked: draft().pushes_at.is_some(),
+                                onchange: move |e| {
+                                    let mut d = draft();
+                                    d.pushes_at = if e.checked() { Some(25.0) } else { None };
+                                    draft.set(d);
+                                }
+                            }
+                            span { "Pushes At" }
+                        }
+                        if let Some(pct) = draft().pushes_at {
+                            input {
+                                class: "input-inline",
+                                style: "width: 60px;",
+                                r#type: "number",
+                                step: "1",
+                                min: "0",
+                                max: "100",
+                                value: "{pct}",
+                                oninput: move |e| {
+                                    let mut d = draft();
+                                    if let Ok(v) = e.value().parse::<f32>() {
+                                        d.pushes_at = Some(v);
+                                        draft.set(d);
+                                    }
+                                }
+                            }
+                            span { class: "text-xs text-muted", "%" }
+                        }
+                        span { class: "text-xs text-muted", "(hide HP bar when pushed out of combat)" }
                     }
                 }
             }

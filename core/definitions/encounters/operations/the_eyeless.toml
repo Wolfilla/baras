@@ -6,6 +6,7 @@ id = 137438993429
 id = "eyeless"
 name = "The Eyeless"
 difficulties = ["story", "veteran"]
+is_final_boss = true
 
 [[boss.entities]]
 name = "The Eyeless"

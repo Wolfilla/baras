@@ -6,6 +6,7 @@ id = 137438993300
 id = "xeno"
 name = "Xenoanalyst"
 difficulties = ["story", "veteran"]
+is_final_boss = true
 
 [[boss.entities]]
 name = "Xenoanalyst"

@@ -22,7 +22,12 @@ area_type = "operation"       # operation | flashpoint | lair_boss | training_du
 id = "boss_id"
 name = "Boss Name"
 difficulties = ["story", "veteran", "master"]
+is_final_boss = true              # Auto-stop ops timer when this boss is killed
 ```
+
+**`is_final_boss`** — Optional boolean (default `false`). When set to `true`, killing this
+boss (encounter ends as a success) will automatically stop the operations timer. Use this
+on the last boss of each operation.
 
 ### Entities
 
@@ -34,7 +39,13 @@ is_boss = true                # Track HP, show on health bar
 is_kill_target = true         # Killing ends encounter
 triggers_encounter = true     # Seeing NPC starts encounter
 show_on_hp_overlay = true     # Show on boss HP overlay
+pushes_at = 25.0              # Hide HP bar when entity HP drops to this %
 ```
+
+**`pushes_at`** — Optional HP percentage threshold. When set, the entity's health bar
+is removed from the Boss HP overlay once its HP drops to or below this value. Use this
+for entities that get "pushed" out of combat (e.g., knocked off a platform) without
+actually dying. The entity is not treated as dead — only its health bar is hidden.
 
 ### Phases
 
