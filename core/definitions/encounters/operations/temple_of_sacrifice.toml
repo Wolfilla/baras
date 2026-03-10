@@ -202,18 +202,25 @@ ids = [
 is_boss = true
 is_kill_target = true
 
-[[boss.phases]]
-id = "ul_main"
-name = "Main"
-trigger = { type = "combat_start" }
+[[boss.entities.hp_markers]]
+label = "First Adds"
+hp_percent = 90.0
 
-# -- Ability Timers --
-# PREDICTIVE timers: trigger fires on current ability, timer shows what's COMING next
+# -- Ability Timers --#
+[[boss.timer]]
+id = "ul_adds"
+name = "Adds Spawn"
+trigger = { type = "ability_cast", abilities = [3512467204341760] }
+duration_secs = 52
+color = [41, 29, 224, 255]
+can_refresh = true
+show_at_seconds = 15.0
+
 [[boss.timer]]
 id = "ul_collapse"
 name = "Collapse"
 trigger = { type = "ability_cast", abilities = [3512467204341760] }
-duration_secs = 15
+duration_secs = 17.5
 color = [41, 29, 224, 255]
 difficulties = ["veteran"]
 
@@ -241,7 +248,7 @@ difficulties = ["veteran"]
 id = "ul_devastation"
 name = "Cross"
 trigger = { type = "ability_cast", abilities = [3413575582351360] }
-duration_secs = 10
+duration_secs = 8
 color = [24, 173, 19, 255]
 difficulties = ["veteran"]
 
@@ -305,11 +312,27 @@ is_boss = true
 triggers_encounter = true
 is_kill_target = false    # Core is the actual kill target
 
+[[boss.entities.hp_markers]]
+hp_percent = 65.0
+label = "HK Arrives"
+
+[[boss.entities.hp_markers]]
+hp_percent = 28.0
+label = "Floor 3"
+
+[[boss.entities.hp_markers]]
+hp_percent = 9.0
+label = "Core Burn"
+
 [[boss.entities]]
 name = "HK-47"
 ids = [3444310368321536]
 is_boss = true
 is_kill_target = false
+
+[[boss.entities.hp_markers]]
+hp_percent = 9.0
+label = "HK Pushes"
 
 [[boss.entities]]
 name = "Machine Focus"
