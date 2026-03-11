@@ -5,7 +5,7 @@
 
 [area]
 name = "A Traitor Among The Chiss"
-id = 836045448953664
+area_id = 836045448953664
 area_type = "flashpoint"
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -78,4 +78,3 @@ name = "Temple Cat"
 ids = [4129460731248640]
 is_boss = true
 is_kill_target = true
-

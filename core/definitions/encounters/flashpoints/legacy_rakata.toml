@@ -1,6 +1,6 @@
 [area]
 name = "Legacy of the Rakata"
-id = 137438993543
+area_id = 137438993543
 area_type = "flashpoint"
 
 [[boss]]

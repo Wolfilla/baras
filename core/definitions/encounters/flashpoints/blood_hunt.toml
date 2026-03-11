@@ -1,12 +1,12 @@
 [area]
 name = "Blood Hunt"
-id = 833571547775719
+area_id = 833571547775719
 area_type = "flashpoint"
+difficulties = ["story", "veteran", "master"]
 
 [[boss]]
 id = "kyramla"
 name = "Kyramla"
-difficulties = ["story", "veteran", "master"]
 
 [[boss.entities]]
 name = "Kyramla"
@@ -14,10 +14,9 @@ ids = [3400982738239488, 3507004005941248]
 is_boss = true
 is_kill_target = true
 
-
 [[boss]]
 id = "valk_jos"
-name = "Valk and Jos"
+name = "Valk & Jos"
 difficulties = ["story", "veteran", "master"]
 
 [[boss.entities]]

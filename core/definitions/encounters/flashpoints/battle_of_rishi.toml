@@ -1,6 +1,6 @@
 [area]
 name = "Battle of Rishi"
-id = 833571547775720
+area_id = 833571547775720
 area_type = "flashpoint"
 
 [[boss]]

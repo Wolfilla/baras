@@ -5,7 +5,7 @@
 
 [area]
 name = "Objective Meridian"
-id = 833571547775793
+area_id = 833571547775793
 area_type = "flashpoint"
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -140,4 +140,3 @@ name = "Commander Rasha"
 ids = [4258185196077056]
 is_boss = true
 is_kill_target = true
-
