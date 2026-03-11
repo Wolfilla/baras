@@ -96,7 +96,7 @@ trigger = { type = "damage_taken", abilities = [
 ], target = { selector = [
   "G4-B3 Heavy Fabricator",
 ] } }
-can_refresh = true
+can_be_refreshed = true
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Boss 5: Karagga the Unyielding

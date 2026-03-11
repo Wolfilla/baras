@@ -20,7 +20,7 @@ Look for more refinements to timer/boss definitions in the future.
 - Added burst healing taken to HP tracking chart
 - Improved formatting of the damage taken summary block
 - Added icons to overlay buttons
-- Disabled elements will not
+- Disabled elements will now show as greyed out
 
 ## Definitions
 
@@ -38,3 +38,4 @@ Thank you Wolfy, Advieser, and Keetsune for contributing to the timers.
 - Corrected effect uptime query when time range is filtered
 - Negative threat values now display in the combat log
 - Operations timer can no longer be triggered when in historical mode
+- Fixed issue causing effects to flash to full duration on raid frames before expiring
