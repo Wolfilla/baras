@@ -275,7 +275,11 @@ impl SessionCache {
     /// When `force` is true, the current encounter's definitions are always replaced
     /// (used during hot-reload so that phases, counters, etc. are updated immediately).
     /// When `force` is false, the current encounter is only updated if it has no
-    /// definitions yet (avoids clobbering mid-fight definitions during area changes).
+    /// definitions yet OR if the encounter hasn't started combat yet.
+    /// This avoids clobbering mid-fight definitions (e.g., player dies and revives in
+    /// another area) while ensuring area transitions between two defined areas (e.g.,
+    /// Dread Fortress → Scum and Villainy) correctly update the pre-combat encounter
+    /// with fresh definitions.
     pub fn load_boss_definitions(
         &mut self,
         definitions: Vec<BossEncounterDefinition>,
@@ -293,11 +297,16 @@ impl SessionCache {
         self.boss_definitions = Arc::clone(&definitions);
 
         // Share definitions with current encounter (Arc clone is cheap)
-        // When force=false, only update if the encounter doesn't already have definitions
-        // (e.g., when player dies and revives in another area before encounter finalizes,
-        // we don't want to clobber the mid-fight definitions)
+        // Safe to update when:
+        // - force=true: hot-reload, always replace
+        // - encounter has no definitions yet: first load for this encounter
+        // - encounter hasn't started combat: stale definitions from a prior area
+        //   can be safely replaced (no active boss fight to disrupt)
+        // NOT safe to update when encounter is InCombat/PostCombat with existing
+        // definitions (e.g., player died and revived in another area mid-fight)
         if let Some(enc) = self.current_encounter_mut() {
-            if force || enc.boss_definitions().is_empty() {
+            if force || enc.boss_definitions().is_empty() || enc.state == EncounterState::NotStarted
+            {
                 enc.load_boss_definitions(definitions);
             }
         }
