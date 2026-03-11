@@ -107,6 +107,16 @@ fn build_area_index_recursive(dir: &Path, index: &mut AreaIndex) -> Result<(), S
         {
             match load_area_config(&path) {
                 Ok(Some(area)) if area.area_id != 0 => {
+                    if let Some(existing) = index.get(&area.area_id) {
+                        tracing::warn!(
+                            area_id = area.area_id,
+                            existing_name = %existing.name,
+                            existing_file = %existing.file_path.display(),
+                            new_name = %area.name,
+                            new_file = %path.display(),
+                            "Duplicate area_id detected - new file will overwrite existing"
+                        );
+                    }
                     index.insert(
                         area.area_id,
                         AreaIndexEntry {
