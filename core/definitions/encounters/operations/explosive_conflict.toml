@@ -242,7 +242,9 @@ initial_value = 0
 [[boss.phases]]
 id = "fs_tanks"
 name = "Tanks"
-conditions = [{ type = "counter_compare", counter_id = "fs_defensive_systems_ct", operator = "lte", value = 3 }]
+conditions = [
+  { type = "counter_compare", counter_id = "fs_defensive_systems_ct", operator = "lte", value = 3 },
+]
 trigger = { type = "any_of", conditions = [
   { type = "combat_start" },
   { type = "phase_ended", phase_id = "fs_shield" },
@@ -267,7 +269,9 @@ end_trigger = { type = "effect_removed", effects = [
 [[boss.phases]]
 id = "fs_burn"
 name = "Burn"
-conditions = [{ type = "counter_compare", counter_id = "fs_defensive_systems_ct", operator = "eq", value = 4 }]
+conditions = [
+  { type = "counter_compare", counter_id = "fs_defensive_systems_ct", operator = "eq", value = 4 },
+]
 trigger = { type = "phase_ended", phase_id = "fs_shield" }
 
 [[boss.phases]]
@@ -584,6 +588,11 @@ name = "Baradium Bomber"
 ids = [2876524281724928, 2876558641463296, 2792969987948544, 2876584411267072]
 is_boss = false
 
+[[boss.entities]]
+name = "Trandoshan Warrior"
+ids = [2876511396823040, 2876541461594112, 2876571526365184, 2809252208967680]
+is_boss = false
+
 [[boss.counters]]
 id = "walker_burns"
 name = "Walker Burns"
@@ -612,21 +621,27 @@ end_trigger = { type = "any_of", conditions = [
 [[boss.phases]]
 id = "wk_trandos"
 name = "Trandoshans"
-conditions = [{ type = "counter_compare", counter_id = "walker_burns", operator = "eq", value = 1 }]
+conditions = [
+  { type = "counter_compare", counter_id = "walker_burns", operator = "eq", value = 1 },
+]
 trigger = { type = "phase_ended", phase_id = "walker_burn" }
 end_trigger = { type = "entity_death", name = "Baradium Bomber" }
 
 [[boss.phases]]
 id = "wk_pulsar"
 name = "Pulsar Droids"
-conditions = [{ type = "counter_compare", counter_id = "walker_burns", operator = "eq", value = 2 }]
+conditions = [
+  { type = "counter_compare", counter_id = "walker_burns", operator = "eq", value = 2 },
+]
 trigger = { type = "phase_ended", phase_id = "walker_burn" }
 end_trigger = { type = "entity_death", name = "Baradium Bomber" }
 
 [[boss.phases]]
 id = "wk_kephess"
 name = "Kephess"
-conditions = [{ type = "counter_compare", counter_id = "walker_burns", operator = "gte", value = 3 }]
+conditions = [
+  { type = "counter_compare", counter_id = "walker_burns", operator = "gte", value = 3 },
+]
 trigger = { type = "phase_ended", phase_id = "walker_burn" }
 end_trigger = { type = "effect_removed", effects = [2815376832331776] }
 
@@ -672,12 +687,28 @@ difficulties = ["story", "veteran", "master"]
 enabled = true
 display_target = "timers_a"
 
-
 [boss.timer.trigger]
 type = "effect_applied"
 effects = [2877026792898560]
 source = "any"
 target = "local_player"
+
+[[boss.counters]]
+id = "wk_trando_spawns"
+name = "Trando Warrior Spawns"
+increment_on = { type = "npc_appears", selector = ["Trandoshan Warrior"] }
+reset_on = { type = "combat_end" }
+initial_value = 0
+
+[[boss.timer]]
+id = "wk_trandos"
+name = "Trando Waves"
+display_text = "Next Trandos"
+duration_secs = 20.0
+color = [224, 168, 33, 255]
+repeats = 1
+trigger = { type = "counter_reaches", counter_id = "wk_trando_spawns", value = 1 }
+
 
 [[boss.timer]]
 id = "warlord_kephess_walker_enrage"
@@ -691,7 +722,6 @@ display_target = "timers_a"
 
 [boss.timer.trigger]
 type = "combat_start"
-
 
 [[boss.timer]]
 id = "wk_baradium_countdown"
