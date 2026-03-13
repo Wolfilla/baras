@@ -757,7 +757,7 @@ increment_on = { type = "entity_death", selector = ["Grasping Tentacle"] }
 # Phase 1 - push to 50% to trigger transition
 [[boss.entities]]
 name = "Terror (P1)"
-ids = [3025220344479744]
+ids = [3025220344479744, 3025224639447040, 3025228934414336, 3025233229381632]
 is_boss = true
 show_on_hp_overlay = false
 triggers_encounter = true
@@ -765,7 +765,7 @@ triggers_encounter = true
 # Phase 2 - triggers victory at ~4% HP but doesn't actually die
 [[boss.entities]]
 name = "Terror (P2)"
-ids = [3025233229381632]
+ids = [3025233229381632, 2978340776443904, 302523752434898, 3025241819316224]
 is_boss = true
 
 [[boss.entities]]
