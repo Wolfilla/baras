@@ -2509,7 +2509,7 @@ async fn calculate_combat_data(shared: &Arc<SharedState>) -> Option<CombatData> 
         };
 
         // Calculate metrics for all players (use session-level discipline registry)
-        let entity_metrics = encounter.calculate_entity_metrics(&cache.player_disciplines)?;
+        let entity_metrics = encounter.calculate_entity_metrics(&cache.player_disciplines, session.interpolated_game_time())?;
         let metrics: Vec<PlayerMetrics> = entity_metrics
             .into_iter()
             .filter(|m| m.entity_type != EntityType::Npc)
@@ -2617,10 +2617,8 @@ async fn calculate_combat_data(shared: &Arc<SharedState>) -> Option<CombatData> 
         });
         let phase_time_secs = encounter
             .phase_started_at
-            .map(|start| {
-                let now = chrono::Local::now().naive_local();
-                (now - start).num_milliseconds() as f32 / 1000.0
-            })
+            .zip(session.interpolated_game_time().or(session.last_event_time))
+            .map(|(start, now)| (now - start).num_milliseconds() as f32 / 1000.0)
             .unwrap_or(0.0);
 
         Some(CombatData {

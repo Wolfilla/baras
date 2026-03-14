@@ -1347,13 +1347,21 @@ impl CombatEncounter {
         self.last_event_line = Some(line_number);
     }
 
+    /// Calculate per-entity DPS/HPS/etc. metrics.
+    ///
+    /// `current_time` is used as the duration fallback while combat is still active.
+    /// Pass `interpolated_game_time()` from the live service path so the DPS/HPS
+    /// denominator stays in sync with the overlay display timer (both game-clock
+    /// anchored).  Pass `None` at finalization — `effective_end_time()` is already
+    /// set by then and provides the correct frozen end timestamp.
     pub fn calculate_entity_metrics(
         &self,
         player_disciplines: &hashbrown::HashMap<i64, super::entity_info::PlayerInfo>,
+        current_time: Option<NaiveDateTime>,
     ) -> Option<Vec<super::metrics::EntityMetrics>> {
         use super::metrics::EntityMetrics;
 
-        let duration_ms = self.duration_ms(None)?;
+        let duration_ms = self.duration_ms(current_time)?;
         if duration_ms <= 0 {
             return None;
         }

@@ -408,7 +408,7 @@ pub fn create_encounter_summary(
     // Calculate metrics and filter to players seen during actual combat
     let combat_start = encounter.enter_combat_time;
     let player_metrics: Vec<PlayerMetrics> = encounter
-        .calculate_entity_metrics(player_disciplines)
+        .calculate_entity_metrics(player_disciplines, None)
         .unwrap_or_default()
         .into_iter()
         .filter(|m| {
