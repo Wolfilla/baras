@@ -772,6 +772,7 @@ is_boss = true
 name = "Grasping Tentacle"
 ids = [3025289063956480, 2988545618739200, 3025293358923776, 3025284768989184]
 is_boss = true
+pushes_at = 0.5
 
 [[boss.entities]]
 name = "Tunneling Tentacle"
@@ -802,7 +803,6 @@ is_boss = false
 name = "Hypergate Beacon"
 ids = [3025194574675968, 3025405028073472]
 is_boss = false
-
 
 [[boss.entities]]
 name = "Unstable Larva"
