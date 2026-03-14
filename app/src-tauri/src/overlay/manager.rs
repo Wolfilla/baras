@@ -141,9 +141,13 @@ impl OverlayManager {
         let _ = handle.tx.send(OverlayCommand::GetPosition(pos_tx)).await;
         let position = pos_rx.await.ok();
 
-        // Send shutdown command
+        // Send shutdown command and join on blocking thread pool (same as shutdown_no_position)
         let _ = handle.tx.send(OverlayCommand::Shutdown).await;
-        let _ = handle.handle.join();
+        tokio::task::spawn_blocking(move || {
+            let _ = handle.handle.join();
+        })
+        .await
+        .ok();
 
         position
     }
@@ -151,7 +155,16 @@ impl OverlayManager {
     /// Shutdown an overlay without getting position (for bulk operations).
     pub async fn shutdown_no_position(handle: OverlayHandle) {
         let _ = handle.tx.send(OverlayCommand::Shutdown).await;
-        let _ = handle.handle.join();
+        // Join on a blocking thread pool so we don't stall the Tokio async executor.
+        // The overlay OS thread exits within one poll interval (≤100ms), but calling
+        // std::thread::JoinHandle::join() directly from an async context would block
+        // the worker thread for that duration — starving the router task and delaying
+        // other Tauri commands, timer ticks, and overlay updates.
+        tokio::task::spawn_blocking(move || {
+            let _ = handle.handle.join();
+        })
+        .await
+        .ok();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -927,30 +940,46 @@ impl OverlayManager {
         let mut newly_spawned: Vec<(OverlayType, tokio::sync::mpsc::Sender<OverlayCommand>)> = Vec::new();
 
         for overlay_type in Self::all_overlay_types() {
+            // Raid is handled separately below (always full teardown+respawn to pick up
+            // grid size changes). Skip it here to avoid a redundant spawn that the
+            // special-case block would immediately tear down.
+            if matches!(overlay_type, OverlayType::Raid) {
+                continue;
+            }
+
             let key = overlay_type.config_key();
             let enabled = settings.enabled.get(key).copied().unwrap_or(false);
-            let running = {
-                let s = state.lock().map_err(|e| e.to_string())?;
-                s.is_running(overlay_type)
-            };
 
-            if running && !enabled {
-                // Shutdown if running but disabled
-                if let Ok(mut s) = state.lock()
-                    && let Some(handle) = s.remove(overlay_type)
-                {
-                    let _ = handle.tx.try_send(OverlayCommand::Shutdown);
+            if !enabled {
+                // Shutdown if running but disabled — remove under lock so no concurrent
+                // spawner can observe it as running after we've taken the handle.
+                let handle = state.lock().map_err(|e| e.to_string())?.remove(overlay_type);
+                if let Some(h) = handle {
+                    let _ = h.tx.try_send(OverlayCommand::Shutdown);
+                    service.set_overlay_active(key, false);
                 }
-                service.set_overlay_active(key, false);
-            } else if !running && enabled && globally_visible && !service.shared.auto_hide.is_auto_hidden() {
-                // Start if not running but enabled (only if global visibility is on and not auto-hidden)
-                if let Ok(result) = Self::spawn(overlay_type, settings)
-                    && let Ok(mut s) = state.lock()
-                {
-                    let tx = result.handle.tx.clone();
-                    s.insert(result.handle);
-                    newly_spawned.push((overlay_type, tx));
-                }
+            } else if enabled && globally_visible && !service.shared.auto_hide.is_auto_hidden() {
+                // Spawn under lock if not already running — the is_running check and the
+                // insert must be a single atomic lock scope to prevent a concurrent
+                // temporary_show_all from also spawning the same overlay type, which
+                // would create a duplicate ghost window on screen.
+                // spawn() is synchronous so it is safe to call while holding the lock.
+                let tx = {
+                    let mut s = state.lock().map_err(|e| e.to_string())?;
+                    if s.is_running(overlay_type) {
+                        // Already running — nothing to do (temporary_show_all beat us here)
+                        continue;
+                    }
+                    match Self::spawn(overlay_type, settings) {
+                        Ok(result) => {
+                            let tx = result.handle.tx.clone();
+                            s.insert(result.handle);
+                            tx
+                        }
+                        Err(_) => continue,
+                    }
+                };
+                newly_spawned.push((overlay_type, tx));
                 service.set_overlay_active(key, true);
             }
         }
@@ -975,14 +1004,25 @@ impl OverlayManager {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
 
-        // Only respawn raid if global visibility is on and not auto-hidden
-        let raid_respawned = if globally_visible && !service.shared.auto_hide.is_auto_hidden()
-            && (raid_was_running || raid_enabled)
-            && let Ok(result) = Self::spawn(OverlayType::Raid, settings)
-            && let Ok(mut s) = state.lock()
+        // Only respawn raid if it is enabled in the current profile, global visibility
+        // is on, and not auto-hidden. raid_was_running is intentionally not included
+        // here — if the newly loaded profile has raid disabled, tearing down the old
+        // window above is correct and we must not respawn it.
+        // spawn() is called inside the lock scope so the is_running check and insert
+        // are atomic — prevents temporary_show_all from racing in and also spawning
+        // a Raid window in the gap between spawn() and insert().
+        let raid_respawned = if raid_enabled && globally_visible && !service.shared.auto_hide.is_auto_hidden()
         {
-            s.insert(result.handle);
-            true
+            match state.lock() {
+                Ok(mut s) => match Self::spawn(OverlayType::Raid, settings) {
+                    Ok(result) => {
+                        s.insert(result.handle);
+                        true
+                    }
+                    Err(_) => false,
+                },
+                Err(_) => false,
+            }
         } else {
             false
         };
