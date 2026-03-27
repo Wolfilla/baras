@@ -542,8 +542,14 @@ victory_trigger = { type = "any_of", conditions = [
   ] },
 ] }
 victory_conditions = [
-  { type = "counter_compare", counter_id = "hunmaster_adrenaline_rush", operator = "gte", value = 1 },
+  { type = "any_of", conditions = [
+    { type = "counter_compare", counter_id = "huntmaster_adrenaline_rush", operator = "gte", value = 1 },
+    { type = "phase_active", phase_ids = [
+      "shelleigh",
+    ] },
+  ] },
 ]
+victory_trigger_difficulties = ["veteran", "master"]
 
 [[boss.counter]]
 id = "huntmaster_adrenaline_rush"
