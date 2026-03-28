@@ -75,8 +75,19 @@ pub(super) fn handle_ability(
         manager.start_timer(&def, timestamp, instance_id);
     }
 
-    // Check for cancel triggers on ability cast
-    manager.cancel_timers_matching(|t| t.matches_ability(ability_id, Some(ability_name_str)));
+    // Check for cancel triggers on ability cast (entity-filtered)
+    manager.cancel_timers_matching_with_source_target(
+        get_entities(encounter),
+        source_id,
+        source_type,
+        source_name,
+        source_npc_id,
+        target_id,
+        target_type,
+        target_name,
+        target_npc_id,
+        |t| t.matches_ability(ability_id, Some(ability_name_str)),
+    );
 }
 
 /// Handle effect applied
@@ -129,8 +140,19 @@ pub(super) fn handle_effect_applied(
         manager.start_timer(&def, timestamp, instance_id);
     }
 
-    // Check for cancel triggers on effect applied
-    manager.cancel_timers_matching(|t| t.matches_effect_applied(effect_id, Some(effect_name)));
+    // Check for cancel triggers on effect applied (entity-filtered)
+    manager.cancel_timers_matching_with_source_target(
+        get_entities(encounter),
+        source_id,
+        source_type,
+        source_name,
+        source_npc_id,
+        target_id,
+        target_type,
+        target_name,
+        target_npc_id,
+        |t| t.matches_effect_applied(effect_id, Some(effect_name)),
+    );
 }
 
 /// Handle effect removed
@@ -183,8 +205,19 @@ pub(super) fn handle_effect_removed(
         manager.start_timer(&def, timestamp, instance_id);
     }
 
-    // Check for cancel triggers on effect removed
-    manager.cancel_timers_matching(|t| t.matches_effect_removed(effect_id, Some(effect_name)));
+    // Check for cancel triggers on effect removed (entity-filtered)
+    manager.cancel_timers_matching_with_source_target(
+        get_entities(encounter),
+        source_id,
+        source_type,
+        source_name,
+        source_npc_id,
+        target_id,
+        target_type,
+        target_name,
+        target_npc_id,
+        |t| t.matches_effect_removed(effect_id, Some(effect_name)),
+    );
 }
 
 /// Handle boss HP change - check for HP threshold triggers
@@ -498,8 +531,19 @@ pub(super) fn handle_damage_taken(
         manager.start_timer(&def, timestamp, instance_id);
     }
 
-    // Check for cancel triggers on damage taken
-    manager.cancel_timers_matching(|t| t.matches_damage_taken(ability_id, Some(&ability_name_str)));
+    // Check for cancel triggers on damage taken (entity-filtered)
+    manager.cancel_timers_matching_with_source_target(
+        get_entities(encounter),
+        source_id,
+        source_type,
+        source_name,
+        source_npc_id,
+        target_id,
+        target_type,
+        target_name,
+        target_npc_id,
+        |t| t.matches_damage_taken(ability_id, Some(&ability_name_str)),
+    );
 }
 
 /// Handle healing taken - check for HealingTaken triggers
@@ -552,9 +596,19 @@ pub(super) fn handle_healing_taken(
         manager.start_timer(&def, timestamp, instance_id);
     }
 
-    // Check for cancel triggers on healing taken
-    manager
-        .cancel_timers_matching(|t| t.matches_healing_taken(ability_id, Some(&ability_name_str)));
+    // Check for cancel triggers on healing taken (entity-filtered)
+    manager.cancel_timers_matching_with_source_target(
+        get_entities(encounter),
+        source_id,
+        source_type,
+        source_name,
+        source_npc_id,
+        target_id,
+        target_type,
+        target_name,
+        target_npc_id,
+        |t| t.matches_healing_taken(ability_id, Some(&ability_name_str)),
+    );
 }
 
 /// Evaluate combat-time-based triggers: CombatStart and TimeElapsed.

@@ -903,6 +903,71 @@ impl TimerManager {
         }
     }
 
+    /// Cancel active timers whose cancel_trigger matches the given predicate,
+    /// also enforcing source/target entity filters on the cancel trigger.
+    ///
+    /// This is the entity-aware counterpart to `cancel_timers_matching`. It should
+    /// be used for event-driven cancels (effect applied/removed, ability cast,
+    /// damage/healing taken) so that a cancel trigger with source/target filters
+    /// only fires when the correct entities are involved — preventing a shield or
+    /// buff removal on entity A from inadvertently cancelling a timer scoped to
+    /// entity B.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn cancel_timers_matching_with_source_target<F>(
+        &mut self,
+        entities: &[crate::dsl::EntityDefinition],
+        source_id: i64,
+        source_type: crate::combat_log::EntityType,
+        source_name: crate::context::IStr,
+        source_npc_id: i64,
+        target_id: i64,
+        target_type: crate::combat_log::EntityType,
+        target_name: crate::context::IStr,
+        target_npc_id: i64,
+        trigger_matches: F,
+    ) where
+        F: Fn(&TimerTrigger) -> bool,
+    {
+        let local_player_id = self.local_player_id;
+        let current_target_id = self.current_target_id;
+        let boss_entity_ids = &self.boss_entity_ids;
+
+        let keys_to_cancel: Vec<_> = self
+            .active_timers
+            .iter()
+            .filter_map(|(key, timer)| {
+                let def = self.definitions.get(&timer.definition_id)?;
+                let cancel_trigger = def.cancel_trigger.as_ref()?;
+                if trigger_matches(cancel_trigger)
+                    && matches_source_target_filters(
+                        cancel_trigger,
+                        entities,
+                        source_id,
+                        source_type,
+                        source_name,
+                        source_npc_id,
+                        target_id,
+                        target_type,
+                        target_name,
+                        target_npc_id,
+                        local_player_id,
+                        current_target_id,
+                        boss_entity_ids,
+                    )
+                {
+                    Some(key.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for key in keys_to_cancel {
+            self.active_timers.remove(&key);
+            self.canceled_this_tick.push(key.definition_id);
+        }
+    }
+
     /// Process timer expirations, repeats, and chains
     fn process_expirations(
         &mut self,
