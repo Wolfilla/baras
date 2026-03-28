@@ -148,7 +148,7 @@ pub struct DataExplorerProps {
 pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
     // Encounter selection state
     let mut encounters = use_signal(Vec::<EncounterSummary>::new);
-    
+
     // Extract persisted state fields into local signals for easier access
     // Initialize from parent state to support navigation from other components
     let mut selected_encounter = use_signal(|| props.state.read().data_explorer.selected_encounter);
@@ -202,14 +202,14 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
 
     // Combat log state is a separate signal that CombatLog component will modify
     let mut combat_log_state = use_signal(|| props.state.read().combat_log.clone());
-    
+
     // Time range is persisted - restore from saved state
     let mut time_range = use_signal(|| props.state.read().data_explorer.time_range);
-    
+
     // Track previous encounter to detect actual changes vs. initial mount
     // Start with None to trigger initial load
     let mut prev_encounter = use_signal(|| None::<u32>);
-    
+
     // Sync local signals back to unified state when they change
     // Read all values first to create subscriptions, then write to parent state
     // NOTE: show_only_bosses is NOT synced here to avoid bidirectional sync loop.
@@ -228,7 +228,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
         let u_col = *usage_sort_column.read();
         let u_dir = *usage_sort_direction.read();
         let combat = combat_log_state.read().clone();
-        
+
         if let Ok(mut state) = props.state.try_write() {
             state.data_explorer.selected_encounter = enc;
             state.data_explorer.view_mode = vm;
@@ -245,7 +245,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
             state.combat_log = combat;
         }
     });
-    
+
     // Sync show_only_bosses from parent state when it changes (e.g., config loaded at startup)
     // This handles the race condition where the component mounts before async config loading completes
     // NOTE: We only sync parent→local here. Local→parent sync happens in the onchange handler
@@ -273,13 +273,13 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
             }
         }
     });
-    
+
     // NOTE: selected_encounter is initialized from parent state on mount (line 332).
     // This handles navigation from external components that set selected_encounter before mounting.
     // We do NOT have a continuous parent→local sync effect here because it creates
     // a bidirectional sync loop with the local→parent sync above, causing
     // encounter clicks in the sidebar to be ignored/sticky.
-    
+
     // Sync show_ids from parent state when it changes (e.g., config loaded at startup)
     use_effect(move || {
         let parent_show_ids = props.state.read().combat_log.show_ids;
@@ -515,7 +515,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
     use_effect(move || {
         let idx = *selected_encounter.read();
         let prev_idx = *prev_encounter.peek();
-        
+
         // Check if this is an actual encounter change vs. initial mount with same encounter
         let is_encounter_change = idx != prev_idx;
         if is_encounter_change {
@@ -1883,7 +1883,7 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
                                                                     let player_name = name.clone();
                                                                     move |_| {
                                                                         let start = (death_time - 10.0).max(0.0);
-                                                                        time_range.set(TimeRange { start, end: death_time });
+                                                                        time_range.set(TimeRange { start, end: death_time + 1.5 });
                                                                         death_target_filter.set(Some(player_name.clone()));
                                                                         view_mode.set(ViewMode::CombatLog);
                                                                     }
