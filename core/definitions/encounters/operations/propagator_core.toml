@@ -171,7 +171,7 @@ duration_secs = 22.5
 alert_on = "none"
 color = [237, 23, 93, 255]
 difficulties = ["story", "veteran", "master"]
-enabled = false
+enabled = true
 display_target = "timers_a"
 
 [boss.timer.trigger]
@@ -202,7 +202,7 @@ name = "Acidic Rocketry"
 duration_secs = 21.0
 alert_on = "none"
 color = [23, 152, 0, 255]
-enabled = false
+enabled = true
 display_target = "timers_a"
 
 [boss.timer.trigger]
@@ -260,7 +260,7 @@ name = "Hunting Grounds"
 duration_secs = 30.0
 alert_on = "none"
 color = [237, 165, 0, 255]
-enabled = false
+enabled = true
 display_target = "timers_a"
 
 [boss.timer.trigger]
