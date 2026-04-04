@@ -1,142 +1,148 @@
+---
+generated: 2026-04-03
+focus: tech
+---
+
 # Technology Stack
 
-**Analysis Date:** 2026-01-17
+**Analysis Date:** 2026-04-03
 
 ## Languages
 
 **Primary:**
-- Rust 2024 Edition - All backend logic, core parsing, overlay rendering, Tauri app
+- Rust (edition 2024) - All backend, core logic, overlay rendering, and frontend
+- WASM (wasm32-unknown-unknown) - Frontend compilation target for Dioxus UI
 
 **Secondary:**
-- TOML - DSL for boss encounters, effects, timers definitions (`core/definitions/`)
-- CSS - Frontend styling (`app/assets/styles.css`, `app/assets/data-explorer.css`)
-- JSON - Configuration files (`app/src-tauri/tauri.conf.json`)
+- JavaScript - ECharts charting library loaded via CDN in the frontend
+- Python - Conversion/migration scripts in `scripts/`
+- TOML - Definition files for effects, encounters, sounds
 
 ## Runtime
 
 **Environment:**
-- Rust 1.92.0 (stable toolchain)
-- WASM (wasm32-unknown-unknown) for frontend via Dioxus
+- Rust stable (currently rustc 1.94.0)
+- Tauri 2 runtime (WebKit2GTK on Linux, WebView2 on Windows, WKWebView on macOS)
+- Tokio async runtime (full features in core, sync-only in frontend WASM)
 
 **Package Manager:**
-- Cargo (workspace-based monorepo)
-- Lockfile: `Cargo.lock` present at root and `app/Cargo.lock`
+- Cargo (workspace-based)
+- Lockfile: `Cargo.lock` present
+
+**WASM Target:**
+- `wasm32-unknown-unknown` for the Dioxus frontend (`app/Cargo.toml`)
 
 ## Frameworks
 
 **Core:**
-- Tauri 2.x - Desktop application framework (`app/src-tauri/Cargo.toml`)
-- Dioxus 0.7.2 - Reactive UI framework for web frontend (`app/Cargo.toml`)
-- tokio 1.48.0 - Async runtime for file watching, I/O operations
+- Tauri 2 - Desktop application framework (`app/src-tauri/Cargo.toml`)
+- Dioxus 0.7.2 - Reactive UI framework targeting web/WASM (`app/Cargo.toml`)
+- DataFusion 51 - SQL query engine for analytics (`core/Cargo.toml`)
+- Arrow 57 / Parquet 57 - Columnar data format and storage (`core/Cargo.toml`)
 
 **Rendering:**
-- tiny-skia 0.11 - 2D software rendering for overlays
-- cosmic-text 0.15 - Text shaping and layout for overlays
-- fontdb 0.23 - System font database
-
-**Data Processing:**
-- DataFusion 51 - SQL query engine for combat data analysis
-- Arrow 57 - Columnar data format
-- Parquet 57 - Persistent storage format for encounter data
+- tiny-skia 0.11 - Software 2D rendering for overlays (`overlay/Cargo.toml`)
+- cosmic-text 0.16 - Text shaping and layout (`overlay/Cargo.toml`)
+- fontdb 0.23 - Font database (`overlay/Cargo.toml`)
 
 **Build/Dev:**
-- just - Task runner (`justfile`)
-- dx (dioxus-cli) - Dioxus build/serve tooling
-- cargo-tauri - Tauri build tooling
+- Dioxus CLI (`dx serve`, `dx bundle`) - Frontend dev server and bundling
+- Tauri CLI (`cargo tauri`) - Application building and packaging
+- cargo-binstall - Binary installation of CLI tools
+- phf_codegen 0.13.1 - Compile-time perfect hash generation (`core/build.rs`)
 
 ## Key Dependencies
 
-**Critical (Core Logic):**
-- `memmap2` 0.9.9 - Memory-mapped file reading for log parsing
-- `memchr` 2.7.6 - Fast byte searching for log parsing
-- `rayon` 1.11.0 - Parallel log processing
-- `lasso` 0.7.3 - String interning for entity/ability names
-- `hashbrown` 0.16.1 - Fast hash maps for entity tracking
-- `notify` 8.2 - File system watching for new combat logs
-- `confy` 2.0.0 - Configuration file management
+**Critical (core logic):**
+- `memchr` 2.7.6 - SIMD-accelerated byte scanning for log parsing (`core/Cargo.toml`)
+- `encoding_rs` 0.8 - Windows-1252 text decoding for SWTOR logs (`core/Cargo.toml`)
+- `lasso` 0.7.3 - String interner with multi-threaded support (`core/Cargo.toml`)
+- `rayon` 1.11.0 - Parallel iteration for parse-worker (`core/Cargo.toml`, `parse-worker/Cargo.toml`)
+- `memmap2` 0.9.9 - Memory-mapped file reading (`core/Cargo.toml`, `parse-worker/Cargo.toml`)
+- `hashbrown` 0.16.1 - Fast hash map implementation (`core/Cargo.toml`)
+- `phf` 0.13.1 - Compile-time perfect hash maps (`core/Cargo.toml`)
+- `notify` 8.2 - Filesystem watching for log file changes (`core/Cargo.toml`)
+- `confy` 2.0.0 - Configuration file management via TOML (`core/Cargo.toml`)
 
-**Serialization:**
-- `serde` 1.0.x - Core serialization
-- `serde_json` 1 - JSON for IPC with frontend
-- `toml` 0.9 - DSL definition parsing
+**Infrastructure:**
+- `tokio` 1.48.0 - Async runtime (full features in backend, sync-only in WASM) (`core/Cargo.toml`)
+- `serde` 1.0 / `serde_json` 1.0 - Serialization throughout all crates
+- `chrono` 0.4.42 - Date/time handling (`core/Cargo.toml`, `app/src-tauri/Cargo.toml`)
+- `toml` 0.9 - TOML parsing for definitions and config (`core/Cargo.toml`)
+- `thiserror` 2 - Error type derivation (`core/Cargo.toml`)
+- `tracing` 0.1 / `tracing-subscriber` 0.3 / `tracing-appender` 0.2 - Structured logging (workspace deps)
+- `rolling-file` 0.2 - Rolling log file output (workspace dep)
+- `reqwest` 0.12 - HTTP client for Parsely uploads (`app/src-tauri/Cargo.toml`)
+- `flate2` 1.1 - Gzip compression for uploads (`app/src-tauri/Cargo.toml`)
+- `rodio` 0.19 - Audio playback for alerts (wav, vorbis, mp3) (`app/src-tauri/Cargo.toml`)
+- `pulldown-cmark` 0.12 - Markdown rendering for boss notes (`app/src-tauri/Cargo.toml`)
+- `quick-xml` 0.37 - XML parsing for Parsely API responses (`app/src-tauri/Cargo.toml`)
+- `zip` 2 - ZIP extraction for icon packs (`app/src-tauri/Cargo.toml`, `overlay/Cargo.toml`)
+- `clap` 4 - CLI argument parsing for validate tool (`validate/Cargo.toml`)
 
-**Platform-Specific Overlay:**
-- `wayland-client` 0.31 + `wayland-protocols` 0.32 - Linux Wayland support
-- `x11rb` 0.13 - Linux X11 fallback support
-- `windows` 0.58 - Windows native overlay APIs
-- `cocoa` 0.26 + `core-graphics` 0.24 - macOS support (experimental)
+**Tauri Plugins:**
+- `tauri-plugin-opener` 2 - OS default app opening
+- `tauri-plugin-dialog` 2 - Native file/folder dialogs
+- `tauri-plugin-global-shortcut` 2 - System-wide hotkeys
+- `tauri-plugin-updater` 2 - Auto-update support
+- `tauri-plugin-process` 2 - Process management
+- `tauri-plugin-single-instance` 2 - Single instance enforcement
+- `tauri-plugin-window-state` 2 - Window position persistence
 
-**Audio:**
-- `rodio` 0.19 - Audio playback for timer alerts
-- `tts` 0.26 - Text-to-speech for countdown (non-Linux only)
+**Platform-Specific:**
+- Linux: `wayland-client` 0.31, `wayland-protocols` 0.32, `wayland-protocols-wlr` 0.3, `x11rb` 0.13, `ashpd` 0.12 (XDG portals), `rustix` 1.0
+- Windows: `windows` 0.58 (Win32 API)
+- macOS: `core-graphics` 0.24, `objc2` 0.6, `objc2-foundation` 0.3, `objc2-app-kit` 0.3, `dispatch` 0.2
 
-**Network:**
-- `reqwest` 0.12 - HTTP client for Parsely.io uploads
+**Frontend (WASM):**
+- `dioxus` 0.7.2 - UI framework (`app/Cargo.toml`)
+- `wasm-bindgen` 0.2 / `wasm-bindgen-futures` 0.4 - JS interop
+- `web-sys` 0.3 / `js-sys` 0.3 - Browser API bindings
+- `serde-wasm-bindgen` 0.6.5 - Serde for WASM bridge
+- `gloo-timers` 0.3 - Timer utilities for WASM
+- `getrandom` 0.3 (wasm_js) - Random number generation in WASM
 
-**Compression:**
-- `flate2` 1.1 - Gzip compression for log uploads
-- `zip` 2.x - Icon archive extraction
+**Non-Linux only:**
+- `tts` 0.26 - Text-to-speech for alerts on Windows/macOS (`app/src-tauri/Cargo.toml`)
 
 ## Configuration
 
 **Application Config:**
-- Location: `~/.config/baras/config.toml` (via confy)
-- Managed by: `core/src/context/config.rs`
-- Type definitions: `types/src/lib.rs` (shared between backend/frontend)
+- Managed via `confy` crate writing TOML to `~/.config/baras/`
+- User encounter definitions: `~/.config/baras/definitions/encounters/`
+- Bundled definitions in `core/definitions/` (effects, encounters, sounds)
 
-**DSL Definitions:**
-- Encounters: `core/definitions/encounters/operations/*.toml`
-- Effects (HoTs, DOTs, DCDs): `core/definitions/effects/*.toml`
-- Sounds: `core/definitions/sounds/`
-- Absorb data: `core/definitions/absorbs.json`
+**Build Config:**
+- `Cargo.toml` (workspace root) - Workspace members, shared deps, release profile
+- `app/src-tauri/tauri.conf.json` - Tauri app config (window, bundle, plugins, updater)
+- `app/Dioxus.toml` - Dioxus frontend config (asset dir, dev server, ECharts CDN)
 
-**Tauri Config:**
-- `app/src-tauri/tauri.conf.json` - Window settings, permissions, bundling
-- Auto-updater endpoint: `https://raw.githubusercontent.com/baras-app/baras/master/latest.json`
-
-**Dioxus Config:**
-- `app/Dioxus.toml` - Build settings, asset paths
-
-## Workspace Structure
-
-```toml
-[workspace]
-members = [
-  "types",        # Shared types (backend + WASM frontend)
-  "core",         # Core business logic
-  "overlay",      # Custom overlay rendering
-  "app",          # Dioxus frontend (WASM)
-  "app/src-tauri", # Tauri backend
-  "validate",     # DSL validation CLI
-  "parse-worker"  # Subprocess for parallel log parsing
-]
-```
-
-**Build Profile (Release):**
-```toml
-lto = "thin"        # Link-time optimization
-codegen-units = 1   # Better optimization
-panic = "abort"     # No unwinding overhead
-```
+**Release Profile** (`Cargo.toml`):
+- LTO: thin (cross-crate optimization)
+- codegen-units: 1 (maximum optimization)
+- panic: abort (no unwinding overhead)
 
 ## Platform Requirements
 
 **Development:**
-- Rust 1.92.0+ with 2024 edition support
-- Linux: `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `libasound2-dev`
-- Windows: MSVC toolchain
-- macOS: Xcode command line tools
+- Rust stable toolchain (edition 2024)
+- `wasm32-unknown-unknown` target for frontend
+- Dioxus CLI (`dx`) and Tauri CLI (`cargo tauri`)
+- Linux: libwebkit2gtk-4.1-dev, libappindicator3-dev, librsvg2-dev, libxdo-dev, libasound2-dev
+- Frontend dev server runs on `http://localhost:1420`
 
-**Production Targets:**
-- Linux: AppImage, .deb (x86_64)
+**Production:**
+- Linux: AppImage or .deb (ubuntu-24.04 base), requires WebKit2GTK 4.1
 - Windows: NSIS installer (.exe)
-- macOS: Experimental (requires additional testing)
+- macOS: DMG or .app bundle (minimum macOS 10.13, aarch64)
+- `baras-parse-worker` sidecar binary bundled alongside main app
 
-**Runtime Dependencies:**
-- Linux: Wayland compositor (preferred) or X11
-- Windows: Windows 10+
-- Ability icons: Bundled in `icons/` directory as `.zip` archives
+**CI/CD:**
+- GitHub Actions with `workflow_dispatch` triggers
+- Runners: ubuntu-24.04 (Linux), windows-latest (Windows), macos-14/15 (macOS)
+- Tauri signing keys via GitHub Secrets
+- Auto-update manifest (`latest.json`) committed to master after release
 
 ---
 
-*Stack analysis: 2026-01-17*
+*Stack analysis: 2026-04-03*

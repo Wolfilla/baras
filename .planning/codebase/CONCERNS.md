@@ -1,177 +1,212 @@
-# Codebase Concerns
+---
+generated: 2026-04-03
+focus: concerns
+---
 
-**Analysis Date:** 2026-01-17
+# Codebase Concerns
 
 ## Tech Debt
 
-**Excessive `.unwrap()` Usage in Production Code:**
-- Issue: 320+ uses of `.unwrap()` and `.expect()` outside test files, many in critical paths
-- Files: `core/src/signal_processor/phase.rs` (lines 72, 134, 198, 236, 237, 268), `core/src/signal_processor/counter.rs` (lines 37, 56, 73, 120, 134, 151), `core/src/signal_processor/processor.rs` (lines 344, 424, 436), `core/src/effects/tracker.rs` (line 29), `core/src/encounter/shielding.rs` (line 90), `core/src/combat_log/reader.rs` (line 131)
-- Impact: Runtime panics in edge cases (missing encounters, uninitialized state)
-- Fix approach: Replace with proper `Option`/`Result` handling, return early with `?` operator or log and continue
+### Oversized Files Exceeding 500-Line Guideline
 
-**Massive Static Data Files:**
-- Issue: Hand-maintained static data arrays exceeding 4000 lines
-- Files: `core/src/game_data/raid_bosses.rs` (4144 lines), `core/src/game_data/flashpoint_bosses.rs` (2614 lines)
-- Impact: Hard to maintain, error-prone manual updates, no compile-time validation
-- Fix approach: Move to external data files (TOML/JSON) loaded at runtime or build-time code generation
+The project has a 500-line guideline (except platform implementations). Many files significantly exceed this.
 
-**Clone-Heavy Phase Transition Logic:**
-- Issue: 35 `.clone()` calls in a single file for phase transition checks
-- Files: `core/src/signal_processor/phase.rs`
-- Impact: Unnecessary allocations on every event during combat
-- Fix approach: Pass references, use copy-on-write patterns, cache computed values
+**Generated data files (acceptable):**
+- `core/src/game_data/raid_bosses.rs` (4144 lines) - auto-generated boss data
+- `core/src/game_data/flashpoint_bosses.rs` (2624 lines) - auto-generated boss data
 
-**Frontend JS Interop Boilerplate:**
-- Issue: 200+ raw `.unwrap()` calls on `js_sys::Reflect::set` operations
-- Files: `app/src/components/charts_panel.rs` (68 instances), `app/src/components/data_explorer.rs` (35 instances), `app/src/api.rs` (100+ instances)
-- Impact: Any JS error causes panic, no graceful degradation
-- Fix approach: Create helper macros or wrapper functions with proper error handling
+**Platform implementations (acceptable per guidelines):**
+- `overlay/src/platform/wayland.rs` (1685 lines)
 
-**Inconsistent Logging Strategy:**
-- Issue: Mix of `eprintln!` (382 occurrences) and no structured logging
-- Files: Throughout codebase, especially `core/src/dsl/challenge.rs` (16), `overlay/src/platform/wayland.rs` (17), `app/src-tauri/src/service/mod.rs` (25)
-- Impact: No log levels, can't filter debug output in production, no structured fields
-- Fix approach: Adopt `tracing` crate consistently with proper levels and spans
+**Service layer (should be split):**
+- `app/src-tauri/src/service/mod.rs` (3787 lines) - CombatService run loop, 31 ServiceCommand variants, operation timer state, file indexing, overlay dispatch, process monitoring. Contains 55 functions and 87 `.clone()` calls.
+  - Fix approach: Extract operation timer logic, file management, and overlay dispatch into dedicated modules.
+- `app/src-tauri/src/service/handler.rs` (1580 lines) - Signal handler with 61 public functions.
+  - Fix approach: Group handler methods by domain (combat, overlay, effects, timers) into sub-modules.
 
-## Known Bugs
+**Frontend components (should be split):**
+- `app/src/components/data_explorer.rs` (3591 lines) - 9+ data views in one component.
+- `app/src/components/settings_panel.rs` (2821 lines) - All settings in one file.
+- `app/src/components/effect_editor.rs` (2251 lines)
+- `app/src/components/charts_panel.rs` (1379 lines)
+- `app/src/components/combat_log.rs` (1307 lines)
+  - Fix approach: Extract each view/tab into its own component file.
 
-**SWTOR Charge Bug Workaround:**
-- Symptoms: Trauma Probe and Kolto Shell report 6 charges instead of 7 on ApplyEffect
-- Files: `core/src/game_data/effects.rs` (lines 34-47)
-- Trigger: When these abilities are applied to targets
-- Workaround: `correct_apply_charges()` function adds 1 to charge count for these abilities
+**Core logic:**
+- `core/src/effects/tracker.rs` (2337 lines, 56 functions)
+- `core/src/signal_processor/processor.rs` (1625 lines)
+- `core/src/timers/manager.rs` (1584 lines)
+- `core/src/encounter/combat.rs` (1488 lines, 70 functions)
+- `core/src/dsl/definition.rs` (958 lines)
+- `core/src/dsl/challenge.rs` (951 lines)
+  - Fix approach: Split struct definitions into separate files per the project guidelines.
 
-**Debug Code Left in Production:**
-- Symptoms: Debug file writes to `/tmp/parse_worker_shield.txt` in parse-worker
-- Files: `parse-worker/src/main.rs` (lines 312-325)
-- Trigger: Processing shield data in subprocess
-- Workaround: Remove or gate behind feature flag
+**Shared types monolith:**
+- `types/src/lib.rs` (3057 lines) - 74 structs/enums in a single file with no module organization.
+  - Impact: Every change to any type requires scanning a 3000-line file. Hard to navigate.
+  - Fix approach: Split into domain modules (overlay types, encounter types, config types, etc.) with a barrel re-export.
 
-## Security Considerations
+### Monolithic API Surface
 
-**Unsafe Code in Platform Layers:**
-- Risk: Memory safety bugs in overlay rendering (memory-mapped shared memory, raw pointers)
-- Files: `overlay/src/platform/wayland.rs` (lines 561-612, `unsafe` mmap operations), `overlay/src/platform/windows.rs` (15 `unsafe` blocks for Win32 API), `overlay/src/platform/x11.rs` (lines 165-198), `overlay/src/platform/macos.rs` (14 `unsafe` blocks for Cocoa)
-- Current mitigation: Contained to platform-specific modules, proper cleanup in `Drop` implementations
-- Recommendations: Add safety comments documenting invariants, consider safe wrappers where possible
+- `app/src/api.rs` (1642 lines, 111 public functions) - All Tauri invoke wrappers in one file.
+  - Fix approach: Split by domain (combat, overlay, effects, encounters, settings).
 
-**Memory-Mapped File Parsing:**
-- Risk: Processing untrusted combat log files via mmap
-- Files: `core/src/combat_log/reader.rs` (lines 39, 84), `parse-worker/src/main.rs` (line 652)
-- Current mitigation: Files come from known game installation directory
-- Recommendations: Add file size limits, validate file format before full parsing
+### Inconsistent Mutex Lock Error Handling
 
-**Configuration File Path:**
-- Risk: Config stored in platform config directory without validation
-- Files: `core/src/context/config.rs` (line 69 - `confy::store` with `.expect()`)
-- Current mitigation: Using `confy` library with standard paths
-- Recommendations: Handle config save failures gracefully, validate config on load
+Two patterns coexist for the same `SharedState`:
 
-## Performance Bottlenecks
+- `operation_timer.lock().unwrap()` - 15 occurrences in `app/src-tauri/src/service/mod.rs`. Will panic on mutex poisoning.
+- `raid_registry.lock().unwrap_or_else(|p| p.into_inner())` - Used elsewhere in the same file. Recovers from poisoning gracefully.
+  - Impact: If any thread panics while holding `operation_timer`, the app crashes on next lock attempt.
+  - Fix approach: Use `unwrap_or_else(|p| p.into_inner())` consistently, or switch to `parking_lot::Mutex` which doesn't poison.
 
-**Cloning in Hot Paths:**
-- Problem: Excessive cloning of `Vec`, `String`, `HashMap` during combat event processing
-- Files: `core/src/signal_processor/phase.rs` (35 clones), `core/src/timers/manager.rs` (36 clones), `core/src/effects/tracker.rs` (28 clones)
-- Cause: Borrow checker workarounds, defensive copies
-- Improvement path: Use `Cow<str>`, `Arc<T>` for shared data, refactor to avoid borrow conflicts
+### Tauri Commands Use `Result<_, String>` Everywhere
 
-**Large Component Files:**
-- Problem: UI components exceeding 1000-1800 lines impacting compile times
-- Files: `app/src/components/encounter_editor/triggers.rs` (1985 lines), `app/src/components/data_explorer.rs` (1822 lines), `app/src/components/settings_panel.rs` (1784 lines), `app/src/components/effect_editor.rs` (1435 lines)
-- Cause: Monolithic component design
-- Improvement path: Extract sub-components, use composition patterns
+All 117 Tauri command return types in `app/src-tauri/src/commands/` use `Result<T, String>` instead of typed errors.
+- Files: All files under `app/src-tauri/src/commands/`
+- Impact: Loses error context, no structured error handling on frontend, `.map_err(|e| e.to_string())` scattered everywhere.
+- Fix approach: Implement a unified `CommandError` type with `impl From<T>` for domain errors and `impl serde::Serialize`.
 
-**Async Lock Contention:**
-- Problem: 322 uses of `.lock()`, `.read()`, `.write()` on `RwLock`/`Mutex` across service layer
-- Files: `app/src-tauri/src/service/handler.rs` (50 instances), `app/src-tauri/src/service/mod.rs` (53 instances), `app/src-tauri/src/overlay/manager.rs` (15 instances)
-- Cause: Shared state architecture with multiple async accessors
-- Improvement path: Reduce lock scope, use message passing for overlay updates, consider lock-free structures
+### Workspace-Level Clippy Suppression
 
-## Fragile Areas
-
-**Signal Processor State Machine:**
-- Files: `core/src/signal_processor/processor.rs`, `core/src/signal_processor/phase.rs`, `core/src/signal_processor/counter.rs`
-- Why fragile: Complex interdependencies between phase transitions, counter updates, and timer triggers. Multiple `unwrap()` calls assume encounter state exists
-- Safe modification: Always verify encounter exists before state mutations, add comprehensive tests for edge cases
-- Test coverage: `processor_tests.rs` (871 lines) covers happy paths but limited edge case coverage
-
-**Effects Tracker AoE Correlation:**
-- Files: `core/src/effects/tracker.rs` (lines 134-195)
-- Why fragile: Stateful tracking of pending AoE refreshes with timing windows (10ms tolerance)
-- Safe modification: Test with varied network latencies, consider race conditions
-- Test coverage: Limited - timing-sensitive logic is hard to unit test
-
-**Wayland Protocol Implementation:**
-- Files: `overlay/src/platform/wayland.rs` (1675 lines)
-- Why fragile: Complex protocol state machine with wl_output, xdg-output, fractional scaling interactions
-- Safe modification: Test on multiple compositors (GNOME, KDE, Sway), handle protocol version differences
-- Test coverage: None - requires manual testing on different desktops
-
-## Scaling Limits
-
-**In-Memory Event Storage:**
-- Current capacity: All combat events held in memory during session
-- Limit: 50MB+ log files cause memory pressure, especially in historical mode
-- Scaling path: Stream events to parquet storage, query from disk. Parse-worker subprocess already helps but results still loaded into main process
-
-**Timer Definition Loading:**
-- Current capacity: All timer definitions loaded into `HashMap<String, Arc<TimerDefinition>>`
-- Limit: As encounter definitions grow, startup time increases
-- Scaling path: Lazy loading by area_id, unload definitions when leaving area
-
-## Dependencies at Risk
-
-**Dioxus (Frontend Framework):**
-- Risk: Pre-1.0 framework with potential breaking changes
-- Impact: UI code may need updates on upgrades
-- Migration plan: Dioxus API is stabilizing, monitor changelogs carefully
-
-**cosmic-text (Text Rendering):**
-- Risk: Relatively new crate for text layout/shaping in overlay
-- Impact: Text rendering bugs, glyph issues
-- Migration plan: Can fallback to simpler text rendering if needed
-
-## Missing Critical Features
-
-**Error Recovery:**
-- Problem: No graceful error recovery in service layer - panics terminate background tasks
-- Blocks: Robust long-running operation (users have to restart app after crashes)
-
-**Structured Logging:**
-- Problem: No structured logging framework, just `eprintln!` scattered throughout
-- Blocks: Production debugging, telemetry, log aggregation
-
-**Input Validation:**
-- Problem: DSL definitions loaded without comprehensive validation
-- Blocks: User-created timers/effects may cause panics with malformed config
+- `Cargo.toml` sets `[workspace.lints.clippy] too_many_arguments = "allow"` globally.
+- Additionally, 6 individual `#[allow(clippy::too_many_arguments)]` annotations exist in overlay code.
+- Impact: Functions with many arguments indicate structural issues (missing config structs). The global suppression hides this.
+- Fix approach: Introduce config/params structs for functions exceeding 5-6 arguments, then remove the workspace-level allow.
 
 ## Test Coverage Gaps
 
-**Platform Overlay Code:**
-- What's not tested: All platform-specific overlay implementations (Wayland, Windows, X11, macOS)
-- Files: `overlay/src/platform/wayland.rs`, `overlay/src/platform/windows.rs`, `overlay/src/platform/x11.rs`, `overlay/src/platform/macos.rs`
-- Risk: Platform-specific regressions go unnoticed
-- Priority: Medium - manual testing covers most cases but CI verification would help
+**Overall:** Only 20 out of 206 Rust source files contain any tests (9.7%).
 
-**Frontend Components:**
-- What's not tested: All Dioxus UI components (settings, editors, charts)
-- Files: `app/src/components/` (entire directory)
-- Risk: UI regressions, state management bugs
-- Priority: Medium - reactive UI reduces some bugs but complex editors need coverage
+**Well-tested areas (core crate only):**
+- `core/src/combat_log/parser/tests.rs` - Parser tests
+- `core/src/signal_processor/processor_tests.rs` (1826 lines)
+- `core/src/effects/tracker_tests.rs` (897 lines)
+- `core/src/timers/manager_tests.rs` (1378 lines)
+- `core/src/dsl/` - Loader, triggers, challenges have tests
 
-**Historical File Parsing:**
-- What's not tested: Full historical log file processing with encounter summaries
-- Files: `core/src/context/parser.rs`, `parse-worker/src/main.rs`
-- Risk: Incorrect encounter classification, missing events
-- Priority: High - core functionality that should have integration tests
+**No tests at all:**
+- `overlay/` crate - Only `overlay/src/utils.rs` has a single test. Zero tests for any overlay rendering, platform backends, or overlay manager logic.
+  - Risk: Rendering regressions go undetected. Platform-specific bugs in Wayland/X11/Windows/macOS code.
+  - Priority: Medium (visual testing is hard, but at least data transform logic could be tested)
 
-**Timer Chaining Logic:**
-- What's not tested: Complex timer chains (timer A expires -> starts timer B -> triggers counter)
-- Files: `core/src/timers/manager.rs` (expired_this_tick, started_this_tick interactions)
-- Risk: Boss mechanic timers may not chain correctly
-- Priority: High - affects raid utility accuracy
+- `app/src-tauri/` - Only `commands/starparse.rs` has tests. Zero tests for:
+  - `service/mod.rs` (3787 lines of service orchestration)
+  - `service/handler.rs` (1580 lines of signal handling)
+  - `overlay/manager.rs` (1138 lines)
+  - `overlay/spawn.rs` (1088 lines with unsafe code)
+  - All other command handlers
+  - Risk: Service logic regressions, state management bugs.
+  - Priority: High
+
+- `app/src/` (Dioxus frontend) - Zero tests.
+  - Priority: Low (WASM frontend testing is complex)
+
+- `core/src/query/` - Zero tests for DataFusion query logic including `breakdown.rs` (872 lines).
+  - Risk: Query result regressions, incorrect statistics.
+  - Priority: High
+
+- `core/src/encounter/combat.rs` (1488 lines, 70 functions) - Zero direct tests.
+  - Priority: Medium (partially covered by processor_tests)
+
+## Unsafe Code
+
+**Platform overlay backends (justified):**
+- `overlay/src/platform/wayland.rs` - 4 unsafe blocks for shared memory (memfd, mmap, raw pointer slices). Required by Wayland SHM protocol.
+- `overlay/src/platform/x11.rs` - 4 unsafe blocks for X11 SHM buffer management. Required by X11 SHM extension.
+- `overlay/src/platform/windows.rs` - ~15 unsafe blocks for Win32 API calls. Required by Windows API.
+- `overlay/src/platform/macos.rs` - ~10 unsafe blocks for Objective-C runtime interop. Required by macOS AppKit.
+
+**Memory-mapped file I/O (justified):**
+- `core/src/combat_log/reader.rs` lines 50, 95 - `unsafe { Mmap::map(&file) }` for memory-mapped log reading. Standard pattern for mmap.
+
+**Raw pointer wrapper (risk area):**
+- `app/src-tauri/src/overlay/spawn.rs` - `SendPtr<T>` wraps `*mut T` with `unsafe impl Send + Sync`. Used to pass overlay pointers across thread boundaries on macOS.
+  - Safety argument: "All access serialized through main queue via `dispatch::Queue::main().exec_sync()`"
+  - Risk: If dispatch serialization is ever bypassed, undefined behavior. The 7 dereference sites (lines 292-358) all assume main-thread access.
+  - Mitigation: Well-documented safety comments. Confined to macOS `#[cfg]` blocks.
+
+**Shared memory Send impl (justified):**
+- `overlay/src/platform/wayland.rs:439` - `unsafe impl Send for ShmBuffer {}`
+- `overlay/src/platform/x11.rs:93` - `unsafe impl Send for ShmBuffer {}`
+  - These wrap OS-level shared memory handles that are safe to send between threads.
+
+## Performance Concerns
+
+**Excessive cloning in service layer:**
+- `app/src-tauri/src/service/mod.rs` has 87 `.clone()` calls. Many involve cloning `PathBuf`, `String`, and complex structs for event emission.
+  - Impact: Unnecessary allocations in the hot path of event processing.
+  - Fix approach: Use `Arc<str>` or `Arc<Path>` for frequently-cloned paths; pass references where lifetime allows.
+
+**Potential lock contention:**
+- `operation_timer` mutex is acquired 15+ times in the main service loop (`app/src-tauri/src/service/mod.rs`), often for brief reads.
+  - Fix approach: Consider `RwLock` for read-heavy access, or inline the timer state into the service struct (it's only accessed from one task).
+
+**No parser hot-path format! calls:**
+- `core/src/combat_log/parser.rs` has zero `format!()` calls, confirming the hot path avoids allocations. This is good.
+
+## Fragile Areas
+
+**CombatService run loop:**
+- Files: `app/src-tauri/src/service/mod.rs` lines 1210-1400+
+- Why fragile: Single `tokio::select!` loop handles all 31 ServiceCommand variants plus timers, file watchers, and process monitoring. Adding new commands requires modifying the same massive match block.
+- Safe modification: Add new ServiceCommand variants at the end of the enum and match block. Test signal flow manually.
+- Test coverage: Zero.
+
+**Signal processing pipeline:**
+- Files: `core/src/signal_processor/processor.rs`, `core/src/context/parser.rs`
+- Why fragile: The `process_event()` function orchestrates combat lifecycle, phase transitions, counters, timers, and effects. Changes to signal ordering can break downstream consumers.
+- Test coverage: Good (1826-line test file), but integration-level only.
+
+**Overlay spawn lifecycle:**
+- Files: `app/src-tauri/src/overlay/spawn.rs`
+- Why fragile: Raw pointer management with manual `Box::from_raw` cleanup. Memory leak if the cleanup path (line 358) is not reached.
+- Safe modification: Do not change the pointer lifecycle without reviewing all 7 dereference sites.
+
+## Dependencies
+
+**Large dependency surface:**
+- `datafusion` v51 + `arrow` v57 + `parquet` v57 - Heavy data processing stack. These are major dependencies that drive compile times and binary size.
+  - Risk: Major version bumps require coordinated updates across all three.
+  - Mitigation: Already using `default-features = false` to minimize feature surface.
+
+**Platform-specific dependencies:**
+- `wayland-client` 0.31 / `wayland-protocols` 0.32 / `wayland-protocols-wlr` 0.3 - Wayland compositor protocol bindings.
+- `x11rb` 0.13 - X11 protocol.
+- `windows` 0.58 - Win32 API.
+- `objc2` 0.6 / `objc2-foundation` 0.3 / `objc2-app-kit` 0.3 - macOS Objective-C bridge.
+  - Risk: objc2 ecosystem is relatively young (0.x versions). Breaking changes likely between minor versions.
+
+**Audio dependency:**
+- `rodio` 0.19 with wav/vorbis/mp3 features. Pulls in audio decoding libraries.
+  - Note: Uses `default-features = false` which is good.
+
+**`confy` 2.0.0 for config:**
+- Used in `core/src/context/config.rs`.
+  - Risk: confy is a small crate with infrequent updates. Config format changes could break user settings.
+
+## Security Considerations
+
+**Memory-mapped file access:**
+- Files: `core/src/combat_log/reader.rs`
+- Risk: If the combat log file is modified by another process while mmap'd, reads could return inconsistent data or (on some platforms) cause SIGBUS.
+- Current mitigation: Used for historical file reading only (not live tailing). The parse-worker subprocess exits after use, limiting exposure.
+
+**Subprocess spawning (parse-worker):**
+- Files: `parse-worker/src/main.rs`, service code that spawns it
+- Risk: Subprocess communicates via stdout JSON. Malformed output could cause deserialization failures.
+- Current mitigation: Fallback to streaming parse if worker fails (documented in error handling section of CLAUDE.local.md).
+
+## Missing Infrastructure
+
+**No integration tests:**
+- No `tests/` directory at workspace or crate level. All tests are unit tests within source files.
+- Impact: No end-to-end testing of the signal pipeline, service commands, or overlay lifecycle.
+
+**No benchmarks:**
+- No `benches/` directory. Parser performance claims (SIMD scanning, stack arrays) are not validated by benchmarks.
+- Fix approach: Add `criterion` benchmarks for `LogParser::parse_line()` and `EventProcessor::process_event()`.
 
 ---
 
-*Concerns audit: 2026-01-17*
+*Concerns audit: 2026-04-03*

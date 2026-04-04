@@ -1,313 +1,262 @@
-# Testing Patterns
+---
+generated: 2026-04-03
+focus: quality
+---
 
-**Analysis Date:** 2026-01-17
+# Testing Patterns
 
 ## Test Framework
 
-**Runner:**
-- Rust's built-in test framework (`cargo test`)
-- No external test runner configured
+**Runner:** Rust built-in test framework (`cargo test`)
 
-**Assertion Library:**
-- Standard `assert!`, `assert_eq!`, `assert!(condition, "message")`
+**Assertion Library:** Standard `assert!`, `assert_eq!`, `assert!(matches!(...))` macros
 
 **Run Commands:**
 ```bash
-cargo test                    # Run all tests
-cargo test -p baras-core      # Run core crate tests only
-cargo test -- --nocapture     # Show println output
-cargo test test_name          # Run specific test
+cargo test                           # Run all workspace tests
+cargo test -p baras-core             # Run core crate tests only
+cargo test -p baras-types            # Run types crate tests only
+cargo test -p baras-validate         # Run validate crate tests only
+cargo test -p app                    # Run Tauri backend tests only
+cargo test -p baras-overlay          # Run overlay tests only
 ```
+
+## Test Count and Distribution
+
+**Total:** ~151 test functions across the workspace
+
+| Crate / File | Tests | Focus |
+|---|---|---|
+| `core/src/timers/manager_tests.rs` | 24 | Timer activation by signals |
+| `core/src/combat_log/parser/tests.rs` | 22 | Log line parsing (entities, details, damage, healing) |
+| `types/src/formatting.rs` | 14 | Number/time formatting |
+| `core/src/effects/tracker_tests.rs` | 14 | Effect lifecycle, alerts, multi-healer tracking |
+| `core/src/signal_processor/processor_tests.rs` | 12 | End-to-end signal emission from log fixtures |
+| `core/src/dsl/challenge.rs` | 11 | Challenge condition evaluation |
+| `core/src/dsl/triggers/matchers.rs` | 9 | Ability/effect/entity selector matching |
+| `core/src/timers/preferences.rs` | 6 | Timer preference persistence |
+| `core/src/game_data/bosses.rs` | 6 | Boss lookup functions |
+| `validate/src/replay/lag.rs` | 4 | Lag simulation |
+| `validate/src/replay/clock.rs` | 4 | Virtual clock timing |
+| `core/src/dsl/loader.rs` | 4 | TOML definition parsing |
+| `core/src/context/area_index.rs` | 4 | Area indexing |
+| Others | ~17 | Various utility tests |
 
 ## Test File Organization
 
-**Location:**
-- Primary: Co-located in same file with `#[cfg(test)] mod tests;`
-- Secondary: Separate `*_tests.rs` file in same directory (for large test suites)
+**Two patterns used:**
 
-**Naming:**
-- Test modules: `mod tests` or `filename_tests.rs`
-- Test functions: `test_<feature>_<scenario>`
-
-**Structure:**
-```
-core/src/
-├── combat_log/
-│   ├── parser.rs           # Contains `mod tests;` at bottom
-│   └── parser/
-│       └── tests.rs        # Separate file for extensive tests
-├── signal_processor/
-│   ├── processor.rs
-│   └── processor_tests.rs  # Separate test file
-└── timers/
-    ├── manager.rs
-    └── manager_tests.rs    # Separate test file
-```
-
-## Test Structure
-
-**Suite Organization:**
+**1. Inline `#[cfg(test)] mod tests` block** (most common):
 ```rust
-#[cfg(test)]
-mod tests;  // External file reference
-
-// OR inline:
+// At bottom of source file
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Helper functions at top
-    fn test_parser() -> LogParser {
-        let date = NaiveDateTime::parse_from_str("2024-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-        LogParser::new(date)
-    }
-
-    // Tests grouped by feature
-    // parse_entity
     #[test]
-    fn test_parse_entity_npc() { ... }
-
-    #[test]
-    fn test_parse_entity_player() { ... }
+    fn test_something() { ... }
 }
 ```
+Used in: `types/src/lib.rs`, `types/src/formatting.rs`, `core/src/game_data/bosses.rs`, `core/src/context/area_index.rs`, `core/src/dsl/loader.rs`, `core/src/dsl/triggers/mod.rs`, `core/src/dsl/challenge.rs`, `validate/src/replay/clock.rs`, `validate/src/verification/checkpoint.rs`, `overlay/src/utils.rs`
 
-**Patterns:**
-- Group related tests with comment headers
-- Provide helper functions for test data setup
-- Use `eprintln!` for debug output in tests
-
-**Test Naming Convention:**
+**2. Separate `_tests.rs` file** (for large test suites):
 ```rust
-#[test]
-fn test_<unit>_<scenario>() { ... }
-
-// Examples:
-fn test_parse_entity_npc()
-fn test_parse_entity_player()
-fn test_parse_details_damage_crit()
-fn test_combat_start_triggers_timer()
-fn test_timer_expires_triggers_chain()
+// In mod.rs:
+#[cfg(test)]
+mod manager_tests;
 ```
+Used in:
+- `core/src/timers/manager_tests.rs` (1378 lines)
+- `core/src/signal_processor/processor_tests.rs` (1826 lines)
+- `core/src/effects/tracker_tests.rs` (897 lines)
+- `core/src/combat_log/parser/tests.rs` (296 lines)
 
-## Mocking
+**Naming convention:** `{module}_tests.rs` for separate files, `mod tests` for inline blocks.
 
-**Framework:** None - uses real implementations with controlled inputs
+## Test Structure Patterns
 
-**Patterns:**
-- Create minimal test doubles inline
-- Use fixture files for realistic test data
-- Initialize test state directly without mocks
+### Helper Constructors
+
+Tests define factory functions for complex test objects to reduce boilerplate:
 
 ```rust
-// Test helper creates minimal parser
-fn test_parser() -> LogParser {
-    let date = NaiveDateTime::parse_from_str("2024-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-    LogParser::new(date)
-}
-
-// Create test timer definitions inline
+// core/src/timers/manager_tests.rs
 fn make_timer(id: &str, name: &str, trigger: TimerTrigger, duration: f32) -> TimerDefinition {
     TimerDefinition {
         id: id.to_string(),
         name: name.to_string(),
         trigger,
         duration_secs: duration,
-        // ... defaults for other fields
+        // ... explicit defaults for all fields
+    }
+}
+
+fn make_encounter(combat_start: NaiveDateTime, combat_time_secs: f32) -> CombatEncounter { ... }
+
+fn now() -> NaiveDateTime { Local::now().naive_local() }
+```
+
+Similar patterns in `core/src/effects/tracker_tests.rs` (`make_effect()`, `make_tracker()`, `effect_applied_signal()`) and `core/src/combat_log/parser/tests.rs` (`test_parser()`).
+
+### Signal Factory Functions
+
+Test files create typed signal constructors for readability:
+
+```rust
+fn effect_applied_signal(effect_id: i64, timestamp: NaiveDateTime) -> GameSignal {
+    GameSignal::EffectApplied {
+        effect_id,
+        effect_name: empty_istr(),
+        action_id: 0,
+        // ... defaults for non-relevant fields
     }
 }
 ```
 
-**What to Mock:**
-- Nothing explicitly mocked; tests use real implementations
-- Time is controlled via fixture timestamps, not mocked clocks
+### Fixture-Based Integration Tests
 
-**What NOT to Mock:**
-- File I/O for fixtures (use actual files)
-- Parsing logic (test with real log lines)
-- Signal processing (test full pipeline)
+`core/src/signal_processor/processor_tests.rs` parses real combat log files and validates signal output:
 
-## Fixtures and Factories
-
-**Test Data:**
 ```rust
-// Inline fixture data for parser tests
-let input = "Dread Master Bestia {3273941900591104}:5320000112163|(137.28,-120.98,-8.85,81.28)|(0/19129210)";
-let result = parser.parse_entity(input);
-
-// Load from file for integration tests
-let fixture_path = Path::new("../test-log-files/fixtures/bestia_pull.txt");
-if !fixture_path.exists() {
-    eprintln!("Skipping test: fixture file not found at {:?}", fixture_path);
-    return;
-}
+fn collect_signals_from_fixture(fixture_path: &Path) -> Vec<GameSignal> { ... }
+fn collect_signals_with_boss_defs(fixture_path: &Path, boss_config_path: &Path) -> Vec<GameSignal> { ... }
 ```
 
-**Location:**
-- `test-log-files/fixtures/` - Combat log snippets for signal tests
-- `test-log-files/definitions/` - TOML boss definitions for integration tests
-- `test-log-files/small/` - Small log files for quick tests
-- `test-log-files/large/` - Full combat logs for performance testing
+Fixture files live in `test-log-files/` (not committed to git). Tests that use fixtures will fail if the files are missing.
 
-**Fixture Pattern:**
+### Assertion Patterns
+
+**Direct equality:**
 ```rust
-/// Parse a fixture file and collect all emitted signals
-fn collect_signals_from_fixture(fixture_path: &Path) -> Vec<GameSignal> {
-    let mut file = File::open(fixture_path).expect("Failed to open fixture file");
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes).expect("Failed to read file");
-    let content = String::from_utf8_lossy(&bytes);
+assert_eq!(entity.entity_type, EntityType::Player);
+assert_eq!(details.dmg_amount, 5765);
+```
 
-    let parser = LogParser::new(chrono::Local::now().naive_local());
-    let mut processor = EventProcessor::new();
-    let mut cache = SessionCache::default();
+**Pattern matching for complex types:**
+```rust
+assert!(matches!(
+    boss.phases[1].start_trigger,
+    PhaseTrigger::BossHpBelow { hp_percent, .. } if (hp_percent - 50.0).abs() < 0.01
+));
+```
 
-    let mut all_signals = Vec::new();
-    for (line_num, line) in content.lines().enumerate() {
-        if let Some(event) = parser.parse_line(line_num as u64, line) {
-            let (signals, _event) = processor.process_event(event, &mut cache);
-            all_signals.extend(signals);
-        }
+**Float comparison with tolerance:**
+```rust
+assert!((clock.combat_elapsed_secs() - 75.5).abs() < 0.001);
+```
+
+**Signal type checking via helper:**
+```rust
+fn signal_type_name(signal: &GameSignal) -> &'static str {
+    match signal {
+        GameSignal::CombatStarted { .. } => "CombatStarted",
+        // ...
     }
-    all_signals
 }
 ```
 
-## Coverage
+## The Validate Crate
 
-**Requirements:** None enforced
+`validate/` is a standalone CLI tool (`baras-validate`) for testing boss encounter definitions against real combat logs. It is the closest thing to an integration test suite.
 
-**View Coverage:**
+**Purpose:** Replay combat logs through the signal pipeline with boss definitions loaded, verifying timer behavior, phase transitions, and counter states.
+
+**Usage:**
 ```bash
-# Using cargo-llvm-cov (if installed)
-cargo llvm-cov --html
+# From justfile
+cargo run --bin baras-validate -- --boss revan --log test-log-files/operations/hm_tos_revan.txt
+cargo run --bin baras-validate -- --boss propagator_core_xr53 --log test-log-files/operations/hm_propagator.txt
 ```
 
-## Test Types
+**Key features:**
+- Replay modes: `--mode realtime` (1x speed with delays) or `--mode accelerated` (fast, default)
+- Checkpoint verification: `--expect expectations.toml` validates timer states at specific combat times
+- Output controls: `--quiet`, `--full`, `--verbose`, `--all-abilities`, `--all-entities`
+- Encounter selection: `--encounter N` or `--latest`
+- Time windowing: `--start-at MM:SS` / `--stop-at MM:SS`
 
-**Unit Tests:**
-- Parser tests: Verify individual parsing functions with raw input strings
-- Location: `core/src/combat_log/parser/tests.rs`
-- Pattern: One test per edge case, isolated inputs
+**Architecture:**
+- `validate/src/main.rs` - CLI entry point (clap-based), main replay loop
+- `validate/src/replay/clock.rs` - Virtual clock for time simulation
+- `validate/src/replay/lag.rs` - I/O lag simulation for realistic testing
+- `validate/src/verification/checkpoint.rs` - TOML-based expectations system
+- `validate/src/output/cli.rs` - Formatted terminal output
+
+**Expectations format** (TOML):
+```toml
+[meta]
+boss_id = "revan"
+tolerance_secs = 0.5
+
+[[checkpoint]]
+at_secs = 10.0
+active_timers = [{ id = "enrage", remaining_secs = [290.0, 290.5] }]
+timers_fired = ["phase1_timer"]
+```
+
+## Mocking
+
+**No mocking framework used.** Tests construct real objects with controlled inputs rather than mocking dependencies. The `SignalHandler` trait enables testing by feeding signals directly:
+
 ```rust
-#[test]
-fn test_parse_entity_npc() {
-    let parser = test_parser();
-    let input = "Dread Master Bestia {3273941900591104}:5320000112163|...";
-    let result = parser.parse_entity(input);
-    assert!(result.is_some());
-    // Verify individual fields
-}
+let mut manager = TimerManager::new();
+manager.load_definitions(vec![timer]);
+let signal = GameSignal::CombatStarted { timestamp: start, encounter_id: 1 };
+manager.handle_signal(&signal, Some(&enc));
+assert_eq!(manager.active_timers().len(), 1);
 ```
 
-**Integration Tests:**
-- Signal processor tests: Parse full fixture files and verify signals
-- Timer manager tests: Verify timer activation/chaining with signals
-- Location: `core/src/signal_processor/processor_tests.rs`, `core/src/timers/manager_tests.rs`
+## Test Data
+
+**Inline data:** Parser tests use inline combat log line strings:
 ```rust
-#[test]
-fn test_bestia_pull_emits_expected_signals() {
-    let fixture_path = Path::new("../test-log-files/fixtures/bestia_pull.txt");
-    if !fixture_path.exists() {
-        eprintln!("Skipping test: fixture file not found");
-        return;
-    }
-    let signals = collect_signals_from_fixture(fixture_path);
-    // Verify signal types and counts
-}
+let input = "@Galen Ayder#690129185314118|(-4700.43,-4750.48,710.03,-0.71)|(1/414851)";
 ```
 
-**E2E Tests:**
-- Not present in codebase
-- Manual testing via running application
-
-## Common Patterns
-
-**Async Testing:**
-- Not heavily used; most tests are synchronous
-- Async functions tested via `tokio::test` when needed
-
-**Error Testing:**
+**TOML strings:** Definition parsing tests use inline TOML:
 ```rust
-#[test]
-fn test_parse_entity_empty() {
-    let parser = test_parser();
-    let input = "";
-    let result = parser.parse_entity(input);
-    assert!(result.is_some());
-
-    let entity = result.unwrap();
-    assert_eq!(entity.entity_type, EntityType::Empty);
-}
+let toml = r#"
+[[boss]]
+id = "test_boss"
+name = "Test Boss"
+...
+"#;
+let config: BossConfig = toml::from_str(toml).expect("Failed to parse TOML");
 ```
 
-**Skip Tests Gracefully:**
-```rust
-#[test]
-fn test_integration_with_fixture() {
-    let fixture_path = Path::new("../test-log-files/fixtures/file.txt");
-    if !fixture_path.exists() {
-        eprintln!("Skipping test: fixture file not found at {:?}", fixture_path);
-        return;  // Early return instead of panic
-    }
-    // Test logic
-}
-```
+**Fixture files:** `test-log-files/` directory (gitignored) contains real combat logs for integration tests.
 
-**Debug Output:**
-```rust
-#[test]
-fn test_with_debug_output() {
-    let signals = collect_signals();
+**External file dependencies:** One test in `app/src-tauri/src/commands/starparse.rs` depends on `scripts/starparse-timers v15.xml` using `env!("CARGO_MANIFEST_DIR")`.
 
-    // Print for debugging during test development
-    eprintln!("Collected {} signals of {} unique types:", signals.len(), signal_types.len());
-    for signal_type in &signal_types {
-        let count = signals.iter().filter(|s| signal_type_name(s) == *signal_type).count();
-        eprintln!("  - {}: {}", signal_type, count);
-    }
+## Coverage Gaps
 
-    // Assertions
-    assert!(signal_types.contains("CombatStarted"), "Missing CombatStarted signal");
-}
-```
+**Well-tested areas:**
+- Log line parsing (`parser/tests.rs`)
+- Timer signal handling (24 tests)
+- Effect tracking lifecycle (14 tests)
+- Signal emission from combat events (12 fixture-based tests)
+- TOML definition loading and serialization
+- Number/time formatting utilities
 
-**Test State Reset:**
-- Each test creates fresh instances of parsers, processors, and caches
-- No shared mutable state between tests
-```rust
-#[test]
-fn test_combat_start_triggers_timer() {
-    let mut manager = TimerManager::new();  // Fresh instance
-    // ... test logic
-}
-```
+**Not tested (or minimally tested):**
+- **Query module** (`core/src/query/`): No tests for DataFusion SQL queries (overview, breakdown, timeline, rotation, usage, combat_log, effects)
+- **Storage module** (`core/src/storage/`): No tests for parquet writing
+- **Frontend components** (`app/src/`): No Dioxus component tests or WASM tests
+- **Tauri commands** (`app/src-tauri/src/commands/`): Only 1 test (starparse XML parsing), no command integration tests
+- **Overlay rendering** (`overlay/src/`): Only 3 utility tests, no rendering tests
+- **Service layer** (`app/src-tauri/src/service/`): No tests for CombatService, handler, directory management
+- **Context module** (`core/src/context/`): Only area_index tests (4), no tests for config, watcher, log files, parser session management
+- **Encounter combat** (`core/src/encounter/`): No direct tests (covered indirectly by processor_tests fixtures)
+- **Parse-worker** (`parse-worker/`): No tests
 
-## Test Categories in Codebase
-
-**Parser Tests** (`core/src/combat_log/parser/tests.rs`):
-- Entity parsing (NPC, Player, Companion, SelfReference, Empty)
-- Damage detail parsing (basic, crit, effective, absorbed, miss, shield, reflect)
-- Heal detail parsing
-- Charge parsing
-
-**Signal Processor Tests** (`core/src/signal_processor/processor_tests.rs`):
-- Combat lifecycle signals (CombatStarted, CombatEnded)
-- Effect signals (EffectApplied with source info)
-- Target signals (TargetChanged, TargetCleared)
-- NPC signals (NpcFirstSeen for all NPC types)
-- Entity lifecycle (EntityDeath, EntityRevived)
-- Boss signals (BossEncounterDetected, BossHpChanged, PhaseChanged)
-- Challenge tracking (boss damage, add damage, burn phase DPS)
-
-**Timer Manager Tests** (`core/src/timers/manager_tests.rs`):
-- Trigger types (CombatStart, AbilityCast, EffectApplied, NpcAppears, PhaseEnded)
-- Timer chaining (TimerExpires triggers)
-- Timer cancellation (cancel_trigger, CombatEnded clears)
-- Timer refresh behavior
-- AnyOf composite triggers
-- Integration tests with real log fixtures
+**Gaps by risk:**
+- High: Query module - complex SQL generation untested
+- High: Storage writer - data integrity critical
+- Medium: Service layer - core application orchestration
+- Medium: Encounter combat state machine
+- Low: Frontend components (UI behavior)
+- Low: Overlay rendering (visual output)
 
 ---
 
-*Testing analysis: 2026-01-17*
+*Testing analysis: 2026-04-03*
