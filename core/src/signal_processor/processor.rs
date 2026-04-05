@@ -185,10 +185,11 @@ impl EventProcessor {
         self.handle_victory_trigger(&event, &signals, cache);
 
         // Process challenge metrics (accumulates values, polled with combat data)
-        // Skip during grace window to prevent accumulating metrics after combat ends
-        if !cache.is_in_grace_window() {
-            challenge::process_challenge_events(&event, cache);
-        }
+        // Grace-window events are still accumulated to parquet (combat_state::handle_post_combat)
+        // and belong to this encounter, so the challenge tracker must see them too — otherwise
+        // trailing damage (overkill, DoT ticks landing at 0 HP) shows up in the data explorer
+        // but not in challenge totals.
+        challenge::process_challenge_events(&event, cache);
 
         // ═══════════════════════════════════════════════════════════════════════
         // PHASE 3: Combat State Machine

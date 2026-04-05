@@ -50,7 +50,7 @@ pub fn process_challenge_events(event: &CombatEvent, cache: &mut SessionCache) {
     let timestamp = event.timestamp;
     match event.effect.effect_id {
         effect_id::DAMAGE => {
-            let damage = event.details.dmg_effective as i64;
+            let damage = event.details.dmg_amount as i64;
             let absorbed = event.details.dmg_absorbed as i64;
             tracker.process_damage(
                 &ctx,
