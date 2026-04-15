@@ -222,7 +222,7 @@ impl AbilityQueueOverlay {
                 rows.push(RenderRow {
                     kind: RowKind::Gcd,
                     name: "GCD".to_string(),
-                    progress: e.progress(),
+                    progress: 1.0 - e.progress(),
                     right_text: format!("{:.1}", e.remaining_secs.max(0.0)),
                     bar_color: gcd_color,
                     icon_ability_id: None,

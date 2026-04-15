@@ -125,8 +125,8 @@ const BASE_PADDING: f32 = 4.0;
 const BASE_SPACING: f32 = 4.0;
 const BASE_FONT_SIZE: f32 = 10.0;
 /// Bar mode dimensions (matches timer overlay style)
-const BASE_BAR_HEIGHT: f32 = 24.0;
-const BASE_BAR_FONT_SIZE: f32 = 11.0;
+const BASE_BAR_HEIGHT: f32 = 38.0;
+const BASE_BAR_FONT_SIZE: f32 = 17.0;
 
 /// Effects overlay - displays effect icons in horizontal or vertical layout
 pub struct EffectsABOverlay {
@@ -138,6 +138,8 @@ pub struct EffectsABOverlay {
     icon_cache: ScaledIconCache,
     /// Last rendered state for dirty checking: (effect_id, time_string, stacks)
     last_rendered: Vec<(u64, String, u8)>,
+    /// Last rendered state for bar mode dirty checking: (effect_id, time_string, stacks, remaining_bits)
+    last_rendered_bar: Vec<(u64, String, u8, u32)>,
     /// Label for this overlay instance
     _label: String,
     european_number_format: bool,
@@ -162,6 +164,7 @@ impl EffectsABOverlay {
             data: EffectsABData::default(),
             icon_cache: HashMap::new(),
             last_rendered: Vec::new(),
+            last_rendered_bar: Vec::new(),
             _label: label.to_string(),
             european_number_format: false,
         })
@@ -548,16 +551,16 @@ impl EffectsABOverlay {
     fn render_bar_mode(&mut self) {
         let max_display = self.config.max_display as usize;
 
-        // Dirty check
-        let current_state: Vec<(u64, String, u8)> = self
+        // Dirty check — include remaining_secs bits so bar fill updates each frame
+        let current_state: Vec<(u64, String, u8, u32)> = self
             .data.effects.iter().take(max_display)
-            .map(|e| (e.effect_id, e.format_time(self.european_number_format), e.stacks))
+            .map(|e| (e.effect_id, e.format_time(self.european_number_format), e.stacks, e.remaining_secs.to_bits()))
             .collect();
 
-        if current_state == self.last_rendered && !self.last_rendered.is_empty() {
+        if current_state == self.last_rendered_bar && !self.last_rendered_bar.is_empty() {
             return;
         }
-        self.last_rendered = current_state;
+        self.last_rendered_bar = current_state;
 
         let font_scale = self.config.font_scale.clamp(1.0, 2.0);
         let bar_height = self.frame.scaled(BASE_BAR_HEIGHT * font_scale);

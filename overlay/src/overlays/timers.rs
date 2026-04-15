@@ -79,9 +79,10 @@ pub struct AbilityQueueEntry {
 impl AbilityQueueEntry {
     pub fn progress(&self) -> f32 {
         if self.total_secs <= 0.0 {
-            return 0.0;
+            return 1.0;
         }
-        (self.remaining_secs / self.total_secs).clamp(0.0, 1.0)
+        let elapsed = self.total_secs - self.remaining_secs;
+        (elapsed / self.total_secs).clamp(0.0, 1.0)
     }
 }
 
