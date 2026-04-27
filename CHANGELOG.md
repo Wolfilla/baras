@@ -1,5 +1,10 @@
 # v2026.4.27
 
+## v2026.4.28 Hotfix
+
+- Fixed edge case where huntmaster classification could be wrong
+- Readded Master Blaster Victory trigger
+
 ## macOS Support
 
 All features should now be working on macOS
