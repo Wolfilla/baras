@@ -423,7 +423,10 @@ difficulties = ["veteran"]
 [[boss]]
 id = "master_blaster"
 name = "Master & Blaster"
-area_type = "operation"
+difficulties = ["story", "veteran", "master"]
+has_victory_trigger = true
+victory_trigger = { type = "effect_removed", effects = [3391331946725697] }
+
 
 [[boss.entities]]
 name = "Blaster"
@@ -488,6 +491,14 @@ type = "effect_applied"
 effects = [3400759399940096]
 source = "any"
 target = "any"
+
+[[boss.phases.start_trigger.conditions]]
+type = "timer_expires"
+timer_id = "master_blaster_rain_of_pain_1st"
+
+[[boss.phases.start_trigger.conditions]]
+type = "timer_expires"
+timer_id = "master_blaster_rain_of_pain"
 
 [[boss.phases]]
 id = "master_blaster_master"
@@ -570,24 +581,6 @@ source = "any"
 target = "any"
 
 [[boss.timer]]
-id = "sp_resonant_explosive_probes"
-name = "Resonant Explosive Probes"
-is_alert = true
-color = [255, 128, 0, 255]
-can_be_refreshed = true
-roles = []
-
-[boss.timer.trigger]
-type = "effect_applied"
-effects = [3400772284841984]
-source = "any"
-target = "local_player"
-
-[boss.timer.audio]
-enabled = true
-file = "Alarm.mp3"
-
-[[boss.timer]]
 id = "master_blaster_1st_rop_dmg"
 name = "1st RoP DMG"
 display_text = "RoP DMG"
@@ -595,7 +588,10 @@ duration_secs = 11.6
 color = [224, 33, 187, 255]
 icon_ability_id = 3400759399940096
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "phase_entered"
@@ -609,7 +605,10 @@ duration_secs = 9.0
 color = [224, 33, 187, 255]
 icon_ability_id = 3400759399940096
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "timer_expires"
@@ -623,7 +622,10 @@ duration_secs = 9.0
 color = [224, 33, 187, 255]
 icon_ability_id = 3400759399940096
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "timer_expires"
@@ -631,12 +633,15 @@ timer_id = "master_blaster_2nd_rop_dmg"
 
 [[boss.timer]]
 id = "master_blaster_rop_shield_down"
-name = "Scatterblast"
+name = "Shield Down"
 duration_secs = 6.0
-color = [255, 0, 0, 255]
-icon_ability_id = 3393552444817408
+color = [0, 204, 255, 255]
+icon_ability_id = 3427444031750144
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "timer_expires"
@@ -649,11 +654,14 @@ duration_secs = 49.4
 color = [224, 33, 187, 255]
 icon_ability_id = 3400759399940096
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "timer_expires"
-timer_id = "master_blaster_rop_shield_down"
+timer_id = "master_blaster_rop_d"
 
 [boss.timer.cancel_trigger]
 type = "phase_entered"
@@ -667,7 +675,10 @@ duration_secs = 59.0
 color = [224, 24, 191, 255]
 icon_ability_id = 3400759399940096
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "effect_removed"
@@ -683,7 +694,10 @@ duration_secs = 9.0
 color = [219, 28, 28, 255]
 icon_ability_id = 3393552444817408
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -718,7 +732,10 @@ duration_secs = 18.0
 color = [220, 42, 39, 255]
 icon_ability_id = 3393552444817408
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -773,7 +790,10 @@ duration_secs = 9.0
 color = [219, 28, 28, 255]
 icon_ability_id = 3393552444817408
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -792,7 +812,10 @@ duration_secs = 25.0
 color = [255, 128, 0, 255]
 icon_ability_id = 3400776579809280
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -818,7 +841,10 @@ duration_secs = 26.0
 color = [238, 255, 0, 255]
 icon_ability_id = 3421916408840192
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -837,7 +863,10 @@ duration_secs = 30.0
 color = [251, 255, 0, 255]
 icon_ability_id = 3421916408840192
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "combat_start"
@@ -849,7 +878,10 @@ duration_secs = 5.0
 color = [255, 128, 0, 255]
 icon_ability_id = 3400776579809280
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -881,7 +913,10 @@ duration_secs = 2.0
 color = [255, 0, 0, 255]
 icon_ability_id = 3393552444817408
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -906,9 +941,13 @@ phase_id = "master_blaster_p2_t"
 id = "master_blaster_p2_us"
 name = "Phase 2"
 duration_secs = 8.7
-color = [255, 0, 0, 255]
+color = [50, 200, 50, 255]
+icon_ability_id = 3391331946725376
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "effect_applied"
@@ -924,27 +963,13 @@ duration_secs = 6.0
 color = [219, 28, 28, 255]
 icon_ability_id = 3393552444817408
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "combat_start"
-
-[[boss.timer]]
-id = "master_blaster_scatterblast_p2_1st"
-name = "Scatterblast P2"
-display_text = "Scatterblast"
-duration_secs = 14.0
-color = [219, 32, 34, 255]
-icon_ability_id = 3393552444817408
-difficulties = ["veteran"]
-enabled = false
-roles = []
-
-[boss.timer.trigger]
-type = "effect_removed"
-effects = [3413408078626816]
-source = "any"
-target = "any"
 
 [[boss.timer]]
 id = "master_blaster_ion_cutter"
@@ -953,7 +978,10 @@ duration_secs = 12.0
 color = [33, 224, 219, 255]
 icon_ability_id = 3397190282117120
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -979,7 +1007,10 @@ duration_secs = 30.0
 color = [160, 65, 14, 255]
 icon_ability_id = 3397933311459328
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -1005,7 +1036,10 @@ duration_secs = 20.0
 color = [0, 225, 255, 255]
 icon_ability_id = 3420615033749504
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "phase_entered"
@@ -1014,11 +1048,14 @@ phase_id = "master_blaster_rop"
 [[boss.timer]]
 id = "master_blaster_knock"
 name = "Knock Up"
-duration_secs = 6.0
+duration_secs = 7.0
 color = [255, 0, 0, 255]
 icon_ability_id = 3400772284842287
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -1033,7 +1070,10 @@ duration_secs = 12.0
 color = [0, 225, 255, 255]
 icon_ability_id = 3420615033749504
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "timer_expires"
@@ -1050,7 +1090,10 @@ duration_secs = 33.0
 color = [255, 128, 0, 255]
 icon_ability_id = 3415078820904960
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -1096,7 +1139,10 @@ duration_secs = 22.0
 color = [255, 234, 0, 255]
 icon_ability_id = 3421916408840192
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -1115,7 +1161,10 @@ duration_secs = 14.0
 color = [255, 128, 0, 255]
 icon_ability_id = 3415078820904960
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -1155,8 +1204,10 @@ name = "Rain of Pain"
 duration_secs = 35.6
 color = [255, 255, 255, 255]
 difficulties = ["veteran"]
-display_target = "none"
+display_targets = []
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "phase_entered"
@@ -1169,7 +1220,10 @@ duration_secs = 23.0
 color = [255, 128, 0, 255]
 icon_ability_id = 3415078820904960
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -1205,7 +1259,10 @@ duration_secs = 13.0
 color = [255, 0, 0, 255]
 icon_ability_id = 3393552444817408
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "ability_cast"
@@ -1214,17 +1271,45 @@ source = "any"
 target = "any"
 
 [[boss.timer.conditions]]
+type = "any_of"
+
+[[boss.timer.conditions.conditions]]
+type = "all_of"
+
+[[boss.timer.conditions.conditions.conditions]]
 type = "not"
 
-[boss.timer.conditions.condition]
+[boss.timer.conditions.conditions.conditions.condition]
 type = "timer_time_remaining"
 timer_id = "master_blaster_scatterblast_p2"
 operator = "gt"
 value = 13.0
 
-[[boss.timer.conditions]]
+[[boss.timer.conditions.conditions.conditions]]
 type = "phase_active"
 phase_ids = ["master_blaster_master"]
+
+[[boss.timer.conditions.conditions]]
+type = "all_of"
+
+[[boss.timer.conditions.conditions.conditions]]
+type = "not"
+
+[boss.timer.conditions.conditions.conditions.condition]
+type = "timer_time_remaining"
+timer_id = "master_blaster_rop_d"
+operator = "gt"
+value = 13.0
+
+[[boss.timer.conditions.conditions.conditions]]
+type = "counter_compare"
+counter_id = "master_blaster_rop_rep_1st_cd_mod"
+operator = "eq"
+value = 1
+
+[[boss.timer.conditions.conditions.conditions]]
+type = "phase_active"
+phase_ids = ["master_blaster_rop"]
 
 [boss.timer.cancel_trigger]
 type = "any_of"
@@ -1244,7 +1329,10 @@ duration_secs = 9.5
 color = [255, 174, 0, 255]
 icon_ability_id = 3421001580806144
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "damage_taken"
@@ -1264,7 +1352,10 @@ duration_secs = 8.0
 color = [160, 65, 14, 255]
 icon_ability_id = 3397933311459328
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "effect_removed"
@@ -1279,12 +1370,59 @@ duration_secs = 9.0
 color = [160, 65, 14, 255]
 icon_ability_id = 3397933311459328
 difficulties = ["veteran"]
+display_targets = ["timers_a"]
 roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
 
 [boss.timer.trigger]
 type = "timer_expires"
 timer_id = "master_blaster_3rd_rop_dmg"
 
+[[boss.timer]]
+id = "master_blaster_sb_p2_rop"
+name = "Scatterblast"
+duration_secs = 6.0
+color = [255, 0, 0, 255]
+icon_ability_id = 3393552444817408
+difficulties = ["veteran"]
+display_targets = ["timers_a"]
+roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
+
+[boss.timer.trigger]
+type = "timer_expires"
+timer_id = "master_blaster_3rd_rop_dmg"
+
+[[boss.timer.conditions]]
+type = "not"
+
+[boss.timer.conditions.condition]
+type = "timer_time_remaining"
+timer_id = "master_blaster_sb_p2_r"
+operator = "gte"
+value = 0.0
+
+[boss.timer.cancel_trigger]
+type = "timer_started"
+timer_id = "master_blaster_sb_p2_r"
+
+[[boss.timer]]
+id = "master_blaster_p3"
+name = "Phase 3"
+duration_secs = 10.0
+color = [50, 200, 50, 255]
+icon_ability_id = 3391331946725376
+difficulties = ["veteran"]
+display_targets = ["timers_a"]
+roles = []
+queue_countdown_bar = false
+queue_hide_from_next = false
+
+[boss.timer.trigger]
+type = "phase_entered"
+phase_id = "master_blaster_p3_t"
 # ═══════════════════════════════════════════════════════════════════════════════
 # Boss 5: Coratanni
 # ═══════════════════════════════════════════════════════════════════════════════
