@@ -267,7 +267,7 @@ countdown_start = 0
 [[boss]]
 id = "breach"
 name = "According To Plan"
-encounter_trigger_fallback_secs = 1.0
+encounter_trigger_fallback_secs = 5.0
 
 [boss.encounter_trigger]
 type = "threat_modified"
