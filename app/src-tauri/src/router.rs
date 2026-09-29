@@ -631,6 +631,45 @@ async fn process_overlay_update(
                 }
             }
         }
+        OverlayUpdate::AbilityCast { ability_id, name } => {
+            let tx = {
+                let state = match overlay_state.lock() {
+                    Ok(s) => s,
+                    Err(_) => return,
+                };
+                state.get_tx(OverlayType::AbilityCast).cloned()
+            };
+            if let Some(tx) = tx {
+                let icon = icon_cache
+                    .and_then(|cache| cache.get_icon(ability_id))
+                    .map(|d| std::sync::Arc::new((d.width, d.height, d.rgba)));
+                let entry = baras_overlay::AbilityCastEntry {
+                    ability_id,
+                    name,
+                    cast_at: std::time::Instant::now(),
+                    icon,
+                };
+                let _ = tx
+                    .send(OverlayCommand::UpdateData(OverlayData::AbilityCast(
+                        baras_overlay::AbilityCastData { entries: vec![entry] },
+                    )))
+                    .await;
+            }
+        }
+        OverlayUpdate::AbilityCastCleared => {
+            let tx = {
+                let state = match overlay_state.lock() {
+                    Ok(s) => s,
+                    Err(_) => return,
+                };
+                state.get_tx(OverlayType::AbilityCast).cloned()
+            };
+            if let Some(tx) = tx {
+                let _ = tx
+                    .send(OverlayCommand::UpdateData(OverlayData::AbilityCast(Default::default())))
+                    .await;
+            }
+        }
         OverlayUpdate::EffectsAUpdated(effects_data) => {
             let tx = {
                 let state = match overlay_state.lock() {
@@ -949,6 +988,11 @@ async fn process_overlay_update(
                 // Combat time overlay
                 if let Some(tx) = state.get_combat_time_tx() {
                     channels.push((tx.clone(), OverlayData::CombatTime(Default::default())));
+                }
+
+                // Ability cast overlay
+                if let Some(tx) = state.get_tx(OverlayType::AbilityCast) {
+                    channels.push((tx.clone(), OverlayData::AbilityCast(Default::default())));
                 }
 
                 // Operation timer overlay (clear display, timer state lives in service)

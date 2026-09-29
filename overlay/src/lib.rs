@@ -47,6 +47,11 @@ pub use class_icons::{
 pub use frame::OverlayFrame;
 pub use manager::OverlayWindow;
 pub use overlays::{
+    // Ability cast overlay
+    AbilityCastConfig,
+    AbilityCastData,
+    AbilityCastEntry,
+    AbilityCastOverlay,
     AlertEntry,
     AlertsData,
     AlertsOverlay,

@@ -3,11 +3,17 @@
 //! This binary is spawned by the main BARAS app to parse historical files.
 //! It runs in a separate process so memory fragmentation doesn't affect the main app.
 //!
-//! Usage: baras-parse-worker <file_path> <session_id> <output_dir> [definitions_dir]
+//! Usage: baras-parse-worker <file_path> <session_id> <output_dir> [definitions_dir] [--summary-only]
+//!        baras-parse-worker --backfill <log_dir> [definitions_dir]
+//!
+//! `--summary-only` skips parquet output (summaries still go to stdout).
+//! `--backfill` records pull history for every log in a directory (see `backfill.rs`).
 //!
 //! Output: JSON to stdout with encounter summaries and final byte position.
 
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
+mod backfill;
 
 use arrow::array::{
     ArrayBuilder, ArrayRef, BooleanBuilder, Float32Builder, Int32Builder, Int64Builder, ListArray,
@@ -557,10 +563,26 @@ fn main() {
     // Initialize tracing subscriber (parse-worker is separate process, needs its own)
     init_logging();
 
-    let args: Vec<String> = std::env::args().collect();
+    let raw_args: Vec<String> = std::env::args().collect();
+
+    if raw_args.get(1).is_some_and(|a| a == "--backfill") {
+        let Some(log_dir) = raw_args.get(2) else {
+            eprintln!("Usage: baras-parse-worker --backfill <log_dir> [definitions_dir]");
+            std::process::exit(1);
+        };
+        let defs = raw_args.get(3).map(PathBuf::from);
+        if let Err(e) = backfill::run(Path::new(log_dir), defs.as_deref()) {
+            eprintln!("Backfill failed: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    let summary_only = raw_args.iter().any(|a| a == "--summary-only");
+    let args: Vec<String> = raw_args.into_iter().filter(|a| !a.starts_with("--")).collect();
     if args.len() < 4 {
         tracing::error!(
-            "Usage: baras-parse-worker <file_path> <session_id> <output_dir> [definitions_dir]"
+            "Usage: baras-parse-worker <file_path> <session_id> <output_dir> [definitions_dir] [--summary-only]"
         );
         std::process::exit(1);
     }
@@ -622,7 +644,7 @@ fn main() {
 
     let timer = std::time::Instant::now();
 
-    match parse_file(&file_path, session_id, &output_dir, area_index, user_dir) {
+    match parse_file(&file_path, session_id, &output_dir, area_index, user_dir, summary_only) {
         Ok(output) => {
             let mut output = output;
             output.elapsed_ms = timer.elapsed().as_millis();
@@ -645,6 +667,7 @@ fn parse_file(
     output_dir: &Path,
     area_index: Option<baras_core::dsl::AreaIndex>,
     user_dir: Option<PathBuf>,
+    summary_only: bool,
 ) -> Result<ParseWorkerOutput, String> {
     // Extract session date from filename
     let date_stamp = file_path
@@ -688,7 +711,7 @@ fn parse_file(
 
     // Process events and write encounters (definitions loaded lazily on AreaEntered)
     let (cache, incomplete_line) =
-        process_and_write_encounters(events, output_dir, area_index, user_dir)?;
+        process_and_write_encounters(events, output_dir, area_index, user_dir, summary_only)?;
 
     // If there's an incomplete encounter, set end_pos to the byte position of its first line
     // and line_count to match that line number for correct tailing
@@ -725,6 +748,7 @@ fn process_and_write_encounters(
     output_dir: &Path,
     area_index: Option<baras_core::dsl::AreaIndex>,
     user_dir: Option<PathBuf>,
+    summary_only: bool,
 ) -> Result<
     (
         SessionCache,
@@ -942,7 +966,7 @@ fn process_and_write_encounters(
 
         // Only write events that were accumulated (same filtering as live parquet)
         // NOTE: This runs AFTER timer processing so phase state reflects timer-driven transitions
-        if was_accumulated {
+        if was_accumulated && !summary_only {
             writer.append_event(&event, &cache, current_encounter_idx);
         }
 

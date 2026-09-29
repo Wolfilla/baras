@@ -1,0 +1,113 @@
+//! Cross-session pull history types served to the History tab.
+//!
+//! The backend keeps the full per-log summaries; only these compact rows and
+//! aggregates cross IPC.
+
+use serde::{Deserialize, Serialize};
+
+/// One recorded pull, reduced to what the History table shows.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PullRow {
+    pub filename: String,
+    /// Log path, present only when the file still exists on disk
+    pub path: Option<String>,
+    pub encounter_id: u64,
+    pub character: String,
+    /// ISO 8601 start time
+    pub timestamp: String,
+    pub operation: String,
+    pub boss: String,
+    pub difficulty: String,
+    pub success: bool,
+    pub duration_seconds: i64,
+    /// Raid content (operations); false for flashpoints, world bosses, dummies
+    pub is_operation: bool,
+    // Logging character's own numbers on this pull
+    pub discipline: Option<String>,
+    /// "Tank" | "Healer" | "Dps"
+    pub role: Option<String>,
+    pub role_icon: Option<String>,
+    pub dps: Option<i64>,
+    pub hps: Option<i64>,
+}
+
+/// Pull/kill counts for one boss, used to build the operation → boss tree.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BossNode {
+    pub operation: String,
+    pub boss: String,
+    pub pulls: u32,
+    pub kills: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct PullHistoryOverview {
+    /// Every character with recorded pulls (unfiltered)
+    pub characters: Vec<String>,
+    /// Every discipline the logging characters have played (unfiltered)
+    pub disciplines: Vec<String>,
+    /// Sorted by operation then boss; training dummy parses last
+    pub bosses: Vec<BossNode>,
+}
+
+/// Row filter applied server-side to both the tree and the pull list.
+/// Empty strings mean "any".
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PullFilter {
+    pub character: String,
+    /// "Tank" | "Healer" | "Dps"
+    pub role: String,
+    pub discipline: String,
+    /// "Story" | "Veteran" | "Master", matched against the difficulty name
+    pub tier: String,
+    pub operations_only: bool,
+    pub kills_only: bool,
+    /// Inclusive day bounds as `YYYY-MM-DD`; empty = open-ended
+    pub date_from: String,
+    pub date_to: String,
+}
+
+impl Default for PullFilter {
+    fn default() -> Self {
+        Self {
+            character: String::new(),
+            role: String::new(),
+            discipline: String::new(),
+            tier: String::new(),
+            operations_only: true,
+            kills_only: false,
+            date_from: String::new(),
+            date_to: String::new(),
+        }
+    }
+}
+
+/// History tab selections kept across tab switches (see `UiSessionState`).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct HistoryState {
+    pub filter: PullFilter,
+    /// Selected (operation, boss)
+    pub selected: Option<(String, String)>,
+    /// Per-boss difficulty tab; empty = all
+    pub difficulty: String,
+}
+
+/// Progress lines emitted by `baras-parse-worker --backfill` (one JSON per
+/// line on stdout) and relayed to the History tab as Tauri events.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum BackfillEvent {
+    Progress {
+        current: u32,
+        total: u32,
+        file: String,
+        pulls: u32,
+    },
+    Done {
+        pulls: u32,
+        logs: u32,
+        failed: u32,
+        scanned: u32,
+        elapsed_secs: f32,
+    },
+}

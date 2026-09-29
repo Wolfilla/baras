@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
 
 use baras_core::context::{AppConfig, DirectoryIndex, LogAreaCache, ParsingSession};
+use baras_core::history::PullIndex;
 use baras_core::query::QueryContext;
 
 // ─── Centralized Auto-Hide State ─────────────────────────────────────────────
@@ -136,6 +137,10 @@ pub struct SharedState {
     pub is_live_tailing: AtomicBool,
     /// Raid frame slot assignments (persists player positions)
     pub raid_registry: Mutex<RaidSlotRegistry>,
+    /// Lazily built index over recorded pull history (History tab)
+    pub pull_index: Mutex<PullIndex>,
+    /// A history backfill subprocess is running
+    pub history_backfill_running: AtomicBool,
     /// Players registered from ability casts, kept as OCR candidates.
     /// `player_disciplines` only learns a player on DisciplineChanged (entering
     /// combat), so pre-combat HOT/buff targets live only here — without this,
@@ -172,6 +177,8 @@ pub struct SharedState {
     pub cooldowns_b_overlay_active: AtomicBool,
     /// Whether DOT tracker overlay is currently running
     pub dot_tracker_overlay_active: AtomicBool,
+    /// Whether ability cast overlay is currently running
+    pub ability_cast_overlay_active: AtomicBool,
     /// Whether raid frame rearrange mode is active (bypasses rendering gates)
     pub rearrange_mode: AtomicBool,
 
@@ -203,6 +210,8 @@ impl SharedState {
             watching: AtomicBool::new(false),
             is_live_tailing: AtomicBool::new(true), // Start in live tailing mode
             raid_registry: Mutex::new(RaidSlotRegistry::new(raid_slots)),
+            pull_index: Mutex::new(PullIndex::default()),
+            history_backfill_running: AtomicBool::new(false),
             ability_roster: Mutex::new(baras_core::raid_detect::CandidateSet::new()),
             pvp_ocr_roster_started_at: Mutex::new(None),
             roster_changed: AtomicBool::new(false),
@@ -219,6 +228,7 @@ impl SharedState {
             cooldowns_overlay_active: AtomicBool::new(false),
             cooldowns_b_overlay_active: AtomicBool::new(false),
             dot_tracker_overlay_active: AtomicBool::new(false),
+            ability_cast_overlay_active: AtomicBool::new(false),
             rearrange_mode: AtomicBool::new(false),
             // Game process state — assume running until the process monitor says otherwise
             game_running: AtomicBool::new(true),

@@ -158,6 +158,8 @@ pub fn SettingsPanel(
                 config.overlay_settings.ability_queue_opacity = new_settings.ability_queue_opacity;
                 config.overlay_settings.enemy_frames = new_settings.enemy_frames.clone();
                 config.overlay_settings.enemy_frames_opacity = new_settings.enemy_frames_opacity;
+                config.overlay_settings.ability_cast = new_settings.ability_cast.clone();
+                config.overlay_settings.ability_cast_opacity = new_settings.ability_cast_opacity;
                 config.overlay_settings.positions = existing_positions;
                 config.overlay_settings.enabled = existing_enabled;
 
@@ -554,6 +556,7 @@ pub fn SettingsPanel(
                         TabButton { label: "Alerts", tab_key: "alerts", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
                         TabButton { label: "Combat Time", tab_key: "combat_time", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
                         TabButton { label: "Op Timer", tab_key: "operation_timer", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
+                        TabButton { label: "Abilities Cast", tab_key: "ability_cast", selected_tab: selected_tab, metrics_global_open: metrics_global_open }
                     }
                 }
                 div { class: "tab-group",
@@ -2772,6 +2775,133 @@ pub fn SettingsPanel(
                                 let mut new_settings = draft_settings();
                                 new_settings.combat_time = Default::default();
                                 new_settings.combat_time_opacity = 180;
+                                update_draft(new_settings);
+                            },
+                            i { class: "fa-solid fa-rotate-left" }
+                            span { " Reset to Defaults" }
+                        }
+                    }
+                }
+            } else if tab == "ability_cast" {
+                // Abilities Cast Overlay Settings
+                div { class: "settings-section",
+                    h4 { "Appearance" }
+
+                    OpacitySlider {
+                        label: "Background Opacity",
+                        value: current_settings.ability_cast_opacity,
+                        on_change: move |val| {
+                            let mut new_settings = draft_settings();
+                            new_settings.ability_cast_opacity = val;
+                            update_draft(new_settings);
+                        },
+                    }
+
+                    div { class: "setting-row",
+                        label { "Dynamic Background" }
+                        input {
+                            r#type: "checkbox",
+                            checked: current_settings.ability_cast.dynamic_background,
+                            onchange: move |e: Event<FormData>| {
+                                let mut new_settings = draft_settings();
+                                new_settings.ability_cast.dynamic_background = e.checked();
+                                update_draft(new_settings);
+                            }
+                        }
+                    }
+
+                    div { class: "setting-row",
+                        label { "Stack From Bottom" }
+                        input {
+                            r#type: "checkbox",
+                            checked: current_settings.ability_cast.stack_from_bottom,
+                            onchange: move |e: Event<FormData>| {
+                                let mut new_settings = draft_settings();
+                                new_settings.ability_cast.stack_from_bottom = e.checked();
+                                update_draft(new_settings);
+                            }
+                        }
+                    }
+
+                    Slider {
+                        label: "Font Scale",
+                        value: (current_settings.ability_cast.font_scale * 100.0) as i32 as f64,
+                        min: 30.0,
+                        max: 300.0,
+                        suffix: "%",
+                        on_change: move |v: f64| {
+                            let mut new_settings = draft_settings();
+                            new_settings.ability_cast.font_scale = (v as f32 / 100.0).clamp(0.3, 3.0);
+                            update_draft(new_settings);
+                        },
+                    }
+
+                    Slider {
+                        label: "Icon Size",
+                        value: current_settings.ability_cast.icon_size as f64,
+                        min: 16.0,
+                        max: 128.0,
+                        suffix: "px",
+                        on_change: move |v: f64| {
+                            let mut new_settings = draft_settings();
+                            new_settings.ability_cast.icon_size = (v as u8).clamp(16, 128);
+                            update_draft(new_settings);
+                        },
+                    }
+
+                    div { class: "setting-row",
+                        label { "Font Color" }
+                        input {
+                            r#type: "color",
+                            value: "{color_to_hex(&current_settings.ability_cast.font_color)}",
+                            class: "color-picker",
+                            oninput: move |e: Event<FormData>| {
+                                if let Some(color) = parse_hex_color(&e.value()) {
+                                    let mut new_settings = draft_settings();
+                                    new_settings.ability_cast.font_color = color;
+                                    update_draft(new_settings);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                div { class: "settings-section",
+                    h4 { "Display" }
+
+                    Slider {
+                        label: "Max Entries",
+                        value: current_settings.ability_cast.max_display as f64,
+                        min: 1.0,
+                        max: 30.0,
+                        on_change: move |v: f64| {
+                            let mut new_settings = draft_settings();
+                            new_settings.ability_cast.max_display = (v as u8).clamp(1, 30);
+                            update_draft(new_settings);
+                        },
+                    }
+
+                    Slider {
+                        label: "Prune After",
+                        value: current_settings.ability_cast.prune_secs as f64,
+                        min: 1.0,
+                        max: 60.0,
+                        suffix: "s",
+                        tooltip: "Casts older than this are removed from the list",
+                        on_change: move |v: f64| {
+                            let mut new_settings = draft_settings();
+                            new_settings.ability_cast.prune_secs = (v as f32).clamp(1.0, 60.0);
+                            update_draft(new_settings);
+                        },
+                    }
+
+                    div { class: "setting-row reset-row",
+                        button {
+                            class: "btn btn-reset",
+                            onclick: move |_| {
+                                let mut new_settings = draft_settings();
+                                new_settings.ability_cast = Default::default();
+                                new_settings.ability_cast_opacity = 180;
                                 update_draft(new_settings);
                             },
                             i { class: "fa-solid fa-rotate-left" }

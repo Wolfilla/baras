@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use super::metrics::create_entries_for_type;
 use super::spawn::{
-    cooldown_config, create_ability_queue_overlay, create_alerts_overlay,
+    ability_cast_config, cooldown_config, create_ability_cast_overlay, create_ability_queue_overlay, create_alerts_overlay,
     create_boss_health_overlay, create_challenges_overlay, create_combat_time_overlay,
     create_cooldowns_overlay, create_dot_tracker_overlay, create_effects_overlay,
     create_enemy_frames_overlay,
@@ -135,6 +135,11 @@ impl OverlayManager {
                 let ct_config = settings.combat_time.clone();
                 create_combat_time_overlay(position, ct_config, settings.combat_time_opacity)?
             }
+            OverlayType::AbilityCast => create_ability_cast_overlay(
+                position,
+                &settings.ability_cast,
+                settings.ability_cast_opacity,
+            )?,
             OverlayType::OperationTimer => {
                 let ot_config = settings.operation_timer.clone();
                 create_operation_timer_overlay(
@@ -293,7 +298,8 @@ impl OverlayManager {
             | OverlayType::CooldownsB
             | OverlayType::DotTracker
             | OverlayType::Notes
-            | OverlayType::AbilityQueue => {
+            | OverlayType::AbilityQueue
+            | OverlayType::AbilityCast => {
                 // These get data via separate update channels (bridge)
             }
         }
@@ -497,6 +503,10 @@ impl OverlayManager {
                 };
                 OverlayConfigUpdate::CombatTime(ct_config, settings.combat_time_opacity, eu)
             }
+            OverlayType::AbilityCast => OverlayConfigUpdate::AbilityCast(
+                ability_cast_config(&settings.ability_cast),
+                settings.ability_cast_opacity,
+            ),
             OverlayType::OperationTimer => {
                 use baras_overlay::OperationTimerConfig;
                 let cfg = &settings.operation_timer;
@@ -707,6 +717,7 @@ impl OverlayManager {
                 "operation_timer" => OverlayType::OperationTimer,
                 "ability_queue" => OverlayType::AbilityQueue,
                 "enemy_frames" => OverlayType::EnemyFrames,
+                "ability_cast" => OverlayType::AbilityCast,
                 _ => {
                     if let Some(mt) = MetricType::from_config_key(key) {
                         OverlayType::Metric(mt)
@@ -870,6 +881,7 @@ impl OverlayManager {
                 "operation_timer" => OverlayType::OperationTimer,
                 "ability_queue" => OverlayType::AbilityQueue,
                 "enemy_frames" => OverlayType::EnemyFrames,
+                "ability_cast" => OverlayType::AbilityCast,
                 _ => {
                     if let Some(mt) = MetricType::from_config_key(key) {
                         OverlayType::Metric(mt)
@@ -1205,6 +1217,7 @@ impl OverlayManager {
         service.set_overlay_active("cooldowns", false);
         service.set_overlay_active("cooldowns_b", false);
         service.set_overlay_active("dot_tracker", false);
+        service.set_overlay_active("ability_cast", false);
     }
 
     /// Get all overlay types for iteration.
@@ -1227,6 +1240,7 @@ impl OverlayManager {
             OverlayType::CombatTime,
             OverlayType::OperationTimer,
             OverlayType::EnemyFrames,
+            OverlayType::AbilityCast,
         ];
         for mt in MetricType::all() {
             types.push(OverlayType::Metric(*mt));

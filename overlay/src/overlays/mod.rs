@@ -9,6 +9,7 @@
 //! All overlays implement the `Overlay` trait, which provides a unified
 //! interface for the application layer to interact with any overlay type.
 
+mod ability_cast;
 mod ability_queue;
 mod alerts;
 mod boss_health;
@@ -26,6 +27,7 @@ mod personal;
 mod raid;
 mod timers;
 
+pub use ability_cast::{AbilityCastConfig, AbilityCastData, AbilityCastEntry, AbilityCastOverlay};
 pub use alerts::{AlertEntry, AlertsData, AlertsOverlay};
 pub use boss_health::{BossEffectIcon, BossHealthData, BossHealthOverlay};
 pub use combat_time::{CombatTimeConfig, CombatTimeData, CombatTimeOverlay};
@@ -144,6 +146,8 @@ pub enum OverlayData {
     AbilityQueue(AbilityQueueData),
     /// Enemy HP frames (PvP)
     EnemyFrames(EnemyFramesData),
+    /// Recently cast abilities (local player)
+    AbilityCast(AbilityCastData),
 }
 
 /// Configuration updates that can be sent to overlays
@@ -192,6 +196,8 @@ pub enum OverlayConfigUpdate {
     AbilityQueue(AbilityQueueConfig, u8),
     /// Config for enemy frames overlay (+ background alpha, european)
     EnemyFrames(EnemyFramesConfig, u8, bool),
+    /// Config for ability cast overlay (+ background alpha)
+    AbilityCast(AbilityCastConfig, u8),
 }
 
 /// Position information for an overlay

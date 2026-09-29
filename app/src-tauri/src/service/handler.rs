@@ -11,6 +11,7 @@ use baras_core::EncounterSummary;
 use baras_core::context::{AppConfig, AppConfigExt, resolve};
 use baras_core::encounter::EncounterState;
 use baras_core::game_data::Discipline;
+use baras_types::history::{PullFilter, PullHistoryOverview, PullRow};
 use baras_core::query::{
     AbilityBreakdown, BreakdownMode, CombatLogFilters, CombatLogFindMatch, CombatLogRow,
     CombatLogSortColumn, DamageTakenSummary, DataTab, EffectChartData, EffectWindow,
@@ -386,7 +387,49 @@ impl ServiceHandle {
             return false;
         };
 
-        cache.encounter_history.set_parsely_link(encounter_id, link)
+        let updated = cache.encounter_history.set_parsely_link(encounter_id, link);
+        if updated && let Some(history) = super::history::build_pull_history(&session) {
+            super::history::save_in_background(history);
+        }
+        updated
+    }
+
+    /// Filter options and per-boss pull counts from the history index.
+    pub async fn pull_history_overview(&self, filter: PullFilter) -> PullHistoryOverview {
+        self.with_pull_index(move |index| index.overview(&filter))
+            .await
+            .unwrap_or_default()
+    }
+
+    /// Every recorded pull of one boss under `filter`, newest first.
+    pub async fn boss_pulls(&self, operation: String, boss: String, filter: PullFilter) -> Vec<PullRow> {
+        self.with_pull_index(move |index| index.pulls(&operation, &boss, &filter))
+            .await
+            .unwrap_or_default()
+    }
+
+    /// Backfill pull history for every log in the configured directory (background).
+    pub async fn start_history_backfill(&self) -> Result<(), String> {
+        super::history::run_backfill(self.shared.clone(), self.app_handle.clone()).await
+    }
+
+    /// Refresh the index against disk (mtime-based, cheap when unchanged) and query it
+    /// off the async runtime.
+    async fn with_pull_index<T: Send + 'static>(
+        &self,
+        query: impl FnOnce(&baras_core::history::PullIndex) -> T + Send + 'static,
+    ) -> Option<T> {
+        let log_dir = PathBuf::from(self.config().await.log_directory);
+        let shared = self.shared.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut index = shared.pull_index.lock().unwrap_or_else(|p| p.into_inner());
+            if let Err(e) = index.refresh(&log_dir) {
+                tracing::warn!(error = %e, "Failed to refresh pull history index");
+            }
+            query(&index)
+        })
+        .await
+        .ok()
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -519,9 +562,13 @@ impl ServiceHandle {
     // ─────────────────────────────────────────────────────────────────────────
 
     /// Open a historical file (pauses live tailing)
-    pub async fn open_historical_file(&self, path: PathBuf) -> Result<(), String> {
+    pub async fn open_historical_file(
+        &self,
+        path: PathBuf,
+        select_encounter: Option<u64>,
+    ) -> Result<(), String> {
         self.cmd_tx
-            .send(ServiceCommand::OpenHistoricalFile(path))
+            .send(ServiceCommand::OpenHistoricalFile { path, select_encounter })
             .await
             .map_err(|e| e.to_string())
     }
@@ -1587,6 +1634,10 @@ impl ServiceHandle {
             "dot_tracker" => self
                 .shared
                 .dot_tracker_overlay_active
+                .store(active, Ordering::SeqCst),
+            "ability_cast" => self
+                .shared
+                .ability_cast_overlay_active
                 .store(active, Ordering::SeqCst),
             _ => {}
         }

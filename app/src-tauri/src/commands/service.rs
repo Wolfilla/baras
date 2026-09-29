@@ -95,9 +95,10 @@ pub async fn get_active_file(handle: State<'_, ServiceHandle>) -> Result<Option<
 #[tauri::command]
 pub async fn open_historical_file(
     path: PathBuf,
+    select_encounter: Option<u64>,
     handle: State<'_, ServiceHandle>,
 ) -> Result<(), String> {
-    handle.open_historical_file(path).await
+    handle.open_historical_file(path, select_encounter).await
 }
 
 #[tauri::command]
@@ -299,6 +300,29 @@ pub async fn get_session_info(
     handle: State<'_, ServiceHandle>,
 ) -> Result<Option<SessionInfo>, String> {
     Ok(handle.session_info().await)
+}
+
+#[tauri::command]
+pub async fn get_pull_history_overview(
+    filter: baras_types::history::PullFilter,
+    handle: State<'_, ServiceHandle>,
+) -> Result<baras_types::history::PullHistoryOverview, String> {
+    Ok(handle.pull_history_overview(filter).await)
+}
+
+#[tauri::command]
+pub async fn start_history_backfill(handle: State<'_, ServiceHandle>) -> Result<(), String> {
+    handle.start_history_backfill().await
+}
+
+#[tauri::command]
+pub async fn get_boss_pulls(
+    operation: String,
+    boss: String,
+    filter: baras_types::history::PullFilter,
+    handle: State<'_, ServiceHandle>,
+) -> Result<Vec<baras_types::history::PullRow>, String> {
+    Ok(handle.boss_pulls(operation, boss, filter).await)
 }
 
 #[tauri::command]
@@ -562,6 +586,7 @@ fn sync_enabled_with_running(config: &mut AppConfig, overlay_state: &crate::over
         OverlayType::DotTracker,
         OverlayType::Notes,
         OverlayType::CombatTime,
+        OverlayType::AbilityCast,
     ];
 
     for overlay_type in &fixed_types {

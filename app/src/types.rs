@@ -163,6 +163,10 @@ pub struct OverlayStatus {
     pub enemy_frames_running: bool,
     #[serde(default)]
     pub enemy_frames_enabled: bool,
+    #[serde(default)]
+    pub ability_cast_running: bool,
+    #[serde(default)]
+    pub ability_cast_enabled: bool,
     pub overlays_visible: bool,
     pub move_mode: bool,
     pub rearrange_mode: bool,
@@ -345,6 +349,7 @@ pub enum OverlayType {
     OperationTimer,
     AbilityQueue,
     EnemyFrames,
+    AbilityCast,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

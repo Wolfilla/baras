@@ -6,6 +6,7 @@
 //! - CombatService: Background task that processes commands and updates shared state
 mod directory;
 mod handler;
+mod history;
 mod raid_detection;
 pub(crate) mod process_monitor;
 
@@ -125,7 +126,12 @@ pub enum ServiceCommand {
     /// Reload effect definitions from disk and update active session
     ReloadEffectDefinitions,
     /// Open a historical file (pauses live tailing)
-    OpenHistoricalFile(PathBuf),
+    /// Open a log for viewing; `select_encounter` asks the Data Explorer to
+    /// focus that encounter id once the file has loaded.
+    OpenHistoricalFile {
+        path: PathBuf,
+        select_encounter: Option<u64>,
+    },
     /// Resume live tailing (switch to newest file)
     ResumeLiveTailing,
     /// Trigger immediate raid frame data refresh (after registry changes)
@@ -395,6 +401,10 @@ pub enum OverlayUpdate {
     OperationTimerUpdated(baras_overlay::OperationTimerData),
     /// Ability queue snapshot (GCD + queued + active countdown entries)
     AbilityQueueUpdated(baras_overlay::AbilityQueueData),
+    /// Local player activated an ability (ability cast overlay)
+    AbilityCast { ability_id: u64, name: String },
+    /// Drop the ability cast list (player identity changed)
+    AbilityCastCleared,
     /// Clear all overlay data (sent when switching files)
     ClearAllData,
     /// Left a PvP area: the last match's enemies are gone
@@ -603,6 +613,8 @@ impl SignalHandler for CombatSignalHandler {
                     // Force role re-evaluation so the DisciplineChanged that
                     // follows fires AutoSwitchProfile for the new character
                     self.current_role = None;
+                    // A different character's casts must not linger
+                    let _ = self.overlay_tx.try_send(OverlayUpdate::AbilityCastCleared);
                 }
 
                 let _ = self.session_event_tx.send(SessionEvent::PlayerInitialized);
@@ -877,6 +889,19 @@ impl SignalHandler for CombatSignalHandler {
                 // A `[area.timer_start]` region is explicit opt-in, so no area-kind gate.
                 info!(entity_id, "Operation timer start region crossed");
                 self.try_auto_start_operation_timer();
+            }
+            GameSignal::AbilityActivated {
+                ability_id,
+                ability_name,
+                source_id,
+                ..
+            } if self.shared.ability_cast_overlay_active.load(Ordering::SeqCst)
+                && self.local_player_id == Some(*source_id) =>
+            {
+                let _ = self.overlay_tx.try_send(OverlayUpdate::AbilityCast {
+                    ability_id: *ability_id as u64,
+                    name: resolve(*ability_name).to_string(),
+                });
             }
             _ => {}
         }
@@ -1454,7 +1479,7 @@ impl CombatService {
                         ServiceCommand::ReloadEffectDefinitions => {
                             self.reload_effect_definitions().await;
                         }
-                        ServiceCommand::OpenHistoricalFile(path) => {
+                        ServiceCommand::OpenHistoricalFile { path, select_encounter } => {
                             // Pause live tailing and open the historical file
                             self.shared.is_live_tailing.store(false, Ordering::SeqCst);
                             let _ = self
@@ -1470,7 +1495,11 @@ impl CombatService {
                                 timer.reset();
                             }
                             self.emit_operation_timer_tick();
+                            // Parse is awaited inline, so "FileLoaded" has fired by now
                             self.start_tailing(path).await;
+                            if let Some(id) = select_encounter {
+                                let _ = self.app_handle.emit("select-encounter", id);
+                            }
                         }
                         ServiceCommand::ResumeLiveTailing => {
                             // Resume live tailing and switch to newest file
@@ -2085,8 +2114,12 @@ impl CombatService {
         );
         session.add_signal_handler(Box::new(handler));
 
+        let session = Arc::new(RwLock::new(session));
+
         // Spawn task to emit session events to frontend (event-driven, not polled)
+        // and persist pull history once each fight's summary has landed.
         let app_handle = self.app_handle.clone();
+        let event_session = session.clone();
         tokio::spawn(async move {
             loop {
                 let event = match tokio::task::spawn_blocking({
@@ -2099,12 +2132,13 @@ impl CombatService {
                     Ok(Err(_)) => break, // Channel closed
                     Err(_) => break,     // Task canceled
                 };
+                if matches!(event, SessionEvent::CombatEnded) {
+                    history::persist_pull_history(&event_session).await;
+                }
                 // Emit event to frontend - they can fetch fresh data
                 let _ = app_handle.emit("session-updated", format!("{:?}", event));
             }
         });
-
-        let session = Arc::new(RwLock::new(session));
 
         // Update shared state
         *self.shared.session.write().await = Some(session.clone());
@@ -2144,21 +2178,7 @@ impl CombatService {
 
         // Spawn parse worker subprocess
         // Check multiple locations: bundled sidecar (with target triple), next to exe, fallback to PATH
-        let worker_path = std::env::current_exe()
-            .ok()
-            .and_then(|exe| {
-                let dir = exe.parent()?;
-                // Try sidecar name with target triple first (Tauri bundle format), then plain name
-                let candidates = [
-                    dir.join(format!(
-                        "baras-parse-worker-{}-unknown-linux-gnu",
-                        std::env::consts::ARCH
-                    )),
-                    dir.join("baras-parse-worker"),
-                ];
-                candidates.into_iter().find(|p| p.exists())
-            })
-            .unwrap_or_else(|| PathBuf::from("baras-parse-worker"));
+        let worker_path = history::worker_binary_path();
 
         debug!(worker_path = ?worker_path, "Using parse worker");
 
@@ -2357,6 +2377,11 @@ impl CombatService {
                                 }
                             }
                             session_guard.finalize_open_encounter();
+                        }
+
+                        // Record this log's pulls for the Historical tab
+                        if let Some(history) = history::build_pull_history(&session_guard) {
+                            history::save_in_background(history);
                         }
 
                         // Check if we're starting mid-encounter (live mode only)

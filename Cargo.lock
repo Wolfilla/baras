@@ -813,6 +813,7 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "baras-core",
+ "baras-types",
  "chrono",
  "dirs",
  "encoding_rs",

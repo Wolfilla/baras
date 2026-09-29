@@ -8,7 +8,7 @@ use wasm_bindgen_futures::spawn_local;
 use crate::api::{self, BossNotesInfo};
 use crate::components::{
     ContributorsModal, DataExplorerPanel, EffectEditorPanel, EncounterEditorPanel,
-    HotkeyInput, ParselyUploadModal, SettingsPanel, Slider, ToastFrame, ToastSeverity, use_parsely_upload,
+    HistoryPanel, HotkeyInput, ParselyUploadModal, SettingsPanel, Slider, ToastFrame, ToastSeverity, use_parsely_upload,
     use_parsely_upload_provider, use_toast, use_toast_provider,
 };
 use crate::components::class_icons::{get_class_icon, get_role_icon};
@@ -72,6 +72,7 @@ pub fn App() -> Element {
     let mut combat_time_enabled = use_signal(|| false);
     let mut operation_timer_enabled = use_signal(|| false);
     let mut ability_queue_enabled = use_signal(|| false);
+    let mut ability_cast_enabled = use_signal(|| false);
     // Operation timer state from Tauri events
     let mut op_timer_secs = use_signal(|| 0u64);
     let mut op_timer_running = use_signal(|| false);
@@ -277,6 +278,7 @@ pub fn App() -> Element {
                 &mut operation_timer_enabled,
                 &mut ability_queue_enabled,
                 &mut enemy_frames_enabled,
+                &mut ability_cast_enabled,
                 &mut overlays_visible,
                 &mut move_mode,
                 &mut rearrange_mode,
@@ -381,7 +383,7 @@ pub fn App() -> Element {
                         &mut effects_a_enabled, &mut effects_b_enabled, &mut effects_c_enabled,
                         &mut cooldowns_enabled, &mut cooldowns_b_enabled, &mut dot_tracker_enabled, &mut notes_enabled,
                         &mut combat_time_enabled, &mut operation_timer_enabled,
-                        &mut ability_queue_enabled, &mut enemy_frames_enabled,
+                        &mut ability_queue_enabled, &mut enemy_frames_enabled, &mut ability_cast_enabled,
                         &mut overlays_visible, &mut move_mode, &mut rearrange_mode, &mut auto_hidden);
                 }
             });
@@ -456,6 +458,23 @@ pub fn App() -> Element {
             let _ = session_ended.try_write().map(|mut w| *w = false);
         });
         api::tauri_listen("new-session-started", &closure).await;
+        closure.forget();
+    });
+
+    // Listen for encounter focus requests (History tab → Data Explorer). Fires after
+    // the file has loaded, so it lands after the new-session reset above. The Data
+    // Explorer reads the selection from ui_state when it mounts on the tab switch.
+    use_future(move || async move {
+        let closure = Closure::new(move |event: JsValue| {
+            if let Ok(payload) = js_sys::Reflect::get(&event, &JsValue::from_str("payload"))
+                && let Some(id) = payload.as_f64()
+            {
+                let mut state = ui_state.write();
+                state.data_explorer.selected_encounter = Some(id as u32);
+                state.active_tab = MainTab::DataExplorer;
+            }
+        });
+        api::tauri_listen("select-encounter", &closure).await;
         closure.forget();
     });
 
@@ -619,6 +638,7 @@ pub fn App() -> Element {
     let operation_timer_on = operation_timer_enabled();
     let ability_queue_on = ability_queue_enabled();
     let enemy_frames_on = enemy_frames_enabled();
+    let ability_cast_on = ability_cast_enabled();
     let any_enabled = enabled_map.values().any(|&v| v)
         || personal_on
         || raid_on
@@ -637,7 +657,8 @@ pub fn App() -> Element {
         || combat_time_on
         || operation_timer_on
         || ability_queue_on
-        || enemy_frames_on;
+        || enemy_frames_on
+        || ability_cast_on;
     let is_visible = overlays_visible();
     let is_move_mode = move_mode();
     let is_rearrange = rearrange_mode();
@@ -917,7 +938,7 @@ pub fn App() -> Element {
                                                 &mut effects_a_enabled, &mut effects_b_enabled, &mut effects_c_enabled,
                                                 &mut cooldowns_enabled, &mut cooldowns_b_enabled, &mut dot_tracker_enabled, &mut notes_enabled,
                                                 &mut combat_time_enabled, &mut operation_timer_enabled,
-                                                &mut ability_queue_enabled, &mut enemy_frames_enabled,
+                                                &mut ability_queue_enabled, &mut enemy_frames_enabled, &mut ability_cast_enabled,
                                                 &mut overlays_visible, &mut move_mode, &mut rearrange_mode, &mut auto_hidden);
                                         }
                                     }
@@ -1019,6 +1040,12 @@ pub fn App() -> Element {
                             onclick: move |_| ui_state.write().active_tab = MainTab::Effects,
                             i { class: "fa-solid fa-heart-pulse" }
                             span { class: "tab-label", " Effects Editor" }
+                        }
+                        button {
+                            class: if ui_state.read().active_tab == MainTab::History { "tab-btn active" } else { "tab-btn" },
+                            onclick: move |_| ui_state.write().active_tab = MainTab::History,
+                            i { class: "fa-solid fa-clock-rotate-left" }
+                            span { class: "tab-label", " History" }
                         }
                     }
                 }
@@ -1554,6 +1581,18 @@ pub fn App() -> Element {
                                         i { class: "fa-solid fa-hourglass-half overlay-btn-icon" }
                                         "Op Timer"
                                     }
+                                    button {
+                                        class: if ability_cast_on { "btn btn-overlay btn-active" } else { "btn btn-overlay" },
+                                        title: "Lists the abilities you recently cast",
+                                        onclick: move |_| { spawn(async move {
+                                            if api::toggle_overlay(OverlayType::AbilityCast, ability_cast_on).await {
+                                                ability_cast_enabled.set(!ability_cast_on);
+                                                profile_dirty.set(true);
+                                            }
+                                        }); },
+                                        i { class: "fa-solid fa-list-ol overlay-btn-icon" }
+                                        "Abilities Cast"
+                                    }
                                 }
                             }
 
@@ -1805,6 +1844,17 @@ pub fn App() -> Element {
                 if ui_state.read().active_tab == MainTab::Effects {
                     EffectEditorPanel {
                         state: ui_state,
+                    }
+                }
+
+                // ─────────────────────────────────────────────────────────────
+                // History Tab
+                // ─────────────────────────────────────────────────────────────
+                if ui_state.read().active_tab == MainTab::History {
+                    HistoryPanel {
+                        european: *european_number_format.read(),
+                        state: ui_state,
+                        is_live_tailing,
                     }
                 }
 
@@ -3072,6 +3122,7 @@ fn apply_status(
     operation_timer_enabled: &mut Signal<bool>,
     ability_queue_enabled: &mut Signal<bool>,
     enemy_frames_enabled: &mut Signal<bool>,
+    ability_cast_enabled: &mut Signal<bool>,
     overlays_visible: &mut Signal<bool>,
     move_mode: &mut Signal<bool>,
     rearrange_mode: &mut Signal<bool>,
@@ -3100,6 +3151,7 @@ fn apply_status(
     operation_timer_enabled.set(status.operation_timer_enabled);
     ability_queue_enabled.set(status.ability_queue_enabled);
     enemy_frames_enabled.set(status.enemy_frames_enabled);
+    ability_cast_enabled.set(status.ability_cast_enabled);
     overlays_visible.set(status.overlays_visible);
     move_mode.set(status.move_mode);
     rearrange_mode.set(status.rearrange_mode);

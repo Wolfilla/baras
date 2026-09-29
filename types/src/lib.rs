@@ -4,6 +4,7 @@
 //! the native backend (baras-core) and the WASM frontend (app-ui).
 
 pub mod formatting;
+pub mod history;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -2944,6 +2945,60 @@ impl Default for CombatTimeOverlayConfig {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Ability Cast Overlay Configuration
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Configuration for the recently-cast abilities overlay
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AbilityCastOverlayConfig {
+    /// Maximum number of casts to display
+    #[serde(default = "default_ability_cast_max_display")]
+    pub max_display: u8,
+    /// Seconds after which a cast is removed from the list
+    #[serde(default = "default_ability_cast_prune_secs")]
+    pub prune_secs: f32,
+    /// Icon edge size in pixels (16 - 128)
+    #[serde(default = "default_ability_cast_icon_size")]
+    pub icon_size: u8,
+    /// Font scale multiplier (0.3 - 3.0, default 1.0)
+    #[serde(default = "default_scaling_factor")]
+    pub font_scale: f32,
+    /// Font color (RGBA)
+    #[serde(default = "default_font_color")]
+    pub font_color: Color,
+    /// When true, background shrinks to fit content
+    #[serde(default = "default_true")]
+    pub dynamic_background: bool,
+    /// When true, rows anchor to the bottom edge with the newest cast lowest
+    #[serde(default)]
+    pub stack_from_bottom: bool,
+}
+
+fn default_ability_cast_max_display() -> u8 {
+    8
+}
+fn default_ability_cast_prune_secs() -> f32 {
+    10.0
+}
+fn default_ability_cast_icon_size() -> u8 {
+    24
+}
+
+impl Default for AbilityCastOverlayConfig {
+    fn default() -> Self {
+        Self {
+            max_display: default_ability_cast_max_display(),
+            prune_secs: default_ability_cast_prune_secs(),
+            icon_size: default_ability_cast_icon_size(),
+            font_scale: 1.0,
+            font_color: overlay_colors::WHITE,
+            dynamic_background: true,
+            stack_from_bottom: false,
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Operation Timer Overlay Configuration
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -3174,6 +3229,10 @@ pub struct OverlaySettings {
     pub enemy_frames: EnemyFramesConfig,
     #[serde(default = "default_opacity")]
     pub enemy_frames_opacity: u8,
+    #[serde(default)]
+    pub ability_cast: AbilityCastOverlayConfig,
+    #[serde(default = "default_opacity")]
+    pub ability_cast_opacity: u8,
     /// Auto-hide overlays when local player is in a conversation
     #[serde(default)]
     pub hide_during_conversations: bool,
@@ -3255,6 +3314,8 @@ impl Default for OverlaySettings {
             ability_queue_opacity: 180,
             enemy_frames: EnemyFramesConfig::default(),
             enemy_frames_opacity: 180,
+            ability_cast: AbilityCastOverlayConfig::default(),
+            ability_cast_opacity: 180,
             hide_during_conversations: false,
             hide_when_not_live: false,
         }
@@ -3730,6 +3791,9 @@ pub struct UiSessionState {
     /// Effects Editor state
     pub effects_editor: EffectsEditorState,
 
+    /// History tab filters and selection
+    pub history: history::HistoryState,
+
     /// Use European number formatting (swap `.` and `,`)
     pub european_number_format: bool,
 }
@@ -3742,6 +3806,7 @@ impl Default for UiSessionState {
             combat_log: CombatLogSessionState::default(),
             encounter_builder: EncounterBuilderState::default(),
             effects_editor: EffectsEditorState::default(),
+            history: history::HistoryState::default(),
             european_number_format: false,
         }
     }
@@ -3767,6 +3832,7 @@ pub enum MainTab {
     Overlays,
     EncounterBuilder,
     Effects,
+    History,
 }
 
 impl MainTab {
@@ -3777,6 +3843,7 @@ impl MainTab {
             MainTab::Overlays => "overlays",
             MainTab::EncounterBuilder => "timers",
             MainTab::Effects => "effects",
+            MainTab::History => "history",
         }
     }
 
@@ -3788,6 +3855,7 @@ impl MainTab {
             "overlays" => MainTab::Overlays,
             "timers" => MainTab::EncounterBuilder,
             "effects" => MainTab::Effects,
+            "history" => MainTab::History,
             _ => MainTab::DataExplorer,
         }
     }

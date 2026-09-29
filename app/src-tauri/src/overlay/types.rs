@@ -186,6 +186,8 @@ pub enum OverlayType {
     AbilityQueue,
     /// Enemy HP frames (PvP)
     EnemyFrames,
+    /// Recently cast abilities (local player)
+    AbilityCast,
 }
 
 impl OverlayType {
@@ -211,6 +213,7 @@ impl OverlayType {
             OverlayType::OperationTimer => "operation_timer",
             OverlayType::AbilityQueue => "ability_queue",
             OverlayType::EnemyFrames => "enemy_frames",
+            OverlayType::AbilityCast => "ability_cast",
         }
     }
 
@@ -236,6 +239,7 @@ impl OverlayType {
             OverlayType::OperationTimer => "baras-operation-timer".to_string(),
             OverlayType::AbilityQueue => "baras-ability-queue".to_string(),
             OverlayType::EnemyFrames => "baras-enemy-frames".to_string(),
+            OverlayType::AbilityCast => "baras-ability-cast".to_string(),
         }
     }
 
@@ -261,6 +265,7 @@ impl OverlayType {
             OverlayType::OperationTimer => (400, 160),
             OverlayType::AbilityQueue => (650, 850),
             OverlayType::EnemyFrames => (900, 200),
+            OverlayType::AbilityCast => (50, 800),
         }
     }
 }

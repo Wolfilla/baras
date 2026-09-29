@@ -10,6 +10,7 @@ path = "src/main.rs"
 [dependencies]
 # default-features = false drops the `query` feature → no DataFusion in the sidecar
 baras-core = { path = "../core", default-features = false }
+baras-types = { path = "../types" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = "0.4"

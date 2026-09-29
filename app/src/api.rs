@@ -364,6 +364,16 @@ pub async fn open_historical_file(path: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Open a historical log and focus `encounter_id` in the Data Explorer once loaded
+/// (backend emits `select-encounter` after the parse completes).
+pub async fn open_historical_encounter(path: &str, encounter_id: u64) -> Result<(), String> {
+    let args = js_sys::Object::new();
+    js_set(&args, "path", &JsValue::from_str(path));
+    js_set(&args, "selectEncounter", &JsValue::from_f64(encounter_id as f64));
+    try_invoke("open_historical_file", args.into()).await?;
+    Ok(())
+}
+
 /// Resume live tailing mode
 pub async fn resume_live_tailing() -> Result<(), String> {
     try_invoke("resume_live_tailing", JsValue::NULL).await?;
@@ -475,6 +485,33 @@ pub async fn get_encounter_history()
 -> Option<Vec<crate::components::encounter_types::EncounterSummary>> {
     let result = invoke("get_encounter_history", JsValue::NULL).await;
     from_js(result)
+}
+
+/// Filter options and per-boss pull counts for the History tab
+pub async fn get_pull_history_overview(
+    filter: &baras_types::history::PullFilter,
+) -> Option<baras_types::history::PullHistoryOverview> {
+    from_js(invoke("get_pull_history_overview", build_args("filter", filter)).await)
+}
+
+/// Backfill pull history from every log in the configured directory.
+/// Progress arrives on the `history-backfill` event.
+pub async fn start_history_backfill() -> Result<(), String> {
+    try_invoke("start_history_backfill", JsValue::NULL).await?;
+    Ok(())
+}
+
+/// Every recorded pull of one boss under `filter`, newest first
+pub async fn get_boss_pulls(
+    operation: &str,
+    boss: &str,
+    filter: &baras_types::history::PullFilter,
+) -> Option<Vec<baras_types::history::PullRow>> {
+    let obj = js_sys::Object::new();
+    js_set(&obj, "operation", &JsValue::from_str(operation));
+    js_set(&obj, "boss", &JsValue::from_str(boss));
+    js_set(&obj, "filter", &serde_wasm_bindgen::to_value(filter).unwrap_or(JsValue::NULL));
+    from_js(invoke("get_boss_pulls", obj.into()).await)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

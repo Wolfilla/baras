@@ -62,13 +62,14 @@ use baras_core::context::{
     OverlayPositionConfig, PersonalOverlayConfig, TimerOverlayConfig,
 };
 use baras_overlay::{
-    AbilityQueueConfig, AbilityQueueOverlay, AlertsOverlay, BossHealthOverlay, ChallengeOverlay,
+    AbilityCastConfig, AbilityCastOverlay, AbilityQueueConfig, AbilityQueueOverlay, AlertsOverlay, BossHealthOverlay, ChallengeOverlay,
     CombatTimeConfig, CombatTimeOverlay, CooldownConfig, CooldownOverlay, DotTrackerConfig,
     DotTrackerOverlay, EffectsABConfig, EffectsABOverlay, MetricOverlay, NotesConfig, NotesOverlay,
     OperationTimerConfig, OperationTimerOverlay, Overlay, OverlayConfig, PersonalOverlay,
     RaidGridLayout, RaidOverlay, RaidOverlayConfig, RaidRegistryAction, TimerOverlay,
 };
 use baras_types::{
+    AbilityCastOverlayConfig as TypesAbilityCastConfig,
     AbilityQueueOverlayConfig as TypesAbilityQueueConfig, ClassIconMode,
     CombatTimeOverlayConfig as TypesCombatTimeConfig, CooldownTrackerConfig,
     DotTrackerConfig as TypesDotTrackerConfig, EffectsAConfig as TypesEffectsAConfig,
@@ -1061,6 +1062,53 @@ pub fn create_notes_overlay(
     let factory = move || {
         NotesOverlay::new(config, overlay_config, background_alpha)
             .map_err(|e| format!("Failed to create notes overlay: {}", e))
+    };
+
+    let (tx, handle) = spawn_overlay_with_factory(factory, kind, None)?;
+
+    Ok(OverlayHandle {
+        tx,
+        handle,
+        kind,
+        registry_action_rx: None,
+    })
+}
+
+/// Map the persisted ability cast config onto the overlay's runtime config
+pub fn ability_cast_config(cfg: &TypesAbilityCastConfig) -> AbilityCastConfig {
+    AbilityCastConfig {
+        max_display: cfg.max_display,
+        prune_secs: cfg.prune_secs,
+        icon_size: cfg.icon_size,
+        font_scale: cfg.font_scale,
+        font_color: cfg.font_color,
+        dynamic_background: cfg.dynamic_background,
+        stack_from_bottom: cfg.stack_from_bottom,
+    }
+}
+
+/// Create and spawn the ability cast overlay
+pub fn create_ability_cast_overlay(
+    position: OverlayPositionConfig,
+    ac_config: &TypesAbilityCastConfig,
+    background_alpha: u8,
+) -> Result<OverlayHandle, String> {
+    let kind = OverlayType::AbilityCast;
+    let config = OverlayConfig {
+        x: position.x,
+        y: position.y,
+        width: position.width,
+        height: position.height,
+        namespace: kind.namespace(),
+        snap_to_grid: true,
+        click_through: true,
+        target_monitor_id: position.monitor_id.clone(),
+    };
+    let overlay_config = ability_cast_config(ac_config);
+
+    let factory = move || {
+        AbilityCastOverlay::new(config, overlay_config, background_alpha)
+            .map_err(|e| format!("Failed to create ability cast overlay: {}", e))
     };
 
     let (tx, handle) = spawn_overlay_with_factory(factory, kind, None)?;

@@ -293,6 +293,9 @@ pub fn run() {
             commands::get_active_file,
             commands::get_session_info,
             commands::get_encounter_history,
+            commands::get_pull_history_overview,
+            commands::get_boss_pulls,
+            commands::start_history_backfill,
             commands::set_encounter_parsely_link,
             // File browser commands
             commands::open_historical_file,
