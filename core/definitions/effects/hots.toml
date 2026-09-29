@@ -63,7 +63,7 @@ single_instance_per_target = true
 color = [0, 13, 174, 255]
 show_single_stack = true
 display_target = "raid_frames"
-disciplines = ["combatmedic", "bodyguard"]
+disciplines = ["CombatMedic", "Bodyguard"]
 
 [[effect]]
 id = "trauma_probe"
@@ -91,7 +91,7 @@ single_instance_per_target = true
 color = [0, 13, 174, 255]
 show_single_stack = true
 display_target = "raid_frames"
-disciplines = ["combatmedic", "bodyguard"]
+disciplines = ["CombatMedic", "Bodyguard"]
 
 [[effect]]
 id = "resurgence"
