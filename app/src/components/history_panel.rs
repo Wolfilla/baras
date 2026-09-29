@@ -91,27 +91,31 @@ pub fn HistoryPanel(props: HistoryPanelProps) -> Element {
         async move { api::get_pull_history_overview(&f).await.unwrap_or_default() }
     });
 
-    // Backfill progress relayed from the worker subprocess; None = idle
+    // Backfill progress relayed from the worker subprocess; None = idle.
+    // The Tauri callback runs outside the Dioxus runtime, so it only writes
+    // this signal; anything that spawns (resource restart, toast timers)
+    // happens in the effect below, inside the runtime.
     let mut backfill = use_signal(|| None::<BackfillEvent>);
     use_future(move || async move {
         let closure = Closure::new(move |event: JsValue| {
             let Ok(payload) = js_sys::Reflect::get(&event, &JsValue::from_str("payload")) else {
                 return;
             };
-            let Ok(ev) = serde_wasm_bindgen::from_value::<BackfillEvent>(payload) else {
-                return;
-            };
-            if let BackfillEvent::Done { pulls, logs, failed, .. } = &ev {
-                toast.show(
-                    format!("Backfill complete: {pulls} pulls across {logs} logs, {failed} failed"),
-                    ToastSeverity::Normal,
-                );
-                overview.restart();
+            if let Ok(ev) = serde_wasm_bindgen::from_value::<BackfillEvent>(payload) {
+                let _ = backfill.try_write().map(|mut w| *w = Some(ev));
             }
-            backfill.set(Some(ev));
         });
         api::tauri_listen("history-backfill", &closure).await;
         closure.forget();
+    });
+    use_effect(move || {
+        if let Some(BackfillEvent::Done { pulls, logs, failed, .. }) = *backfill.read() {
+            toast.show(
+                format!("Backfill complete: {pulls} pulls across {logs} logs, {failed} failed"),
+                ToastSeverity::Normal,
+            );
+            overview.restart();
+        }
     });
     let backfill_running = matches!(*backfill.read(), Some(BackfillEvent::Progress { .. }));
 

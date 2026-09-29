@@ -469,9 +469,10 @@ pub fn App() -> Element {
             if let Ok(payload) = js_sys::Reflect::get(&event, &JsValue::from_str("payload"))
                 && let Some(id) = payload.as_f64()
             {
-                let mut state = ui_state.write();
-                state.data_explorer.selected_encounter = Some(id as u32);
-                state.active_tab = MainTab::DataExplorer;
+                let _ = ui_state.try_write().map(|mut state| {
+                    state.data_explorer.selected_encounter = Some(id as u32);
+                    state.active_tab = MainTab::DataExplorer;
+                });
             }
         });
         api::tauri_listen("select-encounter", &closure).await;
