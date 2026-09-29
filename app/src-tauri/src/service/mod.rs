@@ -443,7 +443,7 @@ struct CombatSignalHandler {
     shared: Arc<SharedState>,
     trigger_tx: mpsc::Sender<MetricsTrigger>,
     /// Channel for frontend session updates (event-driven, not polled)
-    session_event_tx: std::sync::mpsc::Sender<SessionEvent>,
+    session_event_tx: mpsc::UnboundedSender<SessionEvent>,
     /// Channel for overlay updates (to clear overlays on combat end)
     overlay_tx: mpsc::Sender<OverlayUpdate>,
     /// Channel for service commands (to reload area definitions on area change)
@@ -465,7 +465,7 @@ impl CombatSignalHandler {
     fn new(
         shared: Arc<SharedState>,
         trigger_tx: mpsc::Sender<MetricsTrigger>,
-        session_event_tx: std::sync::mpsc::Sender<SessionEvent>,
+        session_event_tx: mpsc::UnboundedSender<SessionEvent>,
         overlay_tx: mpsc::Sender<OverlayUpdate>,
         cmd_tx: mpsc::Sender<ServiceCommand>,
     ) -> Self {
@@ -2066,8 +2066,10 @@ impl CombatService {
 
         // Create trigger channel for signal-driven metrics updates (tokio channel - no spawn_blocking needed)
         let (trigger_tx, mut trigger_rx) = mpsc::channel::<MetricsTrigger>(8);
-        // Create channel for frontend session events (replaces polling)
-        let (session_event_tx, session_event_rx) = std::sync::mpsc::channel::<SessionEvent>();
+        // Create channel for frontend session events (replaces polling).
+        // Unbounded tokio channel: `send` is sync (usable from the signal handler)
+        // and `recv().await` never parks a runtime worker thread.
+        let (session_event_tx, mut session_event_rx) = mpsc::unbounded_channel::<SessionEvent>();
 
         let mut session = ParsingSession::new(path.clone(), self.definitions.clone());
 
@@ -2118,22 +2120,18 @@ impl CombatService {
 
         // Spawn task to emit session events to frontend (event-driven, not polled)
         // and persist pull history once each fight's summary has landed.
+        //
+        // Holds only a `Weak` to the session: the session owns the signal handler
+        // that owns the sender, so a strong ref here would keep both alive forever
+        // and this task would never see the channel close after stop_tailing.
         let app_handle = self.app_handle.clone();
-        let event_session = session.clone();
+        let event_session = Arc::downgrade(&session);
         tokio::spawn(async move {
-            loop {
-                let event = match tokio::task::spawn_blocking({
-                    let rx = session_event_rx.recv();
-                    move || rx
-                })
-                .await
+            while let Some(event) = session_event_rx.recv().await {
+                if matches!(event, SessionEvent::CombatEnded)
+                    && let Some(session) = event_session.upgrade()
                 {
-                    Ok(Ok(e)) => e,
-                    Ok(Err(_)) => break, // Channel closed
-                    Err(_) => break,     // Task canceled
-                };
-                if matches!(event, SessionEvent::CombatEnded) {
-                    history::persist_pull_history(&event_session).await;
+                    history::persist_pull_history(&session).await;
                 }
                 // Emit event to frontend - they can fetch fresh data
                 let _ = app_handle.emit("session-updated", format!("{:?}", event));
