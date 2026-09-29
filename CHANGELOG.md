@@ -1,3 +1,10 @@
+# v2026.9.30
+
+Hotfix.
+
+- Fix capitalization issue causing HOTs definitions to fail to parse.
+- Remove blocking job preventing encounter from not being properly finalized in certain contexts.
+
 # v2026.9.29
 
 BARAS has surpassed 2000 downloads! Thank you for helping make this the widest SWTOR raiding companion app.
