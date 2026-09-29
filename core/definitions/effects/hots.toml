@@ -10,9 +10,9 @@ trigger = { type = "effect_applied", effects = [
   814832605462528,
 ], source = "local_player", target = "group_members" }
 refresh_abilities = [
-  814832605462528,                                                   # Kolto Probe (always refreshes)
-  { ability = 1014376786034688, min_stacks = 2, trigger = "heal" },  # Surgical Probe (only at 2 stacks, on heal)
-  { ability = 815240627355648, min_stacks = 2, trigger = "heal" },   # Kolto Infusion (only at 2 stacks, on heal)
+  814832605462528,                                                  # Kolto Probe (always refreshes)
+  { ability = 1014376786034688, min_stacks = 2, trigger = "heal" }, # Surgical Probe (only at 2 stacks, on heal)
+  { ability = 815240627355648, min_stacks = 2, trigger = "heal" },  # Kolto Infusion (only at 2 stacks, on heal)
 ]
 duration_secs = 21.0
 color = [38, 181, 81, 255]
@@ -27,9 +27,9 @@ trigger = { type = "effect_applied", effects = [
   3406415871868928,
 ], source = "local_player", target = "group_members" }
 refresh_abilities = [
-  3406415871868928,                                                  # Slow Release Medpac (always refreshes)
-  { ability = 807518276157440, min_stacks = 2, trigger = "heal" },   # Emergency Medpac (only at 2 stacks, on heal)
-  { ability = 3470823201439744, min_stacks = 2, trigger = "heal" },  # Kolto Pack (only at 2 stacks, on heal)
+  3406415871868928,                                                 # Slow Release Medpac (always refreshes)
+  { ability = 807518276157440, min_stacks = 2, trigger = "heal" },  # Emergency Medpac (only at 2 stacks, on heal)
+  { ability = 3470823201439744, min_stacks = 2, trigger = "heal" }, # Kolto Pack (only at 2 stacks, on heal)
 ]
 duration_secs = 21.0
 color = [38, 181, 81, 255]
@@ -63,6 +63,7 @@ single_instance_per_target = true
 color = [0, 13, 174, 255]
 show_single_stack = true
 display_target = "raid_frames"
+disciplines = ["combatmedic", "bodyguard"]
 
 [[effect]]
 id = "trauma_probe"
@@ -90,6 +91,7 @@ single_instance_per_target = true
 color = [0, 13, 174, 255]
 show_single_stack = true
 display_target = "raid_frames"
+disciplines = ["combatmedic", "bodyguard"]
 
 [[effect]]
 id = "resurgence"
