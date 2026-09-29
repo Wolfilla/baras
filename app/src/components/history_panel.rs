@@ -13,7 +13,7 @@ use baras_types::formatting;
 use baras_types::history::{BackfillEvent, BossNode, PullFilter, PullRow};
 
 use crate::api;
-use crate::components::class_icons::get_role_icon;
+use crate::components::class_icons::{get_class_icon, get_role_icon};
 use crate::components::{ToastSeverity, use_toast};
 use crate::types::UiSessionState;
 
@@ -27,6 +27,20 @@ pub struct HistoryPanelProps {
 
 const ROLES: [(&str, &str); 3] = [("Tank", "Tank"), ("Healer", "Healer"), ("Dps", "DPS")];
 const TIERS: [&str; 3] = ["Story", "Veteran", "Master"];
+/// Quick date-range presets: label and days back (None = start of this year)
+const DATE_PRESETS: [(&str, Option<i32>); 4] = [("7d", Some(7)), ("30d", Some(30)), ("90d", Some(90)), ("Year", None)];
+
+/// `YYYY-MM-DD` for `days` ago in local time, or Jan 1 of this year
+fn preset_start(days: Option<i32>) -> String {
+    const DAY_MS: f64 = 86_400_000.0;
+    let d = js_sys::Date::new(&JsValue::from_f64(
+        js_sys::Date::now() - days.unwrap_or(0) as f64 * DAY_MS,
+    ));
+    match days {
+        Some(_) => format!("{:04}-{:02}-{:02}", d.get_full_year(), d.get_month() + 1, d.get_date()),
+        None => format!("{:04}-01-01", d.get_full_year()),
+    }
+}
 
 /// Tree selection: (operation, boss)
 type BossKey = (String, String);
@@ -241,18 +255,62 @@ pub fn HistoryPanel(props: HistoryPanelProps) -> Element {
                     " Kills only"
                 }
                 div { class: "pull-history-dates",
+                    div { class: "pull-history-result-tabs",
+                        button {
+                            class: if f.date_from.is_empty() && f.date_to.is_empty() { "filter-tab active" } else { "filter-tab" },
+                            onclick: move |_| {
+                                let mut w = filter.write();
+                                w.date_from.clear();
+                                w.date_to.clear();
+                            },
+                            "All"
+                        }
+                        for (label, days) in DATE_PRESETS {
+                            {
+                                let start = preset_start(days);
+                                let active = f.date_to.is_empty() && f.date_from == start;
+                                rsx! {
+                                    button {
+                                        class: if active { "filter-tab active" } else { "filter-tab" },
+                                        onclick: move |_| {
+                                            let mut w = filter.write();
+                                            w.date_from = start.clone();
+                                            w.date_to.clear();
+                                        },
+                                        "{label}"
+                                    }
+                                }
+                            }
+                        }
+                    }
                     input {
-                        r#type: "date",
-                        title: "From",
+                        r#type: "text",
+                        class: "pull-history-date",
+                        placeholder: "from YYYY-MM-DD",
+                        maxlength: "10",
                         value: "{f.date_from}",
                         onchange: move |e| set_filter(|f, v| f.date_from = v, e.value()),
                     }
                     span { "–" }
                     input {
-                        r#type: "date",
-                        title: "To",
+                        r#type: "text",
+                        class: "pull-history-date",
+                        placeholder: "to YYYY-MM-DD",
+                        maxlength: "10",
                         value: "{f.date_to}",
                         onchange: move |e| set_filter(|f, v| f.date_to = v, e.value()),
+                    }
+                    if !f.date_from.is_empty() || !f.date_to.is_empty() {
+                        button {
+                            class: "btn btn-xs btn-ghost",
+                            title: "Clear date range",
+                            onclick: move |_| {
+                                let mut w = filter.write();
+                                w.date_from.clear();
+                                w.date_to.clear();
+                            },
+                            i { class: "fa-solid fa-xmark" }
+                        }
                     }
                 }
                 span { class: "pull-history-count",
@@ -396,11 +454,17 @@ pub fn HistoryPanel(props: HistoryPanelProps) -> Element {
                                             key: "{row.filename}:{row.encounter_id}",
                                             td { {short_ts(&row.timestamp)} }
                                             td { "{row.character}" }
-                                            td { class: "pull-discipline",
-                                                if let Some(icon) = row.role_icon.as_deref().and_then(get_role_icon) {
-                                                    img { class: "role-icon", src: *icon, alt: "" }
+                                            td {
+                                                // Wrapper keeps the td a real table cell (flex on a td breaks its gridline)
+                                                span { class: "pull-discipline",
+                                                    if let Some(icon) = row.role_icon.as_deref().and_then(get_role_icon) {
+                                                        img { class: "role-icon", src: *icon, alt: "" }
+                                                    }
+                                                    if let Some(icon) = row.discipline_icon.as_deref().and_then(get_class_icon) {
+                                                        img { class: "discipline-icon", src: *icon, alt: "" }
+                                                    }
+                                                    {row.discipline.clone().unwrap_or_else(|| "-".into())}
                                                 }
-                                                {row.discipline.clone().unwrap_or_else(|| "-".into())}
                                             }
                                             td { "{row.difficulty}" }
                                             td { {formatting::format_duration(row.duration_seconds)} }

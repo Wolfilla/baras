@@ -8624,14 +8624,24 @@ a.contributor-name:hover {
   color: var(--text-muted);
 }
 
-.pull-history-dates input[type="date"] {
+.pull-history-dates .pull-history-result-tabs {
+  margin-left: 0;
+}
+
+.pull-history-date {
+  width: 9.5em;
   background: var(--bg-input);
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 0.25em 0.4em;
   font-size: 0.9em;
-  color-scheme: dark;
+  font-family: var(--font-mono);
+}
+
+.pull-history-date::placeholder {
+  color: var(--text-disabled);
+  font-family: var(--font-family);
 }
 
 .pull-history-count {
@@ -8713,7 +8723,8 @@ a.contributor-name:hover {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  border: 1px solid var(--border-subtle);
+  background: var(--gradient-panel);
+  border: 1px solid var(--border-accent);
   border-radius: var(--radius-sm);
 }
 
@@ -8727,15 +8738,16 @@ a.contributor-name:hover {
 .pull-history-table td {
   padding: 0.45em 0.7em;
   text-align: left;
+  vertical-align: middle;
   white-space: nowrap;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .pull-history-table th {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--gradient-panel);
+  background: var(--bg-mid);
   color: var(--swtor-blue-dim);
   font-weight: 500;
 }
@@ -8758,7 +8770,7 @@ a.contributor-name:hover {
 }
 
 .pull-history-table tbody tr:hover {
-  background: var(--blue-alpha-5);
+  background: var(--blue-alpha-8);
 }
 
 .pull-result {
@@ -8782,12 +8794,14 @@ a.contributor-name:hover {
 }
 
 .pull-discipline {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  vertical-align: middle;
   gap: 0.4em;
 }
 
-.pull-discipline .role-icon {
+.pull-discipline .role-icon,
+.pull-discipline .discipline-icon {
   width: 16px;
   height: 16px;
 }

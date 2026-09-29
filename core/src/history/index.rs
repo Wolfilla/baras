@@ -168,6 +168,7 @@ fn row_from(log: &LogHistory, s: &EncounterSummary) -> PullRow {
         discipline: me.and_then(|m| m.discipline_name.clone()),
         role: me.and_then(|m| m.discipline.map(|d| format!("{:?}", d.role()))),
         role_icon: me.and_then(|m| m.role_icon.clone()),
+        discipline_icon: me.and_then(|m| m.discipline.map(|d| d.icon_name().to_string())),
         dps: me.map(|m| m.dps),
         hps: me.map(|m| m.hps),
         character,

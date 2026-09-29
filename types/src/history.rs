@@ -27,6 +27,8 @@ pub struct PullRow {
     /// "Tank" | "Healer" | "Dps"
     pub role: Option<String>,
     pub role_icon: Option<String>,
+    /// Discipline icon filename, resolved by the frontend's icon registry
+    pub discipline_icon: Option<String>,
     pub dps: Option<i64>,
     pub hps: Option<i64>,
 }
