@@ -97,6 +97,41 @@ pub struct DataExplorerProps {
     pub state: Signal<UiSessionState>,
 }
 
+/// Entity list for Rotation/Usage/Charts: Damage + Healing totals merged, plus every
+/// other actor from the Charts roster (buff-only adds, healers with 0 dmg) at 0.
+/// Returns (sorted entities, per-entity damage totals for color coding).
+async fn load_actor_entities(
+    idx: Option<u32>,
+    tr: Option<&TimeRange>,
+) -> (Vec<EntityBreakdown>, HashMap<String, f64>) {
+    let dmg = api::query_entity_breakdown(DataTab::Damage, idx, tr).await.unwrap_or_default();
+    let heal = api::query_entity_breakdown(DataTab::Healing, idx, tr).await.unwrap_or_default();
+    let roster = api::query_entity_breakdown(DataTab::Charts, idx, tr).await.unwrap_or_default();
+    let dmg_map: HashMap<String, f64> = dmg.iter()
+        .map(|e| (e.source_name.clone(), e.total_value))
+        .collect();
+    let mut merged: HashMap<String, EntityBreakdown> = HashMap::new();
+    for e in dmg.into_iter().chain(heal) {
+        merged.entry(e.source_name.clone())
+            .and_modify(|existing| {
+                existing.total_value += e.total_value;
+                existing.abilities_used = existing.abilities_used.max(e.abilities_used);
+            })
+            .or_insert(e);
+    }
+    for e in roster {
+        merged.entry(e.source_name.clone()).or_insert(e);
+    }
+    let mut result: Vec<_> = merged.into_values().collect();
+    result.sort_by(|a, b| {
+        b.total_value
+            .partial_cmp(&a.total_value)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.source_name.cmp(&b.source_name))
+    });
+    (result, dmg_map)
+}
+
 #[component]
 pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
     // Encounter selection state
@@ -748,23 +783,8 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
 
                 // Load entity breakdown
                 let entity_data = if matches!(mode, ViewMode::Rotation | ViewMode::Usage | ViewMode::Charts) {
-                    let dmg = api::query_entity_breakdown(DataTab::Damage, None, None).await.unwrap_or_default();
-                    let heal = api::query_entity_breakdown(DataTab::Healing, None, None).await.unwrap_or_default();
-                    let dmg_map: HashMap<String, f64> = dmg.iter()
-                        .map(|e| (e.source_name.clone(), e.total_value))
-                        .collect();
+                    let (result, dmg_map) = load_actor_entities(None, None).await;
                     entity_dmg_totals.set(dmg_map);
-                    let mut merged: HashMap<String, EntityBreakdown> = HashMap::new();
-                    for e in dmg.into_iter().chain(heal) {
-                        merged.entry(e.source_name.clone())
-                            .and_modify(|existing| {
-                                existing.total_value += e.total_value;
-                                existing.abilities_used = existing.abilities_used.max(e.abilities_used);
-                            })
-                            .or_insert(e);
-                    }
-                    let mut result: Vec<_> = merged.into_values().collect();
-                    result.sort_by(|a, b| b.total_value.partial_cmp(&a.total_value).unwrap_or(std::cmp::Ordering::Equal));
                     result
                 } else {
                     api::query_entity_breakdown(tab, None, None).await.unwrap_or_default()
@@ -859,26 +879,9 @@ pub fn DataExplorerPanel(mut props: DataExplorerProps) -> Element {
             };
 
             // Load entity breakdown - single attempt
-            // For Rotation/Usage/Charts, merge Damage + Healing entities so healers with 0 dmg appear
             let entity_data = if matches!(mode, ViewMode::Rotation | ViewMode::Usage | ViewMode::Charts) {
-                let dmg = api::query_entity_breakdown(DataTab::Damage, idx, tr_opt.as_ref()).await.unwrap_or_default();
-                let heal = api::query_entity_breakdown(DataTab::Healing, idx, tr_opt.as_ref()).await.unwrap_or_default();
-                // Track per-entity damage totals for color coding
-                let dmg_map: HashMap<String, f64> = dmg.iter()
-                    .map(|e| (e.source_name.clone(), e.total_value))
-                    .collect();
+                let (result, dmg_map) = load_actor_entities(idx, tr_opt.as_ref()).await;
                 entity_dmg_totals.set(dmg_map);
-                let mut merged: HashMap<String, EntityBreakdown> = HashMap::new();
-                for e in dmg.into_iter().chain(heal) {
-                    merged.entry(e.source_name.clone())
-                        .and_modify(|existing| {
-                            existing.total_value += e.total_value;
-                            existing.abilities_used = existing.abilities_used.max(e.abilities_used);
-                        })
-                        .or_insert(e);
-                }
-                let mut result: Vec<_> = merged.into_values().collect();
-                result.sort_by(|a, b| b.total_value.partial_cmp(&a.total_value).unwrap_or(std::cmp::Ordering::Equal));
                 result
             } else {
                 match api::query_entity_breakdown(tab, idx, tr_opt.as_ref()).await {

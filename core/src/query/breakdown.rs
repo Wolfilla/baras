@@ -735,11 +735,16 @@ impl EncounterQuery<'_> {
     /// Query entity breakdown for any data tab.
     /// - For outgoing tabs (Damage/Healing): groups by source entity.
     /// - For incoming tabs (DamageTaken/HealingTaken): groups by target entity (who received).
+    /// - For Charts: every entity that activated an ability or applied an effect, so
+    ///   buff-only actors (e.g. an add that only shields the boss) are listed too.
     pub async fn breakdown_by_entity(
         &self,
         tab: DataTab,
         time_range: Option<&TimeRange>,
     ) -> Result<Vec<EntityBreakdown>, String> {
+        if tab == DataTab::Charts {
+            return self.actor_roster(time_range).await;
+        }
         let value_col = tab.value_column();
         let is_outgoing = tab.is_outgoing();
         let is_healing_taken = tab == DataTab::HealingTaken;
@@ -858,7 +863,38 @@ impl EncounterQuery<'_> {
             )
         };
 
-        let batches = self.sql(&query).await?;
+        self.collect_entity_rows(&query).await
+    }
+
+    /// Every source entity that acted during the range (ability activation or
+    /// effect application), with damage + healing as the sort value.
+    async fn actor_roster(
+        &self,
+        time_range: Option<&TimeRange>,
+    ) -> Result<Vec<EntityBreakdown>, String> {
+        let time_filter = time_range
+            .map(|tr| format!("AND {}", tr.sql_filter()))
+            .unwrap_or_default();
+        let query = format!(
+            r#"
+            SELECT source_name, source_id, MIN(source_entity_type) as entity_type,
+                   CAST(SUM(dmg_amount + heal_amount) AS DOUBLE) as total_value,
+                   COUNT(DISTINCT ability_id) as abilities_used
+            FROM events
+            WHERE source_id != 0
+              AND source_entity_type IN ('Player', 'Companion', 'Npc')
+              AND (effect_type_id = {apply_effect} OR effect_id = {ability_activate}) {time_filter}
+            GROUP BY source_name, source_id
+            ORDER BY total_value DESC
+            "#,
+            apply_effect = effect_type_id::APPLYEFFECT,
+            ability_activate = effect_id::ABILITYACTIVATE,
+        );
+        self.collect_entity_rows(&query).await
+    }
+
+    async fn collect_entity_rows(&self, query: &str) -> Result<Vec<EntityBreakdown>, String> {
+        let batches = self.sql(query).await?;
 
         let mut results = Vec::new();
         for batch in &batches {
